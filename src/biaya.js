@@ -142,10 +142,14 @@ async function submit(rows, aiSuggestions) {
 
   const cashflow = await resolveCashflowSpreadsheetId();
   // Lokasi penulisan: selalu baris kosong tepat di bawah baris TERBAWAH yang
-  // sudah terisi. Patokan = kolom B (KETERANGAN), bukan kolom A — karena kolom A
-  // (SUBJEK BIAYA) berisi formula VLOOKUP di baris kosong sekalipun. Celah kosong
-  // di tengah diabaikan; data baru menempel setelah baris terisi paling akhir.
-  const colB = await readRange(cashflow.id, `'${SHEET}'!B2:B997`);
+  // sudah terisi. Pengecekan ini SELALU dibaca ulang (live) di sini, tepat
+  // sebelum menulis — jadi bila ada pengisian manual langsung di spreadsheet,
+  // baris-baris itu ikut terhitung dan data baru tetap menempel di bawahnya.
+  // Patokan = kolom B (KETERANGAN), bukan kolom A — karena kolom A (SUBJEK
+  // BIAYA) berisi formula VLOOKUP di baris kosong sekalipun. Celah kosong di
+  // tengah diabaikan. Rentang terbuka "B2:B" agar tak terbatas berapa jauh pun
+  // pengisian manual ke bawah.
+  const colB = await readRange(cashflow.id, `'${SHEET}'!B2:B`);
   let appendRow = 2; // default: baris data pertama bila sheet masih kosong
   for (let i = 0; i < colB.length; i++) {
     if (colB[i] && colB[i][0]) appendRow = i + 3; // (baris terisi i+2) + 1
