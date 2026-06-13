@@ -95,7 +95,7 @@ async function mapLimit(items, limit, fn) {
 }
 
 /** Petakan satu entry hasil AI ke baris pratinjau (termasuk aturan bisnis). */
-function mapEntry(e, keteranganList, subjekMap, todayIso, sumber) {
+function mapEntry(e, keteranganList, subjekMap, todayIso, sumber, fileIndex) {
   const keterangan = keteranganList.includes(e.keterangan) ? e.keterangan : "";
   // Aturan: keterangan "Setoran Owner" -> rekomendasikan outlet MAUMBI (boleh diubah user).
   const outlet = /^setoran owner$/i.test(keterangan.trim()) ? "MAUMBI" : "";
@@ -111,6 +111,7 @@ function mapEntry(e, keteranganList, subjekMap, todayIso, sumber) {
     catatan: e.catatan,
     keyakinan: e.keyakinan,
     sumber, // nama file asal (untuk verifikasi saat pengisian masal)
+    fileIndex, // indeks file di urutan upload (untuk pratinjau "lihat bukti")
   };
 }
 
@@ -131,7 +132,7 @@ async function analyze(files) {
   const keteranganList = options.daftarBiaya.map((d) => d.keterangan);
   const subjekMap = new Map(options.daftarBiaya.map((d) => [d.keterangan, d.subjek]));
 
-  const perFile = await mapLimit(files, 4, async (f) => {
+  const perFile = await mapLimit(files, 4, async (f, idx) => {
     const images = [{ base64: f.buffer.toString("base64"), mediaType: f.mimetype }];
     const entries = await extractBiaya({
       images,
@@ -141,7 +142,7 @@ async function analyze(files) {
       learningText: learn,
       todayIso,
     });
-    return entries.map((e) => mapEntry(e, keteranganList, subjekMap, todayIso, f.originalname));
+    return entries.map((e) => mapEntry(e, keteranganList, subjekMap, todayIso, f.originalname, idx));
   });
 
   return perFile.flat();

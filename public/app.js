@@ -220,9 +220,37 @@ $("#btn-sync").addEventListener("click", async () => {
   }
 });
 
+// ================= Pratinjau gambar (modal) =================
+function openImageModal(file) {
+  const modal = $("#img-modal");
+  const img = $("#img-modal-img");
+  if (img.dataset.url) URL.revokeObjectURL(img.dataset.url);
+  const url = URL.createObjectURL(file);
+  img.src = url;
+  img.dataset.url = url;
+  $("#img-modal-name").textContent = file.name || "bukti";
+  modal.classList.remove("hidden");
+}
+function closeImageModal() {
+  const modal = $("#img-modal");
+  const img = $("#img-modal-img");
+  modal.classList.add("hidden");
+  if (img.dataset.url) {
+    URL.revokeObjectURL(img.dataset.url);
+    img.removeAttribute("src");
+    delete img.dataset.url;
+  }
+}
+$("#img-modal .img-modal-backdrop").addEventListener("click", closeImageModal);
+$("#img-modal .img-modal-close").addEventListener("click", closeImageModal);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeImageModal();
+});
+
 // ================= Input Biaya =================
 let OPTIONS = null;
 let AI_SUGGESTIONS = null;
+let BIAYA_FILES = []; // File yang diupload (untuk "lihat bukti" di pratinjau)
 
 async function loadOptions() {
   if (!OPTIONS) OPTIONS = await api("/api/biaya/options");
@@ -244,7 +272,12 @@ function biayaRowHtml(entry) {
     .map((s) => `<option${s === (entry.status || "BELUM INPUT") ? " selected" : ""}>${s}</option>`)
     .join("");
   const badge = entry.keyakinan ? `<span class="badge ${entry.keyakinan}">${entry.keyakinan}</span> ` : "";
-  const sumber = entry.sumber ? `<b>${escapeHtml(entry.sumber)}</b> · ` : "";
+  const sumber =
+    entry.sumber && entry.fileIndex !== undefined && entry.fileIndex !== null
+      ? `<a href="#" class="view-bukti" data-idx="${entry.fileIndex}">📎 ${escapeHtml(entry.sumber)}</a> · `
+      : entry.sumber
+      ? `<b>${escapeHtml(entry.sumber)}</b> · `
+      : "";
   return `
     <td class="subjek">${entry.subjek || ""}</td>
     <td><select class="f-keterangan"><option value="">— pilih —</option>${ketOpts}</select></td>
@@ -272,6 +305,14 @@ function addBiayaRow(entry) {
       outletSel.value = "MAUMBI";
     }
   });
+  const viewLink = tr.querySelector(".view-bukti");
+  if (viewLink) {
+    viewLink.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      const idx = Number(viewLink.dataset.idx);
+      if (BIAYA_FILES[idx]) openImageModal(BIAYA_FILES[idx]);
+    });
+  }
   tbody.appendChild(tr);
 }
 
@@ -292,6 +333,7 @@ $("#btn-biaya-analyze").addEventListener("click", async () => {
   $("#btn-biaya-analyze").disabled = true;
   try {
     await loadOptions();
+    BIAYA_FILES = Array.from(files); // simpan untuk "lihat bukti" di pratinjau
     const fd = new FormData();
     for (const f of files) fd.append("files", f);
     const data = await api("/api/biaya/analyze", { method: "POST", body: fd });
