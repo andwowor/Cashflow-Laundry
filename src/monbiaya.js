@@ -6,6 +6,7 @@ const { readRange, batchWrite, resolveCashflowSpreadsheetId } = require("./sheet
 
 const BIAYA_SHEET = "BIAYA";
 const INPUT_SHEET = "INPUT PENGGUNAAN BIAYA";
+const ANALISA_SHEET = "TRANSAKSI"; // sheet di spreadsheet ANALISA KEUANGAN
 
 // Catatan baris yang sudah di-export (hilang dari daftar). Kunci = NOMOR (kolom A).
 const EXPORTED_FILE = path.join(cfg.DATA_DIR, "monbiaya_exported.json");
@@ -186,6 +187,72 @@ async function setKoreksi(row, text) {
   return { ok: true, row, text: teks, verifikasi };
 }
 
+/**
+ * Export baris "Setoran Owner" terpilih ke sheet TRANSAKSI (ANALISA KEUANGAN).
+ * Pemetaan: POS BIAYA="DAILY DRIVER", KETERANGAN PENGGUNAAN(H)→KETERANGAN(B),
+ *   NOMINAL(D)→NOMINAL(C), TANGGAL(E)→TANGGAL(D), SUMBER DANA="PENDAPATAN USAHA";
+ *   BIAYA BULAN/BUDGET BULAN=nama bulan saat export, TAHUN BIAYA/TAHUN BUDGET=tahun saat export.
+ * Baris yang diexport disembunyikan (sama seperti export ke INPUT PENGGUNAAN BIAYA).
+ */
+async function exportSetoranOwner(rowNumbers) {
+  if (!Array.isArray(rowNumbers) || rowNumbers.length === 0) throw new Error("Centang minimal satu baris untuk diexport.");
+  const raw = await readRange(cfg.BIAYA_KAS_SPREADSHEET_ID, `'${BIAYA_SHEET}'!A1:N`, "UNFORMATTED_VALUE");
+  const { year, month } = cfg.nowInBusinessTz();
+  const monthName = cfg.MONTH_NAMES_ID[month - 1];
+
+  const values = [];
+  const usedRows = [];
+  let skipped = 0;
+  for (const rn of rowNumbers) {
+    const r = raw[Number(rn) - 1];
+    if (!r || !norm(r[COL.keterangan])) continue;
+    if (norm(r[COL.keterangan]).toLowerCase() !== "setoran owner") {
+      skipped++;
+      continue;
+    }
+    const tgl = r[COL.tanggal];
+    const tglStr = typeof tgl === "number" ? isoToDDMMYYYY(serialToISO(tgl)) : norm(tgl);
+    const nominal = r[COL.nominal];
+    values.push([
+      "DAILY DRIVER", // A POS BIAYA
+      norm(r[COL.ketPenggunaan]), // B KETERANGAN (dari KETERANGAN PENGGUNAAN)
+      typeof nominal === "number" ? nominal : Number(nominal) || norm(nominal), // C NOMINAL
+      tglStr, // D TANGGAL
+      monthName, // E BIAYA BULAN
+      year, // F TAHUN BIAYA
+      "PENDAPATAN USAHA", // G SUMBER DANA
+      monthName, // H BUDGET BULAN
+      year, // I TAHUN BUDGET
+    ]);
+    usedRows.push(r);
+  }
+  if (values.length === 0) {
+    throw new Error(
+      "Tidak ada baris 'Setoran Owner' yang dicentang." + (skipped ? ` (${skipped} baris non-Setoran Owner dilewati)` : "")
+    );
+  }
+
+  const analisaId = cfg.ANALISA_SPREADSHEET_ID;
+  const colA = await readRange(analisaId, `'${ANALISA_SHEET}'!A2:A`);
+  let appendRow = 2;
+  for (let i = 0; i < colA.length; i++) {
+    if (colA[i] && colA[i][0]) appendRow = i + 3;
+  }
+  const endRow = appendRow + values.length - 1;
+  await batchWrite(analisaId, [{ range: `'${ANALISA_SHEET}'!A${appendRow}:I${endRow}`, values }]);
+
+  // Sembunyikan baris yang sudah diexport.
+  const state = loadExported();
+  state.seeded = true;
+  for (const r of usedRows) {
+    const k = rowKey(r);
+    if (k) state.keys.add(k);
+  }
+  saveExported(state);
+
+  return { ok: true, sheet: ANALISA_SHEET, barisAwal: appendRow, barisAkhir: endRow, jumlah: values.length, skipped };
+}
+
 /** Munculkan kembali baris (berdasarkan NOMOR) dengan menghapusnya dari daftar ter-export. */
 function restore(nomors) {
   const state = loadExported();
@@ -201,4 +268,4 @@ function restore(nomors) {
   return { ok: true, removed, nomors: Array.from(want) };
 }
 
-module.exports = { list, setStatus, setKoreksi, exportRows, restore };
+module.exports = { list, setStatus, setKoreksi, exportRows, exportSetoranOwner, restore };

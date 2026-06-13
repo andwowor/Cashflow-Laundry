@@ -17,6 +17,11 @@ const BIAYA_KAS_SPREADSHEET_ID =
   process.env.BIAYA_KAS_SPREADSHEET_ID ||
   "17FSDZKdYnn3yl08lWDfTZaQZ-x2AhXn493HhVnfAZlY";
 
+// Spreadsheet ANALISA KEUANGAN (tetap; sheet TRANSAKSI tujuan export Setoran Owner).
+const ANALISA_SPREADSHEET_ID =
+  process.env.ANALISA_SPREADSHEET_ID ||
+  "1IsRwEzQ7xJdd0jpzxpGmvhBvx34CVuOElPFfyRs-5fM";
+
 function ensureDataDir() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 }
@@ -124,6 +129,7 @@ module.exports = {
   MONTH_NAMES_ID,
   TIMEZONE,
   BIAYA_KAS_SPREADSHEET_ID,
+  ANALISA_SPREADSHEET_ID,
   CONFIG_FILE,
   DATA_DIR,
   getStoredConfig,

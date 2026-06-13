@@ -946,26 +946,30 @@ $("#btn-monbiaya-unhide").addEventListener("click", async () => {
   }
 });
 
-$("#btn-monbiaya-export").addEventListener("click", async () => {
+async function mbExport(endpoint, btn) {
   const out = $("#monbiaya-result");
   const rows = $$("#monbiaya-table .mb-check:checked").map((c) => Number(c.dataset.row));
   if (!rows.length) return showLog(out, "✘ Centang minimal satu baris untuk diexport.", true);
-  const btn = $("#btn-monbiaya-export");
   btn.disabled = true;
   try {
-    const r = await api("/api/monbiaya/export", {
+    const r = await api(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ rows }),
     });
-    showLog(out, `✔ ${r.jumlah} baris diexport ke ${r.sheet} (baris ${r.barisAwal}–${r.barisAkhir}).`);
+    let msg = `✔ ${r.jumlah} baris diexport ke ${r.sheet} (baris ${r.barisAwal}–${r.barisAkhir}).`;
+    if (r.skipped) msg += ` ${r.skipped} baris non-Setoran Owner dilewati.`;
+    showLog(out, msg);
     await loadMonBiaya();
   } catch (e) {
     showLog(out, "✘ " + e.message, true);
   } finally {
     btn.disabled = false;
   }
-});
+}
+
+$("#btn-monbiaya-export").addEventListener("click", (e) => mbExport("/api/monbiaya/export", e.currentTarget));
+$("#btn-monbiaya-export-so").addEventListener("click", (e) => mbExport("/api/monbiaya/export-setoran", e.currentTarget));
 
 // ================= Init =================
 initDropzone($("#dz-biaya"), $("#biaya-files"), $("#dz-biaya-count"));

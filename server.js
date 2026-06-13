@@ -217,6 +217,10 @@ app.post("/api/monbiaya/koreksi", wrap(async (req, res) => {
   res.json(await monbiaya.setKoreksi(Number(row), text));
 }));
 
+app.post("/api/monbiaya/export-setoran", wrap(async (req, res) => {
+  res.json(await monbiaya.exportSetoranOwner((req.body || {}).rows || []));
+}));
+
 // ---------- Start ----------
 
 const PORT = process.env.PORT || 3000;
