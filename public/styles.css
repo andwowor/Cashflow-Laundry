@@ -132,6 +132,19 @@ input[type="file"] { font-family: "Segoe UI", Arial, sans-serif; font-size: 13px
 .upload-row { display: flex; gap: 12px; align-items: center; margin: 10px 0; flex-wrap: wrap; }
 .upload-row input[type="text"] { flex: 1; min-width: 280px; }
 
+.dropzone {
+  flex: 1; min-width: 280px;
+  border: 2px dashed var(--line); border-radius: 8px;
+  padding: 12px 14px; background: #fafbf8;
+  display: flex; flex-direction: column; gap: 6px;
+  transition: border-color .15s, background .15s;
+}
+.dropzone.drag { border-color: var(--teal); background: #eaf4f1; }
+.dropzone input[type="file"] { font-size: 13px; }
+.dz-text { font-size: 12.5px; color: var(--ink-soft); }
+.dz-text b { color: var(--teal); }
+.dz-count { font-size: 12.5px; color: var(--teal); font-weight: 600; min-height: 15px; }
+
 .actions { display: flex; gap: 12px; margin-top: 14px; }
 
 .result-log {

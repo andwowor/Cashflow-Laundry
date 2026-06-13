@@ -19,6 +19,61 @@ async function api(path, opts = {}) {
   return data;
 }
 
+// ===== Drag & drop upload =====
+function setInputFiles(input, fileList) {
+  const dt = new DataTransfer();
+  for (const f of fileList) {
+    if (f.type && !f.type.startsWith("image/")) continue; // hanya gambar
+    dt.items.add(f);
+  }
+  input.files = dt.files;
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function describeFiles(input) {
+  const n = input.files ? input.files.length : 0;
+  if (!n) return "";
+  if (n === 1) return "1 file: " + input.files[0].name;
+  return n + " file dipilih";
+}
+
+function initDropzone(zone, input, countEl) {
+  if (!zone || !input) return;
+  const update = () => {
+    if (countEl) countEl.textContent = describeFiles(input);
+  };
+  input.addEventListener("change", update);
+  ["dragenter", "dragover"].forEach((ev) =>
+    zone.addEventListener(ev, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      zone.classList.add("drag");
+    })
+  );
+  ["dragleave", "dragend"].forEach((ev) =>
+    zone.addEventListener(ev, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (ev === "dragleave" && zone.contains(e.relatedTarget)) return;
+      zone.classList.remove("drag");
+    })
+  );
+  zone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    zone.classList.remove("drag");
+    const files = e.dataTransfer && e.dataTransfer.files;
+    if (files && files.length) setInputFiles(input, files);
+  });
+}
+
+/** Kosongkan input file + perbarui tampilan hitungannya. */
+function clearFileInput(input) {
+  if (!input) return;
+  input.value = "";
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
 function showLog(el, text, isError = false) {
   el.classList.remove("hidden");
   el.classList.toggle("error", isError);
@@ -284,7 +339,7 @@ $("#btn-biaya-submit").addEventListener("click", async () => {
     });
     showLog(out, `✔ ${r.jumlah} baris tersimpan di ${r.sheet} (baris ${r.barisAwal}–${r.barisAkhir}). AI sudah mencatat pilihan final untuk pembelajaran.`);
     $("#biaya-table tbody").innerHTML = "";
-    $("#biaya-files").value = "";
+    clearFileInput($("#biaya-files"));
     AI_SUGGESTIONS = null;
   } catch (e) {
     showLog(out, "✘ " + e.message, true);
@@ -299,7 +354,11 @@ function initKasCard(card) {
   const body = document.createElement("div");
   body.innerHTML = `
     <div class="upload-row">
-      <input type="file" accept="image/*" multiple class="kas-files">
+      <div class="dropzone kas-dz">
+        <div class="dz-text">📎 <b>Tarik &amp; lepas</b> screenshot di sini, atau pilih file:</div>
+        <input type="file" accept="image/*" multiple class="kas-files">
+        <div class="dz-count kas-count"></div>
+      </div>
       <button class="btn-primary kas-analyze">🔍 Analisis</button>
     </div>
     <div class="loading hidden kas-loading">Claude sedang membaca screenshot…</div>
@@ -315,6 +374,7 @@ function initKasCard(card) {
   card.appendChild(body);
 
   const fileInput = card.querySelector(".kas-files");
+  initDropzone(card.querySelector(".kas-dz"), fileInput, card.querySelector(".kas-count"));
   const errEl = card.querySelector(".kas-error");
   const loadEl = card.querySelector(".kas-loading");
   const preview = card.querySelector(".kas-preview");
@@ -377,7 +437,7 @@ function initKasCard(card) {
       });
       showLog(resultEl, ["✔ Tersimpan (" + r.tanggal + "):", ...r.written.map((w) => `  • ${w.label}: ${fmtRp(w.nominal)} → ${w.cell}`)].join("\n"));
       preview.classList.add("hidden");
-      fileInput.value = "";
+      clearFileInput(fileInput);
       loadDashboard();
     } catch (e) {
       showLog(resultEl, "✘ " + e.message, true);
@@ -460,7 +520,7 @@ $("#btn-qris-submit").addEventListener("click", async () => {
     });
     showLog(out, `✔ ${r.jumlah} baris tersimpan di ${r.sheet} (baris ${r.barisAwal}–${r.barisAkhir}).`);
     $("#qris-table tbody").innerHTML = "";
-    $("#qris-files").value = "";
+    clearFileInput($("#qris-files"));
     $("#qris-preview").classList.add("hidden");
   } catch (e) {
     showLog(out, "✘ " + e.message, true);
@@ -574,7 +634,7 @@ $("#btn-qbank-submit").addEventListener("click", async () => {
     showLog(out, lines.join("\n"));
     $("#qbank-table tbody").innerHTML = "";
     $("#qbank-summary").innerHTML = "";
-    $("#qbank-files").value = "";
+    clearFileInput($("#qbank-files"));
     $("#qbank-preview").classList.add("hidden");
     loadDashboard();
   } catch (e) {
@@ -585,5 +645,8 @@ $("#btn-qbank-submit").addEventListener("click", async () => {
 });
 
 // ================= Init =================
+initDropzone($("#dz-biaya"), $("#biaya-files"), $("#dz-biaya-count"));
+initDropzone($("#dz-qris"), $("#qris-files"), $("#dz-qris-count"));
+initDropzone($("#dz-qbank"), $("#qbank-files"), $("#dz-qbank-count"));
 loadStatus();
 loadDashboard();

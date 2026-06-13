@@ -58,7 +58,11 @@
            AI membaca tiap bukti dan menggabungkan semua transaksi ke satu pratinjau
            — periksa &amp; lengkapi sebelum disimpan ke sheet <b>INPUT PENGGUNAAN BIAYA</b>.</p>
         <div class="upload-row">
-          <input type="file" id="biaya-files" accept="image/*" multiple />
+          <div class="dropzone" id="dz-biaya">
+            <div class="dz-text">📎 <b>Tarik &amp; lepas</b> screenshot/bukti di sini, atau pilih file:</div>
+            <input type="file" id="biaya-files" accept="image/*" multiple />
+            <div class="dz-count" id="dz-biaya-count"></div>
+          </div>
           <button id="btn-biaya-analyze" class="btn-primary">🔍 Analisis Bukti</button>
         </div>
         <div id="biaya-loading" class="loading hidden">Claude sedang membaca bukti…</div>
@@ -125,7 +129,11 @@
           MAUMBI/PERKAMIL — diisi otomatis bila terbaca, selain itu Anda pilih sendiri).
           Data ditambahkan di baris terbawah yang kosong (dicek live tiap submit).</p>
         <div class="upload-row">
-          <input type="file" id="qris-files" accept="image/*" multiple />
+          <div class="dropzone" id="dz-qris">
+            <div class="dz-text">📎 <b>Tarik &amp; lepas</b> screenshot di sini, atau pilih file:</div>
+            <input type="file" id="qris-files" accept="image/*" multiple />
+            <div class="dz-count" id="dz-qris-count"></div>
+          </div>
           <button id="btn-qris-analyze" class="btn-primary">🔍 Analisis</button>
         </div>
         <div id="qris-loading" class="loading hidden">Claude sedang membaca screenshot…</div>
@@ -154,7 +162,11 @@
           bila lebih dari satu, dijumlahkan sebagai <b>formula</b> (mis. <code>=76064+420714</code>).
           Kolom Total Transaksi &amp; Selisih otomatis (tidak disentuh).</p>
         <div class="upload-row">
-          <input type="file" id="qbank-files" accept="image/*" multiple />
+          <div class="dropzone" id="dz-qbank">
+            <div class="dz-text">📎 <b>Tarik &amp; lepas</b> screenshot mutasi di sini, atau pilih file:</div>
+            <input type="file" id="qbank-files" accept="image/*" multiple />
+            <div class="dz-count" id="dz-qbank-count"></div>
+          </div>
           <button id="btn-qbank-analyze" class="btn-primary">🔍 Analisis</button>
         </div>
         <div id="qbank-loading" class="loading hidden">Claude sedang membaca screenshot…</div>
