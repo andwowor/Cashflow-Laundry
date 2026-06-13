@@ -19,30 +19,73 @@ async function api(path, opts = {}) {
   return data;
 }
 
-// ===== Drag & drop upload =====
-function setInputFiles(input, fileList) {
+// ===== Upload: drag & drop, tempel (paste), pilih file =====
+const DROPZONES = [];
+let lastZone = null;
+
+function renamePasted(file) {
+  const ext = ((file.type || "image/png").split("/")[1] || "png").replace("jpeg", "jpg");
+  const ts = new Date().toISOString().replace(/[-:T.]/g, "").slice(0, 14);
+  return new File([file], `tempel-${ts}-${Math.floor(Math.random() * 1000)}.${ext}`, {
+    type: file.type || "image/png",
+  });
+}
+
+function clipboardImages(e) {
+  const items = (e.clipboardData && e.clipboardData.items) || [];
+  const out = [];
+  for (const it of items) {
+    if (it.kind === "file" && it.type && it.type.startsWith("image/")) {
+      const f = it.getAsFile();
+      if (f) out.push(renamePasted(f));
+    }
+  }
+  return out;
+}
+
+/** Tambahkan file gambar ke input (akumulasi — cocok untuk pengisian masal). */
+function addInputFiles(input, files) {
   const dt = new DataTransfer();
-  for (const f of fileList) {
-    if (f.type && !f.type.startsWith("image/")) continue; // hanya gambar
+  for (const f of input.files) dt.items.add(f); // pertahankan yang sudah ada
+  for (const f of files) {
+    if (f.type && !f.type.startsWith("image/")) continue;
     dt.items.add(f);
   }
   input.files = dt.files;
   input.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
-function describeFiles(input) {
-  const n = input.files ? input.files.length : 0;
-  if (!n) return "";
-  if (n === 1) return "1 file: " + input.files[0].name;
-  return n + " file dipilih";
+/** Kosongkan input file + perbarui tampilan hitungannya. */
+function clearFileInput(input) {
+  if (!input) return;
+  input.value = "";
+  input.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
 function initDropzone(zone, input, countEl) {
   if (!zone || !input) return;
+  zone.setAttribute("tabindex", "0");
+  const entry = { zone, input };
+  DROPZONES.push(entry);
+
   const update = () => {
-    if (countEl) countEl.textContent = describeFiles(input);
+    if (!countEl) return;
+    const n = input.files ? input.files.length : 0;
+    if (!n) {
+      countEl.innerHTML = "";
+      return;
+    }
+    const label = n === 1 ? "1 file: " + escapeHtml(input.files[0].name) : n + " file dipilih";
+    countEl.innerHTML = `${label} &nbsp;<a href="#" class="dz-clear">✕ kosongkan</a>`;
+    const clr = countEl.querySelector(".dz-clear");
+    if (clr) clr.addEventListener("click", (ev) => { ev.preventDefault(); clearFileInput(input); });
   };
   input.addEventListener("change", update);
+
+  zone.addEventListener("focusin", () => { lastZone = entry; zone.classList.add("focused"); });
+  zone.addEventListener("focusout", () => zone.classList.remove("focused"));
+  zone.addEventListener("mousedown", () => { lastZone = entry; });
+
   ["dragenter", "dragover"].forEach((ev) =>
     zone.addEventListener(ev, (e) => {
       e.preventDefault();
@@ -63,16 +106,28 @@ function initDropzone(zone, input, countEl) {
     e.stopPropagation();
     zone.classList.remove("drag");
     const files = e.dataTransfer && e.dataTransfer.files;
-    if (files && files.length) setInputFiles(input, files);
+    if (files && files.length) addInputFiles(input, files);
   });
 }
 
-/** Kosongkan input file + perbarui tampilan hitungannya. */
-function clearFileInput(input) {
-  if (!input) return;
-  input.value = "";
-  input.dispatchEvent(new Event("change", { bubbles: true }));
-}
+// Tempel (Ctrl/Cmd+V) gambar -> dropzone yang sedang/terakhir difokuskan.
+document.addEventListener("paste", (e) => {
+  const imgs = clipboardImages(e);
+  if (!imgs.length) return;
+  let entry = null;
+  let node = e.target;
+  while (node && node.nodeType === 1 && !entry) {
+    entry = DROPZONES.find((d) => d.zone === node) || null;
+    node = node.parentNode;
+  }
+  if (!entry) entry = lastZone;
+  if (!entry) return;
+  // Jangan rebut paste saat user sedang mengetik di input teks/textarea lain.
+  const ae = document.activeElement;
+  if (ae && (ae.tagName === "TEXTAREA" || (ae.tagName === "INPUT" && ae.type !== "file")) && !entry.zone.contains(ae)) return;
+  e.preventDefault();
+  addInputFiles(entry.input, imgs);
+});
 
 function showLog(el, text, isError = false) {
   el.classList.remove("hidden");
@@ -396,7 +451,7 @@ function initKasCard(card) {
   body.innerHTML = `
     <div class="upload-row">
       <div class="dropzone kas-dz">
-        <div class="dz-text">📎 <b>Tarik &amp; lepas</b> screenshot di sini, atau pilih file:</div>
+        <div class="dz-text">📎 <b>Tarik &amp; lepas</b>, <b>tempel (Ctrl/Cmd+V)</b>, atau pilih file:</div>
         <input type="file" accept="image/*" multiple class="kas-files">
         <div class="dz-count kas-count"></div>
       </div>
