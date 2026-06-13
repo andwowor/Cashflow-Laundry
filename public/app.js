@@ -299,11 +299,10 @@ function addBiayaRow(entry) {
   tr.querySelector(".f-keterangan").addEventListener("change", (ev) => {
     const found = OPTIONS.daftarBiaya.find((d) => d.keterangan === ev.target.value);
     tr.querySelector(".subjek").textContent = found ? found.subjek : "";
-    // Rekomendasi: "Setoran Owner" -> outlet MAUMBI (hanya bila outlet masih kosong).
+    // Rekomendasi outlet otomatis (hanya bila outlet masih kosong); aturan dari server.
     const outletSel = tr.querySelector(".f-outlet");
-    if (/^setoran owner$/i.test(ev.target.value.trim()) && !outletSel.value) {
-      outletSel.value = "MAUMBI";
-    }
+    const rec = (OPTIONS.outletRecommendations || {})[ev.target.value.trim().toLowerCase()];
+    if (rec && !outletSel.value) outletSel.value = rec;
   });
   const viewLink = tr.querySelector(".view-bukti");
   if (viewLink) {

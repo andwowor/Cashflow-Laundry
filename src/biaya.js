@@ -17,6 +17,16 @@ const SUMBER_DANA = [
 const OUTLETS = ["MAUMBI", "PERKAMIL"];
 const STATUS = ["BELUM INPUT", "SUDAH INPUT"];
 
+// Rekomendasi outlet otomatis berdasarkan keterangan (kunci = keterangan huruf
+// kecil). Tambah baris baru di sini untuk aturan rekomendasi berikutnya.
+const OUTLET_RECOMMENDATIONS = {
+  "setoran owner": "MAUMBI",
+  "biaya admin": "MAUMBI",
+};
+function recommendOutlet(keterangan) {
+  return OUTLET_RECOMMENDATIONS[String(keterangan || "").trim().toLowerCase()] || "";
+}
+
 /** Daftar keterangan (dropdown kolom B) + pemetaan ke subjek biaya (kolom A). */
 async function getOptions() {
   const cashflow = await resolveCashflowSpreadsheetId();
@@ -29,6 +39,7 @@ async function getOptions() {
     sumberDana: SUMBER_DANA,
     outlets: OUTLETS,
     status: STATUS,
+    outletRecommendations: OUTLET_RECOMMENDATIONS,
     cashflow: { id: cashflow.id, source: cashflow.source },
   };
 }
@@ -97,8 +108,8 @@ async function mapLimit(items, limit, fn) {
 /** Petakan satu entry hasil AI ke baris pratinjau (termasuk aturan bisnis). */
 function mapEntry(e, keteranganList, subjekMap, todayIso, sumber, fileIndex) {
   const keterangan = keteranganList.includes(e.keterangan) ? e.keterangan : "";
-  // Aturan: keterangan "Setoran Owner" -> rekomendasikan outlet MAUMBI (boleh diubah user).
-  const outlet = /^setoran owner$/i.test(keterangan.trim()) ? "MAUMBI" : "";
+  // Aturan rekomendasi outlet (mis. "Setoran Owner"/"Biaya Admin" -> MAUMBI). Boleh diubah user.
+  const outlet = recommendOutlet(keterangan);
   return {
     keterangan,
     keteranganMentah: e.keterangan,
