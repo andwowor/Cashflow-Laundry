@@ -27,6 +27,13 @@ function recommendOutlet(keterangan) {
   return OUTLET_RECOMMENDATIONS[String(keterangan || "").trim().toLowerCase()] || "";
 }
 
+// Pembelian token listrik PLN: IDPEL langganan menentukan keterangan + outlet.
+const IDPEL_MAP = {
+  "311900080398": { keterangan: "Setoran Owner", outlet: "MAUMBI" },
+  "311200039441": { keterangan: "Token Listrik", outlet: "MAUMBI" },
+  "311010618527": { keterangan: "Token Listrik", outlet: "PERKAMIL" },
+};
+
 /** Daftar keterangan (dropdown kolom B) + pemetaan ke subjek biaya (kolom A). */
 async function getOptions() {
   const cashflow = await resolveCashflowSpreadsheetId();
@@ -107,20 +114,36 @@ async function mapLimit(items, limit, fn) {
 
 /** Petakan satu entry hasil AI ke baris pratinjau (termasuk aturan bisnis). */
 function mapEntry(e, keteranganList, subjekMap, todayIso, sumber, fileIndex) {
-  const keterangan = keteranganList.includes(e.keterangan) ? e.keterangan : "";
+  let keterangan = keteranganList.includes(e.keterangan) ? e.keterangan : "";
   // Aturan rekomendasi outlet (mis. "Setoran Owner"/"Biaya Admin" -> MAUMBI). Boleh diubah user.
-  const outlet = recommendOutlet(keterangan);
+  let outlet = recommendOutlet(keterangan);
+
+  // Aturan token listrik: IDPEL langganan menentukan keterangan + outlet.
+  let idpelNote = "";
+  const idpel = String(e.idpel || "").replace(/\D/g, "");
+  if (idpel) {
+    const rule = IDPEL_MAP[idpel];
+    if (rule) {
+      if (keteranganList.includes(rule.keterangan)) keterangan = rule.keterangan;
+      outlet = rule.outlet || recommendOutlet(keterangan);
+      idpelNote = `IDPEL ${idpel} → ${rule.keterangan} / ${rule.outlet}. `;
+    } else {
+      idpelNote = `IDPEL ${idpel} (tak dikenal — pilih manual). `;
+    }
+  }
+
   return {
     keterangan,
     keteranganMentah: e.keterangan,
-    subjek: subjekMap.get(e.keterangan) || "",
+    subjek: subjekMap.get(keterangan) || "",
     nominal: e.nominal,
     tanggal: e.tanggal || todayIso,
     outlet,
     status: "BELUM INPUT", // selalu BELUM INPUT
     sumberDana: e.sumber_dana && SUMBER_DANA.includes(e.sumber_dana) ? e.sumber_dana : "",
-    catatan: e.catatan,
+    catatan: idpelNote + (e.catatan || ""),
     keyakinan: e.keyakinan,
+    idpel: idpel || null,
     sumber, // nama file asal (untuk verifikasi saat pengisian masal)
     fileIndex, // indeks file di urutan upload (untuk pratinjau "lihat bukti")
   };
