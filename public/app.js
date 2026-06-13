@@ -757,6 +757,12 @@ function mbUpdateCount() {
   $("#monbiaya-count").textContent = `${n} dipilih`;
 }
 
+// Label tampilan tombol status: "SUDAH ..." -> centang hijau (✓). Nilai asli tetap dipakai.
+function mbLabel(val) {
+  if (val === "SUDAH INPUT" || val === "SUDAH VERIFIKASI OWNER") return "✓";
+  return val || "—";
+}
+
 function renderMonBiaya() {
   const el = $("#monbiaya-table");
   if (!MONBIAYA || !MONBIAYA.rows.length) {
@@ -773,10 +779,10 @@ function renderMonBiaya() {
         .map((c, col) => {
           if (MB_HIDDEN.has(col)) return ""; // kolom disembunyikan
           if (col === MB_STATUS_COL) {
-            return `<td><button class="mb-btn mb-status" data-row="${r.row}" data-val="${escapeHtml(c)}">${escapeHtml(c || "—")}</button></td>`;
+            return `<td><button class="mb-btn mb-status" data-row="${r.row}" data-val="${escapeHtml(c)}" title="${escapeHtml(c || "(kosong)")}">${escapeHtml(mbLabel(c))}</button></td>`;
           }
           if (col === MB_VERIF_COL) {
-            return `<td><button class="mb-btn mb-verif" data-row="${r.row}" data-val="${escapeHtml(c)}">${escapeHtml(c || "—")}</button></td>`;
+            return `<td><button class="mb-btn mb-verif" data-row="${r.row}" data-val="${escapeHtml(c)}" title="${escapeHtml(c || "(kosong)")}">${escapeHtml(mbLabel(c))}</button></td>`;
           }
           if (col === MB_KODE_COL) {
             return `<td>${escapeHtml(c)} <button class="mb-copy" data-kode="${escapeHtml(c)}" title="Salin kode">⧉ Salin</button></td>`;
@@ -818,7 +824,8 @@ async function mbCycleStatus(btn, field) {
       body: JSON.stringify({ row: Number(btn.dataset.row), field, value: next }),
     });
     btn.dataset.val = next;
-    btn.textContent = next;
+    btn.textContent = mbLabel(next);
+    btn.title = next || "(kosong)";
   } catch (e) {
     btn.textContent = prevLabel;
     btn.classList.add("err");
