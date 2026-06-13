@@ -141,10 +141,14 @@ async function submit(rows, aiSuggestions) {
   }
 
   const cashflow = await resolveCashflowSpreadsheetId();
+  // Lokasi penulisan: selalu baris kosong tepat di bawah baris TERBAWAH yang
+  // sudah terisi. Patokan = kolom B (KETERANGAN), bukan kolom A — karena kolom A
+  // (SUBJEK BIAYA) berisi formula VLOOKUP di baris kosong sekalipun. Celah kosong
+  // di tengah diabaikan; data baru menempel setelah baris terisi paling akhir.
   const colB = await readRange(cashflow.id, `'${SHEET}'!B2:B997`);
-  let firstEmpty = 2;
+  let appendRow = 2; // default: baris data pertama bila sheet masih kosong
   for (let i = 0; i < colB.length; i++) {
-    if (colB[i] && colB[i][0]) firstEmpty = i + 3; // baris setelah baris terisi terakhir
+    if (colB[i] && colB[i][0]) appendRow = i + 3; // (baris terisi i+2) + 1
   }
 
   const values = rows.map((r) => [
@@ -155,15 +159,15 @@ async function submit(rows, aiSuggestions) {
     r.status || "BELUM INPUT",
     r.sumberDana || "",
   ]);
-  const endRow = firstEmpty + rows.length - 1;
-  await batchWrite(cashflow.id, [{ range: `'${SHEET}'!B${firstEmpty}:G${endRow}`, values }]);
+  const endRow = appendRow + rows.length - 1;
+  await batchWrite(cashflow.id, [{ range: `'${SHEET}'!B${appendRow}:G${endRow}`, values }]);
 
   recordLearning(aiSuggestions, rows);
 
   return {
     ok: true,
     sheet: SHEET,
-    barisAwal: firstEmpty,
+    barisAwal: appendRow,
     barisAkhir: endRow,
     jumlah: rows.length,
   };
