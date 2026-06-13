@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard Kas Laundry</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">◍</span>
+      <div>
+        <h1>Dashboard Kas Laundry</h1>
+        <p id="status-line">Memuat status…</p>
+      </div>
+    </div>
+    <nav class="tabs">
+      <button class="tab active" data-tab="monitor">Monitoring</button>
+      <button class="tab" data-tab="biaya">Input Biaya</button>
+      <button class="tab" data-tab="kas">Input Kas</button>
+      <button class="tab" data-tab="pengaturan">Pengaturan</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- ============ TAB MONITORING ============ -->
+    <section id="tab-monitor" class="panel active">
+      <div class="sync-box">
+        <div>
+          <h2>Update Laporan Harian</h2>
+          <p>Satu klik untuk menjalankan seluruh rangkaian: ambil kas tunai hari ini dari REKAP,
+             perbarui sheet KAS, lalu salin nominal &amp; tanggal ke INPUT LAPORAN HARIAN.</p>
+        </div>
+        <button id="btn-sync" class="btn-primary btn-big">▶ Jalankan Update Harian</button>
+      </div>
+      <div id="sync-result" class="result-log hidden"></div>
+
+      <div class="grid-2">
+        <div class="card">
+          <h3>Sheet KAS — BIAYA &amp; KAS LAUNDRY</h3>
+          <div id="table-kas" class="table-wrap">Memuat…</div>
+        </div>
+        <div class="card">
+          <h3>INPUT LAPORAN HARIAN — CASHFLOW <span id="bulan-label"></span></h3>
+          <div id="table-ilh" class="table-wrap">Memuat…</div>
+        </div>
+      </div>
+      <button id="btn-refresh" class="btn-ghost">⟳ Muat ulang data</button>
+    </section>
+
+    <!-- ============ TAB INPUT BIAYA ============ -->
+    <section id="tab-biaya" class="panel">
+      <div class="card">
+        <h2>Input Penggunaan Biaya</h2>
+        <p>Upload screenshot / bukti transfer pengeluaran. AI akan membaca bukti dan mengusulkan isian
+           — periksa &amp; lengkapi sebelum disimpan ke sheet <b>INPUT PENGGUNAAN BIAYA</b>.</p>
+        <div class="upload-row">
+          <input type="file" id="biaya-files" accept="image/*" multiple />
+          <button id="btn-biaya-analyze" class="btn-primary">🔍 Analisis Bukti</button>
+        </div>
+        <div id="biaya-loading" class="loading hidden">Claude sedang membaca bukti…</div>
+        <div id="biaya-error" class="error hidden"></div>
+      </div>
+
+      <div id="biaya-preview" class="card hidden">
+        <h3>Pratinjau — periksa sebelum submit</h3>
+        <p class="hint">Subjek Biaya &amp; Kode Transaksi terisi otomatis oleh spreadsheet (hanya tampilan).
+           Outlet wajib dipilih manual. Status selalu <b>BELUM INPUT</b>.</p>
+        <div class="table-wrap">
+          <table id="biaya-table">
+            <thead>
+              <tr>
+                <th>Subjek Biaya<br><small>(otomatis)</small></th>
+                <th>Keterangan</th>
+                <th>Nominal (Rp)</th>
+                <th>Tanggal</th>
+                <th>Outlet</th>
+                <th>Status Smartlink</th>
+                <th>Sumber Dana</th>
+                <th>Kode<br><small>(otomatis)</small></th>
+                <th>Catatan AI</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="actions">
+          <button id="btn-biaya-add" class="btn-ghost">+ Tambah baris manual</button>
+          <button id="btn-biaya-submit" class="btn-primary">💾 Submit ke Spreadsheet</button>
+        </div>
+        <div id="biaya-submit-result" class="result-log hidden"></div>
+      </div>
+    </section>
+
+    <!-- ============ TAB INPUT KAS ============ -->
+    <section id="tab-kas" class="panel">
+      <p class="section-intro">Upload screenshot saldo, AI membaca nominalnya, lalu <b>konfirmasi pratinjau</b> sebelum
+         nominal &amp; tanggal hari ini ditulis ke sel tujuan.</p>
+      <div class="grid-2">
+        <div class="card kas-card" data-jenis="bank">
+          <h3>1. Kas Bank (m-banking)</h3>
+          <p class="hint">BCA → KAS!B6 · BRI → B7 · BNI → B8 · Mandiri → B9 <i>(BIAYA &amp; KAS LAUNDRY)</i></p>
+        </div>
+        <div class="card kas-card" data-jenis="aplikasi-outlet">
+          <h3>2. Kas Aplikasi Outlet</h3>
+          <p class="hint">Maumbi → B4 · Perkamil → B5 <i>(INPUT LAPORAN HARIAN)</i></p>
+        </div>
+        <div class="card kas-card" data-jenis="bank-aplikasi">
+          <h3>3. Kas Bank di Aplikasi</h3>
+          <p class="hint">BCA → B11 · BRI → B12 · BNI → B13 · Mandiri → B14 <i>(INPUT LAPORAN HARIAN)</i></p>
+        </div>
+        <div class="card kas-card" data-jenis="belum-settlement">
+          <h3>4. Belum Settlement</h3>
+          <p class="hint">Total → B15 <i>(INPUT LAPORAN HARIAN)</i></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ TAB PENGATURAN ============ -->
+    <section id="tab-pengaturan" class="panel">
+      <div class="card">
+        <h2>Pengaturan</h2>
+        <div id="settings-info">Memuat…</div>
+        <hr />
+        <h3>Spreadsheet CASHFLOW bulan ini</h3>
+        <p class="hint">Setiap awal bulan, dashboard otomatis mencari spreadsheet berjudul
+          <b>CASHFLOW DAN BIAYA &lt;BULAN&gt; &lt;TAHUN&gt;</b>. Jika tidak ketemu (atau judulnya berbeda),
+          tempel link spreadsheet bulan ini di sini.</p>
+        <div class="upload-row">
+          <input type="text" id="cashflow-link" placeholder="https://docs.google.com/spreadsheets/d/…" />
+          <button id="btn-save-cashflow" class="btn-primary">Simpan</button>
+        </div>
+        <div id="settings-result" class="result-log hidden"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
