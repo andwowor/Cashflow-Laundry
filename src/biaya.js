@@ -150,6 +150,25 @@ function mapEntry(e, keteranganList, subjekMap, todayIso, sumber, fileIndex) {
 }
 
 /**
+ * Aturan per-bukti: bila sebuah file adalah "Setoran Owner" dan di dalamnya ada
+ * "Biaya Admin", biaya admin TIDAK dipisah — nominalnya digabung ke Setoran Owner
+ * (satu baris). Hanya berlaku saat kedua jenis ada dalam file yang sama.
+ */
+function combineAdminIntoSetoran(rows) {
+  const isSetoran = (r) => /^setoran owner$/i.test((r.keterangan || "").trim());
+  const isAdmin = (r) => /^biaya admin$/i.test((r.keterangan || "").trim());
+  const setoran = rows.filter(isSetoran);
+  const admins = rows.filter(isAdmin);
+  if (!setoran.length || !admins.length) return rows; // tidak ada yang digabung
+
+  const adminTotal = admins.reduce((s, r) => s + (Number(r.nominal) || 0), 0);
+  const target = setoran[0];
+  target.nominal = (Number(target.nominal) || 0) + adminTotal;
+  target.catatan = `Termasuk biaya admin Rp${adminTotal.toLocaleString("id-ID")} (digabung). ` + (target.catatan || "");
+  return rows.filter((r) => !isAdmin(r));
+}
+
+/**
  * Analisis screenshot/bukti biaya dengan Claude. Mendukung banyak file sekaligus
  * (pengisian masal): tiap file diproses terpisah secara paralel (dibatasi),
  * lalu seluruh entry digabung untuk satu kali pratinjau & submit.
@@ -176,7 +195,8 @@ async function analyze(files) {
       learningText: learn,
       todayIso,
     });
-    return entries.map((e) => mapEntry(e, keteranganList, subjekMap, todayIso, f.originalname, idx));
+    const rows = entries.map((e) => mapEntry(e, keteranganList, subjekMap, todayIso, f.originalname, idx));
+    return combineAdminIntoSetoran(rows); // gabung biaya admin ke setoran owner (per bukti)
   });
 
   return perFile.flat();

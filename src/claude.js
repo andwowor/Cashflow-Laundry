@@ -79,6 +79,7 @@ async function extractBiaya({ images, keteranganList, sumberDanaList, historyTex
     "- Tanggal diambil dari bukti (bukan tanggal hari ini), kecuali tidak terbaca → null.",
     "- sumber_dana hanya diisi bila nama bank pengirim terlihat (mis. logo/teks BCA, BRI, BNI, Mandiri) dan harus persis dari daftar SUMBER DANA; jika ragu → null.",
     "- Bila bukti adalah pembelian TOKEN LISTRIK PLN (token/stroom prabayar), baca nomor IDPEL/ID Pelanggan (11–12 digit) dan isikan di field idpel. Jangan tertukar dengan nomor token 20 digit atau nomor seri meter.",
+    "- Bila pada bukti terdapat biaya admin / biaya transfer, buat entry terpisah dengan keterangan 'Biaya Admin' dan nominal biaya tersebut (penggabungan, bila perlu, dilakukan di tahap berikutnya).",
     "- Gunakan riwayat pengisian dan koreksi sebelumnya untuk memilih keterangan yang paling sesuai kebiasaan user.",
   ].join("\n");
 
