@@ -106,18 +106,23 @@ async function analyze(files) {
   });
 
   const subjekMap = new Map(options.daftarBiaya.map((d) => [d.keterangan, d.subjek]));
-  return entries.map((e) => ({
-    keterangan: keteranganList.includes(e.keterangan) ? e.keterangan : "",
-    keteranganMentah: e.keterangan,
-    subjek: subjekMap.get(e.keterangan) || "",
-    nominal: e.nominal,
-    tanggal: e.tanggal || todayIso,
-    outlet: "", // user selalu memilih sendiri
-    status: "BELUM INPUT", // selalu BELUM INPUT
-    sumberDana: e.sumber_dana && SUMBER_DANA.includes(e.sumber_dana) ? e.sumber_dana : "",
-    catatan: e.catatan,
-    keyakinan: e.keyakinan,
-  }));
+  return entries.map((e) => {
+    const keterangan = keteranganList.includes(e.keterangan) ? e.keterangan : "";
+    // Aturan: keterangan "Setoran Owner" -> rekomendasikan outlet MAUMBI (boleh diubah user).
+    const outlet = /^setoran owner$/i.test(keterangan.trim()) ? "MAUMBI" : "";
+    return {
+      keterangan,
+      keteranganMentah: e.keterangan,
+      subjek: subjekMap.get(e.keterangan) || "",
+      nominal: e.nominal,
+      tanggal: e.tanggal || todayIso,
+      outlet,
+      status: "BELUM INPUT", // selalu BELUM INPUT
+      sumberDana: e.sumber_dana && SUMBER_DANA.includes(e.sumber_dana) ? e.sumber_dana : "",
+      catatan: e.catatan,
+      keyakinan: e.keyakinan,
+    };
+  });
 }
 
 function isoToSheetDate(iso) {
