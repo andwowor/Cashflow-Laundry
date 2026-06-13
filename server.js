@@ -212,6 +212,10 @@ app.post("/api/monbiaya/unhide", wrap(async (req, res) => {
   res.json(monbiaya.restore((req.body || {}).nomors || []));
 }));
 
+app.post("/api/monbiaya/hide", wrap(async (req, res) => {
+  res.json(monbiaya.hide((req.body || {}).nomors || []));
+}));
+
 app.post("/api/monbiaya/koreksi", wrap(async (req, res) => {
   const { row, text } = req.body || {};
   res.json(await monbiaya.setKoreksi(Number(row), text));

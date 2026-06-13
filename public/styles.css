@@ -202,6 +202,7 @@ input[type="file"] { font-family: "Segoe UI", Arial, sans-serif; font-size: 13px
 .mb-koreksi-save { margin-left: 6px; padding: 4px 10px; font-size: 11px; border-radius: 6px; border: 1px solid var(--line); background: #fff; cursor: pointer; font-family: "Segoe UI", Arial, sans-serif; }
 .mb-koreksi-save:hover { border-color: var(--teal); }
 #monbiaya-grid td.mb-tgl-red { background: #f7d9d2; color: var(--err); font-weight: 600; }
+#monbiaya-grid td.mb-subjek-yellow { background: #fcefb4; font-weight: 600; }
 
 /* Pratinjau input biaya: kolom cukup lebar agar isi terlihat penuh; tabel boleh
    menggulir horizontal bila melebihi lebar layar. */

@@ -10,12 +10,21 @@ const ANALISA_SHEET = "TRANSAKSI"; // sheet di spreadsheet ANALISA KEUANGAN
 
 // Catatan baris yang sudah di-export (hilang dari daftar). Kunci = NOMOR (kolom A).
 const EXPORTED_FILE = path.join(cfg.DATA_DIR, "monbiaya_exported.json");
+const SEED_VERSION = 2; // v2: baris yang SUDAH VERIFIKASI OWNER dianggap historis
 function loadExported() {
-  const d = cfg.readJsonFile(EXPORTED_FILE, { seeded: false, keys: [] });
-  return { seeded: !!d.seeded, keys: new Set(d.keys || []) };
+  const d = cfg.readJsonFile(EXPORTED_FILE, { seeded: false, seedVersion: 0, keys: [] });
+  return {
+    seeded: !!d.seeded,
+    seedVersion: Number(d.seedVersion) || (d.seeded ? 1 : 0),
+    keys: new Set(d.keys || []),
+  };
 }
 function saveExported(state) {
-  cfg.writeJsonFile(EXPORTED_FILE, { seeded: state.seeded, keys: Array.from(state.keys) });
+  cfg.writeJsonFile(EXPORTED_FILE, {
+    seeded: state.seeded,
+    seedVersion: state.seedVersion || 0,
+    keys: Array.from(state.keys),
+  });
 }
 
 // Opsi dropdown pada sheet BIAYA.
@@ -97,16 +106,19 @@ async function list() {
   const rows = await readRange(id, `'${BIAYA_SHEET}'!A1:N`, "FORMATTED_VALUE");
   const state = loadExported();
 
-  if (!state.seeded) {
+  // Baseline historis (sekali per versi): baris yang SUDAH VERIFIKASI OWNER dianggap
+  // "sudah ditangani" (termasuk Setoran Owner lama yang status lapornya kosong).
+  if ((state.seedVersion || 0) < SEED_VERSION) {
     for (let i = 1; i < rows.length; i++) {
       const r = rows[i] || [];
       if (!norm(r[COL.keterangan])) continue;
-      if (norm(r[COL.status]) === "SUDAH INPUT" && norm(r[COL.verifikasi]) === "SUDAH VERIFIKASI OWNER") {
+      if (norm(r[COL.verifikasi]) === "SUDAH VERIFIKASI OWNER") {
         const k = rowKey(r);
         if (k) state.keys.add(k);
       }
     }
     state.seeded = true;
+    state.seedVersion = SEED_VERSION;
     saveExported(state);
   }
 
@@ -285,6 +297,20 @@ async function exportSetoranOwner(rowNumbers) {
   return { ok: true, sheet: ANALISA_SHEET, barisAwal: appendRow, barisAkhir: endRow, jumlah: values.length, skipped };
 }
 
+/** Sembunyikan baris (berdasarkan NOMOR) dengan menambahkannya ke daftar ter-export. */
+function hide(nomors) {
+  const state = loadExported();
+  state.seeded = true;
+  const want = (nomors || []).map((n) => String(n).trim()).filter(Boolean);
+  let added = 0;
+  for (const k of want) {
+    if (!state.keys.has(k)) added++;
+    state.keys.add(k);
+  }
+  saveExported(state);
+  return { ok: true, hidden: added, nomors: want };
+}
+
 /** Munculkan kembali baris (berdasarkan NOMOR) dengan menghapusnya dari daftar ter-export. */
 function restore(nomors) {
   const state = loadExported();
@@ -300,4 +326,4 @@ function restore(nomors) {
   return { ok: true, removed, nomors: Array.from(want) };
 }
 
-module.exports = { list, setStatus, setKoreksi, exportRows, exportSetoranOwner, restore };
+module.exports = { list, setStatus, setKoreksi, exportRows, exportSetoranOwner, hide, restore };

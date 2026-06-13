@@ -747,6 +747,7 @@ $("#btn-qbank-submit").addEventListener("click", async () => {
 // ================= Monitoring Biaya =================
 let MONBIAYA = null;
 let MONBIAYA_LOADED = false;
+const MB_SUBJEK_COL = 1; // SUBJEK BIAYA
 const MB_TANGGAL_COL = 4; // TANGGAL
 const MB_STATUS_COL = 10; // STATUS LAPOR APLIKASI
 const MB_KODE_COL = 11; // KODE TRANSAKSI
@@ -794,6 +795,10 @@ function renderMonBiaya() {
       const tds = r.cells
         .map((c, col) => {
           if (MB_HIDDEN.has(col)) return ""; // kolom disembunyikan
+          if (col === MB_SUBJEK_COL) {
+            const yellow = c.trim().toLowerCase() === "setoran owner" ? " mb-subjek-yellow" : "";
+            return `<td class="mb-subjek${yellow}">${escapeHtml(c)}</td>`;
+          }
           if (col === MB_TANGGAL_COL) {
             return `<td class="mb-tgl${ready ? "" : " mb-tgl-red"}">${escapeHtml(c)}</td>`;
           }
@@ -948,23 +953,27 @@ $("#monbiaya-table").addEventListener("change", (e) => {
 
 $("#btn-monbiaya-refresh").addEventListener("click", loadMonBiaya);
 
-$("#btn-monbiaya-unhide").addEventListener("click", async () => {
+async function mbNomorAction(endpoint, verb) {
   const out = $("#monbiaya-result");
-  const nomors = $("#monbiaya-unhide").value.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
+  const nomors = $("#monbiaya-nomor").value.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
   if (!nomors.length) return showLog(out, "✘ Masukkan NOMOR (pisah koma).", true);
   try {
-    const r = await api("/api/monbiaya/unhide", {
+    const r = await api(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ nomors }),
     });
-    showLog(out, `✔ ${r.removed} baris dimunculkan kembali (NOMOR: ${nomors.join(", ")}).`);
-    $("#monbiaya-unhide").value = "";
+    const n = r.removed ?? r.hidden ?? nomors.length;
+    showLog(out, `✔ ${n} baris ${verb} (NOMOR: ${nomors.join(", ")}).`);
+    $("#monbiaya-nomor").value = "";
     await loadMonBiaya();
   } catch (e) {
     showLog(out, "✘ " + e.message, true);
   }
-});
+}
+
+$("#btn-monbiaya-hide").addEventListener("click", () => mbNomorAction("/api/monbiaya/hide", "disembunyikan"));
+$("#btn-monbiaya-unhide").addEventListener("click", () => mbNomorAction("/api/monbiaya/unhide", "dimunculkan kembali"));
 
 async function mbExport(endpoint, btn) {
   const out = $("#monbiaya-result");
