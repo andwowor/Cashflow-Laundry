@@ -201,7 +201,6 @@ async function exportSetoranOwner(rowNumbers) {
   const monthName = cfg.MONTH_NAMES_ID[month - 1];
 
   const values = [];
-  const usedRows = [];
   let skipped = 0;
   for (const rn of rowNumbers) {
     const r = raw[Number(rn) - 1];
@@ -224,7 +223,6 @@ async function exportSetoranOwner(rowNumbers) {
       monthName, // H BUDGET BULAN
       year, // I TAHUN BUDGET
     ]);
-    usedRows.push(r);
   }
   if (values.length === 0) {
     throw new Error(
@@ -241,15 +239,8 @@ async function exportSetoranOwner(rowNumbers) {
   const endRow = appendRow + values.length - 1;
   await batchWrite(analisaId, [{ range: `'${ANALISA_SHEET}'!A${appendRow}:I${endRow}`, values }]);
 
-  // Sembunyikan baris yang sudah diexport.
-  const state = loadExported();
-  state.seeded = true;
-  for (const r of usedRows) {
-    const k = rowKey(r);
-    if (k) state.keys.add(k);
-  }
-  saveExported(state);
-
+  // Catatan: baris TIDAK disembunyikan setelah export ini (berbeda dari export ke
+  // INPUT PENGGUNAAN BIAYA) — sesuai permintaan, aturan sembunyi hanya untuk export tsb.
   return { ok: true, sheet: ANALISA_SHEET, barisAwal: appendRow, barisAkhir: endRow, jumlah: values.length, skipped };
 }
 
