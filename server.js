@@ -51,7 +51,7 @@ app.use(express.static(path.join(__dirname, "public")));
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 15 * 1024 * 1024, files: 10 },
+  limits: { fileSize: 15 * 1024 * 1024, files: 30 },
   fileFilter: (req, file, cb) => {
     const ok = ["image/png", "image/jpeg", "image/webp", "image/gif"].includes(file.mimetype);
     cb(ok ? null : new Error("Format gambar harus PNG/JPEG/WebP/GIF."), ok);
@@ -130,12 +130,12 @@ app.get("/api/biaya/history", wrap(async (req, res) => {
   res.json({ ok: true, history: await biaya.getHistory(30) });
 }));
 
-app.post("/api/biaya/analyze", upload.array("files", 10), wrap(async (req, res) => {
+app.post("/api/biaya/analyze", upload.array("files", 30), wrap(async (req, res) => {
   if (!req.files || req.files.length === 0) {
     return res.status(400).json({ ok: false, error: "Upload minimal satu screenshot/bukti transfer." });
   }
   const entries = await biaya.analyze(req.files);
-  res.json({ ok: true, entries });
+  res.json({ ok: true, entries, fileCount: req.files.length });
 }));
 
 app.post("/api/biaya/submit", wrap(async (req, res) => {

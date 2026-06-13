@@ -80,7 +80,45 @@ function learningText(maxItems = 25) {
   return lines.slice(-40).join("\n");
 }
 
-/** Analisis screenshot bukti biaya dengan Claude. */
+/** Jalankan fn untuk tiap item dengan batas konkurensi. */
+async function mapLimit(items, limit, fn) {
+  const results = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const idx = next++;
+      results[idx] = await fn(items[idx], idx);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+/** Petakan satu entry hasil AI ke baris pratinjau (termasuk aturan bisnis). */
+function mapEntry(e, keteranganList, subjekMap, todayIso, sumber) {
+  const keterangan = keteranganList.includes(e.keterangan) ? e.keterangan : "";
+  // Aturan: keterangan "Setoran Owner" -> rekomendasikan outlet MAUMBI (boleh diubah user).
+  const outlet = /^setoran owner$/i.test(keterangan.trim()) ? "MAUMBI" : "";
+  return {
+    keterangan,
+    keteranganMentah: e.keterangan,
+    subjek: subjekMap.get(e.keterangan) || "",
+    nominal: e.nominal,
+    tanggal: e.tanggal || todayIso,
+    outlet,
+    status: "BELUM INPUT", // selalu BELUM INPUT
+    sumberDana: e.sumber_dana && SUMBER_DANA.includes(e.sumber_dana) ? e.sumber_dana : "",
+    catatan: e.catatan,
+    keyakinan: e.keyakinan,
+    sumber, // nama file asal (untuk verifikasi saat pengisian masal)
+  };
+}
+
+/**
+ * Analisis screenshot/bukti biaya dengan Claude. Mendukung banyak file sekaligus
+ * (pengisian masal): tiap file diproses terpisah secara paralel (dibatasi),
+ * lalu seluruh entry digabung untuk satu kali pratinjau & submit.
+ */
 async function analyze(files) {
   const [options, history] = await Promise.all([getOptions(), getHistory(60)]);
   const { year, month, day } = cfg.nowInBusinessTz();
@@ -89,40 +127,24 @@ async function analyze(files) {
   const historyText = history
     .map((h) => `- ${h.keterangan} → Rp${h.nominal} → ${h.outlet} → ${h.sumberDana}`)
     .join("\n");
-
-  const images = files.map((f) => ({
-    base64: f.buffer.toString("base64"),
-    mediaType: f.mimetype,
-  }));
-
+  const learn = learningText();
   const keteranganList = options.daftarBiaya.map((d) => d.keterangan);
-  const entries = await extractBiaya({
-    images,
-    keteranganList,
-    sumberDanaList: SUMBER_DANA,
-    historyText,
-    learningText: learningText(),
-    todayIso,
+  const subjekMap = new Map(options.daftarBiaya.map((d) => [d.keterangan, d.subjek]));
+
+  const perFile = await mapLimit(files, 4, async (f) => {
+    const images = [{ base64: f.buffer.toString("base64"), mediaType: f.mimetype }];
+    const entries = await extractBiaya({
+      images,
+      keteranganList,
+      sumberDanaList: SUMBER_DANA,
+      historyText,
+      learningText: learn,
+      todayIso,
+    });
+    return entries.map((e) => mapEntry(e, keteranganList, subjekMap, todayIso, f.originalname));
   });
 
-  const subjekMap = new Map(options.daftarBiaya.map((d) => [d.keterangan, d.subjek]));
-  return entries.map((e) => {
-    const keterangan = keteranganList.includes(e.keterangan) ? e.keterangan : "";
-    // Aturan: keterangan "Setoran Owner" -> rekomendasikan outlet MAUMBI (boleh diubah user).
-    const outlet = /^setoran owner$/i.test(keterangan.trim()) ? "MAUMBI" : "";
-    return {
-      keterangan,
-      keteranganMentah: e.keterangan,
-      subjek: subjekMap.get(e.keterangan) || "",
-      nominal: e.nominal,
-      tanggal: e.tanggal || todayIso,
-      outlet,
-      status: "BELUM INPUT", // selalu BELUM INPUT
-      sumberDana: e.sumber_dana && SUMBER_DANA.includes(e.sumber_dana) ? e.sumber_dana : "",
-      catatan: e.catatan,
-      keyakinan: e.keyakinan,
-    };
-  });
+  return perFile.flat();
 }
 
 function isoToSheetDate(iso) {

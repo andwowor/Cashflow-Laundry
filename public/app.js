@@ -189,6 +189,7 @@ function biayaRowHtml(entry) {
     .map((s) => `<option${s === (entry.status || "BELUM INPUT") ? " selected" : ""}>${s}</option>`)
     .join("");
   const badge = entry.keyakinan ? `<span class="badge ${entry.keyakinan}">${entry.keyakinan}</span> ` : "";
+  const sumber = entry.sumber ? `<b>${escapeHtml(entry.sumber)}</b> · ` : "";
   return `
     <td class="subjek">${entry.subjek || ""}</td>
     <td><select class="f-keterangan"><option value="">— pilih —</option>${ketOpts}</select></td>
@@ -198,7 +199,7 @@ function biayaRowHtml(entry) {
     <td><select class="f-status">${statusOpts}</select></td>
     <td><select class="f-sumber">${sdOpts}</select></td>
     <td><small>otomatis</small></td>
-    <td><small>${badge}${entry.catatan || ""}</small></td>
+    <td><small>${sumber}${badge}${escapeHtml(entry.catatan || "")}</small></td>
     <td><button class="btn-mini" title="Hapus baris">✕</button></td>`;
 }
 
@@ -228,6 +229,10 @@ $("#btn-biaya-analyze").addEventListener("click", async () => {
     errEl.classList.remove("hidden");
     return;
   }
+  $("#biaya-loading").textContent =
+    files.length > 1
+      ? `Claude sedang membaca ${files.length} bukti…`
+      : "Claude sedang membaca bukti…";
   $("#biaya-loading").classList.remove("hidden");
   $("#btn-biaya-analyze").disabled = true;
   try {
@@ -240,6 +245,10 @@ $("#btn-biaya-analyze").addEventListener("click", async () => {
     data.entries.forEach(addBiayaRow);
     $("#biaya-preview").classList.remove("hidden");
     $("#biaya-submit-result").classList.add("hidden");
+    if (!data.entries.length) {
+      $("#biaya-error").textContent = "Tidak ada transaksi yang terbaca dari bukti yang diupload.";
+      $("#biaya-error").classList.remove("hidden");
+    }
   } catch (e) {
     errEl.textContent = e.message;
     errEl.classList.remove("hidden");
