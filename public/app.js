@@ -750,6 +750,7 @@ let MONBIAYA_LOADED = false;
 const MB_STATUS_COL = 10; // STATUS LAPOR APLIKASI
 const MB_KODE_COL = 11; // KODE TRANSAKSI
 const MB_VERIF_COL = 12; // VERIFIKASI OWNER
+const MB_HIDDEN = new Set([8, 9]); // POS BIAYA APLIKASI & ITEM BIAYA: tidak ditampilkan
 
 function mbUpdateCount() {
   const n = $$("#monbiaya-table .mb-check:checked").length;
@@ -764,12 +765,13 @@ function renderMonBiaya() {
     return;
   }
   const heads = ['<th><input type="checkbox" id="mb-checkall" title="Pilih semua"></th>']
-    .concat(MONBIAYA.headers.map((h) => `<th>${escapeHtml(h)}</th>`))
+    .concat(MONBIAYA.headers.map((h, i) => (MB_HIDDEN.has(i) ? "" : `<th>${escapeHtml(h)}</th>`)))
     .join("");
   const body = MONBIAYA.rows
     .map((r) => {
       const tds = r.cells
         .map((c, col) => {
+          if (MB_HIDDEN.has(col)) return ""; // kolom disembunyikan
           if (col === MB_STATUS_COL) {
             return `<td><button class="mb-btn mb-status" data-row="${r.row}" data-val="${escapeHtml(c)}">${escapeHtml(c || "—")}</button></td>`;
           }
