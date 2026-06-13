@@ -13,9 +13,38 @@ const { runDailySync } = require("./src/sync");
 const biaya = require("./src/biaya");
 const kas = require("./src/kas");
 const { MODEL } = require("./src/claude");
+const auth = require("./src/auth");
 
 const app = express();
+app.set("trust proxy", 1); // hormati X-Forwarded-Proto di belakang proxy hosting (Render dsb.)
 app.use(express.json({ limit: "2mb" }));
+
+// ---------- Autentikasi (sebelum route lain) ----------
+
+app.get("/login", (req, res) => res.sendFile(path.join(__dirname, "public", "login.html")));
+
+app.post("/api/login", (req, res) => {
+  const { username, password } = req.body || {};
+  if (!auth.isConfigured()) {
+    return res.status(503).json({
+      ok: false,
+      error: "Login belum dikonfigurasi. Set DASHBOARD_PASSWORD di environment/.env lalu restart.",
+    });
+  }
+  if (!auth.checkCredentials(username, password)) {
+    return res.status(401).json({ ok: false, error: "Username atau password salah." });
+  }
+  auth.setAuthCookie(req, res);
+  res.json({ ok: true });
+});
+
+app.post("/api/logout", (req, res) => {
+  auth.clearAuthCookie(res);
+  res.json({ ok: true });
+});
+
+// Semua route di bawah ini wajib login.
+app.use(auth.requireAuth);
 app.use(express.static(path.join(__dirname, "public")));
 
 const upload = multer({

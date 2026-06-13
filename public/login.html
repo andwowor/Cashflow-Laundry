@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Masuk — Dashboard Kas Laundry</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #0a4f49, #0f6b62);
+      font-family: "Segoe UI", Arial, sans-serif; color: #1d2b2a;
+    }
+    .box {
+      background: #fff; width: 340px; max-width: 92vw; padding: 30px 28px;
+      border-radius: 12px; box-shadow: 0 18px 50px rgba(0,0,0,0.25);
+    }
+    .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+    .brand span { font-size: 28px; color: #c97b2d; }
+    .brand h1 { font-size: 19px; margin: 0; font-family: Georgia, serif; color: #0a4f49; }
+    p.sub { margin: 0 0 20px; font-size: 13px; color: #5c6b69; }
+    label { display: block; font-size: 13px; margin: 12px 0 5px; color: #5c6b69; }
+    input {
+      width: 100%; padding: 10px 12px; font-size: 14px; border: 1px solid #dfe3da;
+      border-radius: 8px;
+    }
+    button {
+      width: 100%; margin-top: 20px; padding: 11px; border: none; border-radius: 8px;
+      background: #c97b2d; color: #fff; font-size: 15px; font-weight: 600; cursor: pointer;
+    }
+    button:hover { filter: brightness(1.08); }
+    button:disabled { opacity: .6; cursor: wait; }
+    .err { margin-top: 14px; color: #b3402f; font-size: 13px; min-height: 18px; }
+  </style>
+</head>
+<body>
+  <form class="box" id="login-form">
+    <div class="brand"><span>◍</span><h1>Dashboard Kas Laundry</h1></div>
+    <p class="sub">Masuk untuk melanjutkan</p>
+    <label for="u">Username</label>
+    <input id="u" name="username" autocomplete="username" autofocus />
+    <label for="p">Password</label>
+    <input id="p" name="password" type="password" autocomplete="current-password" />
+    <button type="submit" id="btn">Masuk</button>
+    <div class="err" id="err"></div>
+  </form>
+  <script>
+    const form = document.getElementById("login-form");
+    const err = document.getElementById("err");
+    const btn = document.getElementById("btn");
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      err.textContent = "";
+      btn.disabled = true;
+      try {
+        const res = await fetch("/api/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: document.getElementById("u").value,
+            password: document.getElementById("p").value,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.ok) {
+          window.location = "/";
+        } else {
+          err.textContent = data.error || "Username atau password salah.";
+        }
+      } catch (e2) {
+        err.textContent = "Gagal terhubung ke server.";
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

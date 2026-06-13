@@ -44,6 +44,8 @@ body {
   border-radius: 8px 8px 0 0;
 }
 .tab.active { background: var(--bg); color: var(--teal-dark); font-weight: 600; }
+.tab.logout { margin-left: auto; color: #ffd9a8; }
+.tab.logout:hover { color: #fff; }
 
 main { padding: 24px 28px 60px; max-width: 1280px; margin: 0 auto; }
 

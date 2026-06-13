@@ -83,6 +83,42 @@ Blok bulan baru di sheet REKAP (baris baru mengikuti pola: header bulan → +28 
 ke "KAS TUNAI LAPOR") terdeteksi otomatis dari nama bulan, jadi tidak perlu mengubah
 kode saat baris 226 berganti ke baris bulan berikutnya.
 
+## Login
+
+Dashboard dilindungi login (wajib sebelum dipakai/online). Set di `.env`:
+
+```env
+DASHBOARD_USERNAME=admin
+DASHBOARD_PASSWORD=password-kuat-anda
+```
+
+Tanpa `DASHBOARD_PASSWORD`, halaman login akan menolak masuk. Sesi tersimpan di
+cookie bertanda-tangan (HttpOnly), berlaku 7 hari. Tombol **Keluar** ada di kanan
+atas. Jika `SESSION_SECRET` dikosongkan, ia diturunkan dari username+password —
+mengubah password otomatis mem-logout semua sesi lama.
+
+## Online / Deploy (Render)
+
+GitHub Pages tidak bisa menjalankan server Node.js ini. Gunakan host yang
+mendukung Node, mis. **Render** (ada paket gratis), yang deploy langsung dari repo:
+
+1. Push repo ke GitHub (sudah).
+2. Di https://render.com → **New → Blueprint** → hubungkan repo ini → pilih branch.
+   File `render.yaml` sudah menyiapkan service-nya.
+3. Isi environment variable lewat dashboard Render (jangan taruh di file):
+   - `ANTHROPIC_API_KEY` — key Claude.
+   - `GOOGLE_SERVICE_ACCOUNT_JSON` — **isi seluruh isi file** `service-account.json`
+     (di host tidak ada file; kredensial dibaca dari env var ini).
+   - `DASHBOARD_USERNAME`, `DASHBOARD_PASSWORD` — login Anda.
+   - `BIAYA_KAS_SPREADSHEET_ID` dan `TZ_NAME` sudah terisi dari blueprint.
+4. Deploy → Render memberi link publik `https://<nama>.onrender.com`.
+
+Catatan host gratis:
+- Filesystem bersifat sementara — `data/learning.json` (memori pembelajaran AI)
+  dan override link CASHFLOW bisa ter-reset saat redeploy/restart. Deteksi
+  spreadsheet bulanan via Drive tetap jalan otomatis, jadi ini tidak fatal.
+- Service paket gratis "tidur" saat idle; akses pertama setelah idle agak lambat.
+
 ## Catatan Teknis
 
 - Zona waktu default **Asia/Makassar (WITA)** — bisa diubah lewat `TZ_NAME`.

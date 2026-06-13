@@ -1,0 +1,27 @@
+# Blueprint deploy ke Render (https://render.com).
+# Di Render: New → Blueprint → hubungkan repo GitHub ini → pilih branch.
+# Setelah service dibuat, isi nilai environment variable yang ditandai sync:false
+# lewat dashboard Render (jangan taruh rahasia di file ini).
+services:
+  - type: web
+    name: dashboard-kas-laundry
+    runtime: node
+    plan: free
+    branch: claude/beautiful-bohr-8l57ky
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: TZ_NAME
+        value: Asia/Makassar
+      - key: BIAYA_KAS_SPREADSHEET_ID
+        value: 17FSDZKdYnn3yl08lWDfTZaQZ-x2AhXn493HhVnfAZlY
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: GOOGLE_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: DASHBOARD_USERNAME
+        sync: false
+      - key: DASHBOARD_PASSWORD
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true

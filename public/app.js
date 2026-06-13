@@ -10,6 +10,10 @@ const fmtRp = (n) =>
 
 async function api(path, opts = {}) {
   const res = await fetch(path, opts);
+  if (res.status === 401) {
+    window.location = "/login";
+    throw new Error("Sesi berakhir, silakan login ulang.");
+  }
   const data = await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }));
   if (!res.ok || data.ok === false) throw new Error(data.error || `HTTP ${res.status}`);
   return data;
@@ -29,6 +33,14 @@ $$(".tab").forEach((btn) => {
     btn.classList.add("active");
     $("#tab-" + btn.dataset.tab).classList.add("active");
   });
+});
+
+// ================= Logout =================
+$("#btn-logout").addEventListener("click", async () => {
+  try {
+    await fetch("/api/logout", { method: "POST" });
+  } catch {}
+  window.location = "/login";
 });
 
 // ================= Status =================
