@@ -235,4 +235,65 @@ async function extractQris({ images, todayIso }) {
   return JSON.parse(firstText(response)).entries;
 }
 
-module.exports = { extractBiaya, extractKas, extractQris, MODEL };
+/**
+ * Ekstraksi screenshot mutasi/transfer masuk dana EDC menjadi baris-baris
+ * transaksi {tanggal, subjek, nominal(bertanda), topup} untuk sheet DATA QRIS.
+ */
+async function extractQrisBank({ images, todayIso }) {
+  const schema = {
+    type: "object",
+    properties: {
+      entries: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            tanggal: {
+              type: ["string", "null"],
+              description: "Tanggal transaksi, format YYYY-MM-DD. Bila tahun tak tertera, pakai tahun hari ini. null jika tak terbaca.",
+            },
+            subjek: { type: "string", description: "Teks keterangan/subjek transaksi apa adanya (verbatim)." },
+            nominal: {
+              type: "integer",
+              description: "Nominal rupiah BERTANDA: positif untuk dana masuk/kredit, negatif untuk pengurangan/biaya/debit.",
+            },
+            topup: {
+              type: "boolean",
+              description: "true bila subjek/keterangan menunjukkan 'Bayar/Top-up' (penyetoran dana EDC); selain itu false.",
+            },
+          },
+          required: ["tanggal", "subjek", "nominal", "topup"],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ["entries"],
+    additionalProperties: false,
+  };
+
+  const system = [
+    "Kamu membaca screenshot mutasi/transfer masuk dana EDC (rekening bank) bisnis laundry.",
+    "Setiap baris transaksi memiliki: tanggal, subjek/keterangan, dan nominal yang bisa positif (kredit/dana masuk) atau negatif (debit/biaya).",
+    "Kembalikan SEMUA baris transaksi apa adanya (jangan disaring) — penyaringan dilakukan di tahap berikutnya.",
+    "nominal harus BERTANDA: beri tanda negatif bila transaksi berupa pengurangan/biaya/debit.",
+    "topup = true HANYA bila subjek/keterangan baris itu adalah jenis 'Bayar/Top-up' (penyetoran dana EDC); selain itu false.",
+    "Angka rupiah memakai titik sebagai pemisah ribuan (mis. 1.234.567 = 1234567).",
+  ].join("\n");
+
+  const content = [
+    ...images.map((img) => imageBlock(img.base64, img.mediaType)),
+    { type: "text", text: `Hari ini: ${todayIso}.\nKeluarkan entries sesuai skema.` },
+  ];
+
+  const response = await client().messages.create({
+    model: MODEL,
+    max_tokens: 12000,
+    system,
+    messages: [{ role: "user", content }],
+    output_config: { format: { type: "json_schema", schema } },
+  });
+
+  return JSON.parse(firstText(response)).entries;
+}
+
+module.exports = { extractBiaya, extractKas, extractQris, extractQrisBank, MODEL };

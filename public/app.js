@@ -455,6 +455,121 @@ $("#btn-qris-submit").addEventListener("click", async () => {
   }
 });
 
+// ================= Transfer Masuk Dana EDC (DATA QRIS) =================
+let QBANK_DATEROWS = {};
+
+function isoToDDMMYYYY(iso) {
+  const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
+}
+
+function renderQbankSummary() {
+  // Kelompokkan baris tercentang per tanggal, hitung formula + baris tujuan.
+  const groups = {};
+  $$("#qbank-table tbody tr").forEach((tr) => {
+    if (!tr.querySelector(".qb-include").checked) return;
+    const iso = tr.querySelector(".qb-tanggal").value;
+    const nom = Math.round(Number(tr.querySelector(".qb-nominal").value));
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso) || !Number.isFinite(nom) || nom <= 0) return;
+    (groups[iso] = groups[iso] || []).push(nom);
+  });
+  const keys = Object.keys(groups).sort();
+  if (!keys.length) {
+    $("#qbank-summary").innerHTML = `<p class="hint">Belum ada entri positif tercentang.</p>`;
+    return;
+  }
+  const rows = keys.map((iso) => {
+    const noms = groups[iso];
+    const total = noms.reduce((a, b) => a + b, 0);
+    const formula = noms.length === 1 ? String(noms[0]) : "=" + noms.join("+");
+    const row = QBANK_DATEROWS[iso];
+    const target = row ? `B${row}` : `<span style="color:#b3402f">tanggal tak ada di DATA QRIS</span>`;
+    return `<tr><td>${isoToDDMMYYYY(iso)}</td><td>${target}</td><td><code>${escapeHtml(formula)}</code></td><td class="num">${fmtRp(total)}</td></tr>`;
+  });
+  $("#qbank-summary").innerHTML =
+    `<table><thead><tr><th>Tanggal</th><th>Sel</th><th>Isi (formula)</th><th>Total</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
+}
+
+function addQbankRow(e) {
+  const tbody = $("#qbank-table tbody");
+  const tr = document.createElement("tr");
+  tr.innerHTML = `
+    <td style="text-align:center"><input type="checkbox" class="qb-include"${e.include ? " checked" : ""}></td>
+    <td><input type="date" class="qb-tanggal" value="${e.tanggal || ""}"></td>
+    <td><small>${escapeHtml(e.subjek || "")}</small></td>
+    <td><input type="number" class="qb-nominal" value="${e.nominal ?? ""}"></td>
+    <td style="text-align:center">${e.topup ? "✔" : "—"}</td>`;
+  tr.querySelector(".qb-include").addEventListener("change", renderQbankSummary);
+  tr.querySelector(".qb-tanggal").addEventListener("change", renderQbankSummary);
+  tr.querySelector(".qb-nominal").addEventListener("input", renderQbankSummary);
+  tbody.appendChild(tr);
+}
+
+$("#btn-qbank-analyze").addEventListener("click", async () => {
+  const files = $("#qbank-files").files;
+  const errEl = $("#qbank-error");
+  errEl.classList.add("hidden");
+  if (!files.length) {
+    errEl.textContent = "Pilih dulu screenshot mutasi transfer EDC.";
+    errEl.classList.remove("hidden");
+    return;
+  }
+  $("#qbank-loading").classList.remove("hidden");
+  $("#btn-qbank-analyze").disabled = true;
+  try {
+    const fd = new FormData();
+    for (const f of files) fd.append("files", f);
+    const data = await api("/api/qrisbank/analyze", { method: "POST", body: fd });
+    QBANK_DATEROWS = data.dateRows || {};
+    $("#qbank-table tbody").innerHTML = "";
+    data.entries.forEach(addQbankRow);
+    renderQbankSummary();
+    $("#qbank-preview").classList.remove("hidden");
+    $("#qbank-result").classList.add("hidden");
+    if (!data.entries.length) {
+      errEl.textContent = "Tidak ada transaksi yang terbaca dari screenshot.";
+      errEl.classList.remove("hidden");
+    }
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.classList.remove("hidden");
+  } finally {
+    $("#qbank-loading").classList.add("hidden");
+    $("#btn-qbank-analyze").disabled = false;
+  }
+});
+
+$("#btn-qbank-submit").addEventListener("click", async () => {
+  const out = $("#qbank-result");
+  const entries = $$("#qbank-table tbody tr")
+    .filter((tr) => tr.querySelector(".qb-include").checked)
+    .map((tr) => ({
+      tanggal: tr.querySelector(".qb-tanggal").value,
+      nominal: tr.querySelector(".qb-nominal").value,
+    }));
+  if (!entries.length) return showLog(out, "✘ Centang minimal satu entri positif.", true);
+  $("#btn-qbank-submit").disabled = true;
+  try {
+    const r = await api("/api/qrisbank/submit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ entries }),
+    });
+    const lines = ["✔ Tersimpan ke " + r.sheet + ":", ...r.written.map((w) => `  • ${w.tanggal} → ${w.sheet || "B" + w.row} = ${escapeHtml(w.formula)} (${fmtRp(w.total)})`)];
+    if (r.skipped && r.skipped.length) lines.push(`⚠ Dilewati (tanggal tak ditemukan): ${r.skipped.map((s) => s.tanggal).join(", ")}`);
+    showLog(out, lines.join("\n"));
+    $("#qbank-table tbody").innerHTML = "";
+    $("#qbank-summary").innerHTML = "";
+    $("#qbank-files").value = "";
+    $("#qbank-preview").classList.add("hidden");
+    loadDashboard();
+  } catch (e) {
+    showLog(out, "✘ " + e.message, true);
+  } finally {
+    $("#btn-qbank-submit").disabled = false;
+  }
+});
+
 // ================= Init =================
 loadStatus();
 loadDashboard();

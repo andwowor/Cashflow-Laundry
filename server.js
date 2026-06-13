@@ -13,6 +13,7 @@ const { runDailySync } = require("./src/sync");
 const biaya = require("./src/biaya");
 const kas = require("./src/kas");
 const qris = require("./src/qris");
+const qrisbank = require("./src/qrisbank");
 const { MODEL } = require("./src/claude");
 const auth = require("./src/auth");
 
@@ -169,6 +170,19 @@ app.post("/api/qris/analyze", upload.array("files", 10), wrap(async (req, res) =
 
 app.post("/api/qris/submit", wrap(async (req, res) => {
   res.json(await qris.submit((req.body || {}).rows));
+}));
+
+// ---------- Input transfer masuk dana EDC (sheet DATA QRIS) ----------
+
+app.post("/api/qrisbank/analyze", upload.array("files", 10), wrap(async (req, res) => {
+  if (!req.files || req.files.length === 0) {
+    return res.status(400).json({ ok: false, error: "Upload minimal satu screenshot." });
+  }
+  res.json({ ok: true, ...(await qrisbank.analyze(req.files)) });
+}));
+
+app.post("/api/qrisbank/submit", wrap(async (req, res) => {
+  res.json(await qrisbank.submit((req.body || {}).entries));
 }));
 
 // ---------- Start ----------

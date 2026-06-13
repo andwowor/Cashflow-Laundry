@@ -145,6 +145,36 @@
           <div id="qris-result" class="result-log hidden"></div>
         </div>
       </div>
+
+      <div class="card" id="qbank-card">
+        <h3>6. Transfer Masuk Dana EDC → sheet DATA QRIS</h3>
+        <p class="hint">Dari screenshot mutasi bank, AI mengambil <b>hanya</b> entri bersubjek "Bayar/Top-up" yang
+          <b>positif</b>. Nominal dicocokkan ke baris sesuai <b>tanggal</b> lalu ditulis ke kolom <b>TOTAL BANK</b>;
+          bila lebih dari satu, dijumlahkan sebagai <b>formula</b> (mis. <code>=76064+420714</code>).
+          Kolom Total Transaksi &amp; Selisih otomatis (tidak disentuh).</p>
+        <div class="upload-row">
+          <input type="file" id="qbank-files" accept="image/*" multiple />
+          <button id="btn-qbank-analyze" class="btn-primary">🔍 Analisis</button>
+        </div>
+        <div id="qbank-loading" class="loading hidden">Claude sedang membaca screenshot…</div>
+        <div id="qbank-error" class="error hidden"></div>
+
+        <div id="qbank-preview" class="hidden" style="margin-top: 12px;">
+          <h4 style="margin:0 0 8px; font-family:'Segoe UI',Arial,sans-serif;">Pratinjau transaksi — centang yang ikut dijumlahkan</h4>
+          <div class="table-wrap">
+            <table id="qbank-table">
+              <thead><tr><th>Pakai</th><th>Tanggal</th><th>Subjek</th><th>Nominal (Rp)</th><th>Top-up?</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <h4 style="margin:14px 0 6px; font-family:'Segoe UI',Arial,sans-serif;">Yang akan ditulis ke DATA QRIS</h4>
+          <div id="qbank-summary" class="table-wrap"></div>
+          <div class="actions">
+            <button id="btn-qbank-submit" class="btn-primary">💾 Submit ke DATA QRIS</button>
+          </div>
+          <div id="qbank-result" class="result-log hidden"></div>
+        </div>
+      </div>
     </section>
 
     <!-- ============ TAB PENGATURAN ============ -->
