@@ -953,10 +953,36 @@ $("#monbiaya-table").addEventListener("change", (e) => {
 
 $("#btn-monbiaya-refresh").addEventListener("click", loadMonBiaya);
 
+// Parse daftar NOMOR: dukung satuan ("35, 802") dan rentang ("769-804"), boleh dicampur.
+function parseNomorList(input) {
+  const out = [];
+  String(input || "")
+    .replace(/\n/g, ",")
+    .split(",")
+    .forEach((seg) => {
+      const part = seg.trim();
+      if (!part) return;
+      const m = part.match(/^(\d+)\s*-\s*(\d+)$/);
+      if (m) {
+        let a = parseInt(m[1], 10);
+        let b = parseInt(m[2], 10);
+        if (a > b) [a, b] = [b, a];
+        if (b - a > 5000) return; // jaga-jaga rentang tak masuk akal
+        for (let n = a; n <= b; n++) out.push(String(n));
+      } else {
+        part.split(/\s+/).forEach((t) => {
+          if (t) out.push(t);
+        });
+      }
+    });
+  return Array.from(new Set(out));
+}
+
 async function mbNomorAction(endpoint, verb) {
   const out = $("#monbiaya-result");
-  const nomors = $("#monbiaya-nomor").value.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
-  if (!nomors.length) return showLog(out, "✘ Masukkan NOMOR (pisah koma).", true);
+  const input = $("#monbiaya-nomor").value;
+  const nomors = parseNomorList(input);
+  if (!nomors.length) return showLog(out, "✘ Masukkan NOMOR atau rentang (mis. 35, 769-804).", true);
   try {
     const r = await api(endpoint, {
       method: "POST",
@@ -964,7 +990,7 @@ async function mbNomorAction(endpoint, verb) {
       body: JSON.stringify({ nomors }),
     });
     const n = r.removed ?? r.hidden ?? nomors.length;
-    showLog(out, `✔ ${n} baris ${verb} (NOMOR: ${nomors.join(", ")}).`);
+    showLog(out, `✔ ${n} baris ${verb} (input: ${input.trim()}).`);
     $("#monbiaya-nomor").value = "";
     await loadMonBiaya();
   } catch (e) {
