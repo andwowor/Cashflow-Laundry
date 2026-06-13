@@ -36,8 +36,9 @@ function isoToDDMMYYYY(iso) {
 }
 
 /**
- * Daftar biaya yang BELUM "SUDAH INPUT" (kolom STATUS LAPOR APLIKASI) DAN BELUM
- * "SUDAH VERIFIKASI OWNER" (kolom VERIFIKASI OWNER).
+ * Daftar biaya yang masih perlu tindakan: tampil selama BELUM "SUDAH INPUT"
+ * (kolom STATUS LAPOR APLIKASI) ATAU BELUM "SUDAH VERIFIKASI OWNER" (kolom
+ * VERIFIKASI OWNER). Baris hilang dari daftar HANYA bila keduanya sudah selesai.
  */
 async function list() {
   const id = cfg.BIAYA_KAS_SPREADSHEET_ID;
@@ -48,8 +49,8 @@ async function list() {
     if (!norm(r[COL.keterangan])) continue; // baris kosong
     const status = norm(r[COL.status]);
     const verif = norm(r[COL.verifikasi]);
-    if (status === "SUDAH INPUT") continue; // sudah input -> sembunyikan
-    if (verif === "SUDAH VERIFIKASI OWNER") continue; // sudah verifikasi -> sembunyikan
+    // Sembunyikan hanya bila SUDAH INPUT dan SUDAH VERIFIKASI OWNER (dua-duanya).
+    if (status === "SUDAH INPUT" && verif === "SUDAH VERIFIKASI OWNER") continue;
     out.push({
       row: i + 1, // nomor baris di sheet
       cells: HEADERS.map((_, c) => (r[c] == null ? "" : String(r[c]))),
