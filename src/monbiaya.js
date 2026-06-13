@@ -169,4 +169,19 @@ async function exportRows(rowNumbers) {
   return { ok: true, sheet: INPUT_SHEET, barisAwal: appendRow, barisAkhir: endRow, jumlah: values.length };
 }
 
-module.exports = { list, setStatus, exportRows };
+/** Munculkan kembali baris (berdasarkan NOMOR) dengan menghapusnya dari daftar ter-export. */
+function restore(nomors) {
+  const state = loadExported();
+  const want = new Set((nomors || []).map((n) => String(n).trim()).filter(Boolean));
+  let removed = 0;
+  for (const k of Array.from(state.keys)) {
+    if (want.has(k)) {
+      state.keys.delete(k);
+      removed++;
+    }
+  }
+  saveExported(state);
+  return { ok: true, removed, nomors: Array.from(want) };
+}
+
+module.exports = { list, setStatus, exportRows, restore };

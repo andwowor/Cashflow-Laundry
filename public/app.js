@@ -874,6 +874,24 @@ $("#monbiaya-table").addEventListener("change", (e) => {
 
 $("#btn-monbiaya-refresh").addEventListener("click", loadMonBiaya);
 
+$("#btn-monbiaya-unhide").addEventListener("click", async () => {
+  const out = $("#monbiaya-result");
+  const nomors = $("#monbiaya-unhide").value.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
+  if (!nomors.length) return showLog(out, "✘ Masukkan NOMOR (pisah koma).", true);
+  try {
+    const r = await api("/api/monbiaya/unhide", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nomors }),
+    });
+    showLog(out, `✔ ${r.removed} baris dimunculkan kembali (NOMOR: ${nomors.join(", ")}).`);
+    $("#monbiaya-unhide").value = "";
+    await loadMonBiaya();
+  } catch (e) {
+    showLog(out, "✘ " + e.message, true);
+  }
+});
+
 $("#btn-monbiaya-export").addEventListener("click", async () => {
   const out = $("#monbiaya-result");
   const rows = $$("#monbiaya-table .mb-check:checked").map((c) => Number(c.dataset.row));

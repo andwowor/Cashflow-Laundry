@@ -208,6 +208,10 @@ app.post("/api/monbiaya/export", wrap(async (req, res) => {
   res.json(await monbiaya.exportRows((req.body || {}).rows || []));
 }));
 
+app.post("/api/monbiaya/unhide", wrap(async (req, res) => {
+  res.json(monbiaya.restore((req.body || {}).nomors || []));
+}));
+
 // ---------- Start ----------
 
 const PORT = process.env.PORT || 3000;
