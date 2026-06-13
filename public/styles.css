@@ -81,6 +81,13 @@ main { padding: 24px 28px 60px; max-width: 1500px; margin: 0 auto; }
 .sync-box h2 { margin: 0 0 6px; font-size: 20px; }
 .sync-box p { margin: 0; color: #cfe0dc; max-width: 640px; }
 
+.last-sync {
+  font-family: "Segoe UI", Arial, sans-serif; font-size: 13px; color: var(--ink-soft);
+  margin: -6px 0 14px; padding: 8px 14px; background: #fff;
+  border: 1px solid var(--line); border-radius: 8px;
+}
+.last-sync b { color: var(--teal); }
+
 button { font-family: "Segoe UI", Arial, sans-serif; }
 .btn-primary {
   background: var(--amber);

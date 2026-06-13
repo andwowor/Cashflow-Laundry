@@ -110,7 +110,14 @@ app.get("/api/dashboard", wrap(async (req, res) => {
   } catch (e) {
     cashflowError = e.message;
   }
-  res.json({ ok: true, kas: kasRows, laporanHarian: ilhRows, cashflowError, today: cfg.todaySheetDate() });
+  res.json({
+    ok: true,
+    kas: kasRows,
+    laporanHarian: ilhRows,
+    cashflowError,
+    today: cfg.todaySheetDate(),
+    lastSync: cfg.getLastSync(),
+  });
 }));
 
 // ---------- Tombol update harian ----------

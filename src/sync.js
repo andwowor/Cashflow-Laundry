@@ -187,6 +187,8 @@ async function runDailySync() {
   ]);
   steps.push(`CASHFLOW ${ILH_SHEET}: B2:B3 & B6:B9 terisi nominal, C2:C25 = ${tanggal}.`);
 
+  cfg.recordLastSync(); // catat waktu update harian terakhir (sinkronisasi inti sukses)
+
   return {
     ok: true,
     tanggal,

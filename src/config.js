@@ -81,6 +81,45 @@ function parseSpreadsheetId(input) {
   return null;
 }
 
+/** Format tanggal+jam pada zona waktu bisnis: "dd/mm/yyyy HH:MM". */
+function formatBusinessDateTime(date) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: TIMEZONE,
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    })
+      .formatToParts(date)
+      .map((p) => [p.type, p.value])
+  );
+  return `${parts.day}/${parts.month}/${parts.year} ${parts.hour}:${parts.minute}`;
+}
+
+const TZ_ABBR = { "Asia/Jakarta": "WIB", "Asia/Makassar": "WITA", "Asia/Jayapura": "WIT" };
+function tzLabel() {
+  return TZ_ABBR[TIMEZONE] || TIMEZONE;
+}
+
+/** Catat waktu update harian terakhir (dipanggil saat sinkronisasi sukses). */
+function recordLastSync() {
+  const c = getStoredConfig();
+  c.lastSync = { iso: new Date().toISOString() };
+  saveStoredConfig(c);
+}
+
+/** Info update harian terakhir untuk ditampilkan, atau null bila belum pernah. */
+function getLastSync() {
+  const c = getStoredConfig();
+  if (!c.lastSync || !c.lastSync.iso) return null;
+  const d = new Date(c.lastSync.iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return { iso: c.lastSync.iso, display: `${formatBusinessDateTime(d)} ${tzLabel()}` };
+}
+
 module.exports = {
   MONTH_NAMES_ID,
   TIMEZONE,
@@ -95,4 +134,8 @@ module.exports = {
   currentMonthKey,
   todaySheetDate,
   parseSpreadsheetId,
+  formatBusinessDateTime,
+  tzLabel,
+  recordLastSync,
+  getLastSync,
 };

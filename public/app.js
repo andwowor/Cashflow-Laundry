@@ -240,6 +240,9 @@ function renderSheetTable(el, rows, opts = {}) {
 async function loadDashboard() {
   try {
     const data = await api("/api/dashboard");
+    $("#last-sync").innerHTML = data.lastSync
+      ? `Update harian terakhir: <b>${escapeHtml(data.lastSync.display)}</b>`
+      : "Update harian terakhir: <i>belum pernah dijalankan</i>";
     renderSheetTable($("#table-kas"), data.kas, {
       today: data.today,
       colCount: 4,
