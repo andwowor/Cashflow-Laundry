@@ -53,6 +53,12 @@ async function extractBiaya({ images, keteranganList, sumberDanaList, historyTex
                 "JANGAN ambil nomor token/stroom 20 digit, dan jangan nomor seri meter. " +
                 "null bila bukan pembelian token listrik atau IDPEL tak terbaca.",
             },
+            penerima: {
+              type: ["string", "null"],
+              description:
+                "Khusus bukti TRANSFER: nama pemilik rekening TUJUAN/penerima apa adanya (verbatim). " +
+                "null bila bukan transfer atau nama penerima tak terbaca.",
+            },
             sumber_dana: {
               type: ["string", "null"],
               description: "Hanya diisi bila nama bank/sumber dana terlihat jelas pada bukti; harus salah satu dari daftar SUMBER DANA. Selain itu null.",
@@ -60,7 +66,7 @@ async function extractBiaya({ images, keteranganList, sumberDanaList, historyTex
             catatan: { type: "string", description: "Penjelasan singkat apa yang terbaca dari bukti (untuk diperiksa user)." },
             keyakinan: { type: "string", enum: ["tinggi", "sedang", "rendah"] },
           },
-          required: ["keterangan", "nominal", "tanggal", "idpel", "sumber_dana", "catatan", "keyakinan"],
+          required: ["keterangan", "nominal", "tanggal", "idpel", "penerima", "sumber_dana", "catatan", "keyakinan"],
           additionalProperties: false,
         },
       },
@@ -80,6 +86,7 @@ async function extractBiaya({ images, keteranganList, sumberDanaList, historyTex
     "- sumber_dana hanya diisi bila nama bank pengirim terlihat (mis. logo/teks BCA, BRI, BNI, Mandiri) dan harus persis dari daftar SUMBER DANA; jika ragu → null.",
     "- Bila bukti adalah pembelian TOKEN LISTRIK PLN (token/stroom prabayar), baca nomor IDPEL/ID Pelanggan (11–12 digit) dan isikan di field idpel. Jangan tertukar dengan nomor token 20 digit atau nomor seri meter.",
     "- Bila pada bukti terdapat biaya admin / biaya transfer, buat entry terpisah dengan keterangan 'Biaya Admin' dan nominal biaya tersebut (penggabungan, bila perlu, dilakukan di tahap berikutnya).",
+    "- Bila bukti adalah transfer, baca nama pemilik rekening TUJUAN/penerima dan isikan di field penerima (apa adanya).",
     "- Gunakan riwayat pengisian dan koreksi sebelumnya untuk memilih keterangan yang paling sesuai kebiasaan user.",
   ].join("\n");
 

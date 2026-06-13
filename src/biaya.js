@@ -34,6 +34,16 @@ const IDPEL_MAP = {
   "311010618527": { keterangan: "Token Listrik", outlet: "PERKAMIL" },
 };
 
+// Transfer ke rekening milik nama-nama ini dianggap "Setoran Owner".
+const OWNER_RECIPIENTS = ["betrix mega yohana tombeg"];
+function normalizeName(s) {
+  return String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+function isOwnerRecipient(penerima) {
+  const n = normalizeName(penerima);
+  return n.length > 0 && OWNER_RECIPIENTS.some((name) => n === name || n.includes(name));
+}
+
 /** Daftar keterangan (dropdown kolom B) + pemetaan ke subjek biaya (kolom A). */
 async function getOptions() {
   const cashflow = await resolveCashflowSpreadsheetId();
@@ -132,6 +142,14 @@ function mapEntry(e, keteranganList, subjekMap, todayIso, sumber, fileIndex) {
     }
   }
 
+  // Aturan penerima: transfer ke rekening owner -> Setoran Owner (outlet via rekomendasi).
+  let penerimaNote = "";
+  if (isOwnerRecipient(e.penerima)) {
+    if (keteranganList.includes("Setoran Owner")) keterangan = "Setoran Owner";
+    outlet = recommendOutlet(keterangan) || outlet;
+    penerimaNote = `Penerima ${String(e.penerima).trim()} → Setoran Owner. `;
+  }
+
   return {
     keterangan,
     keteranganMentah: e.keterangan,
@@ -141,7 +159,7 @@ function mapEntry(e, keteranganList, subjekMap, todayIso, sumber, fileIndex) {
     outlet,
     status: "BELUM INPUT", // selalu BELUM INPUT
     sumberDana: e.sumber_dana && SUMBER_DANA.includes(e.sumber_dana) ? e.sumber_dana : "",
-    catatan: idpelNote + (e.catatan || ""),
+    catatan: penerimaNote + idpelNote + (e.catatan || ""),
     keyakinan: e.keyakinan,
     idpel: idpel || null,
     sumber, // nama file asal (untuk verifikasi saat pengisian masal)
