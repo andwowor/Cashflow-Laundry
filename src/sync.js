@@ -6,25 +6,32 @@ const { readRange, batchWrite, getSheetTitles, resolveCashflowSpreadsheetId } = 
 const KAS_SHEET = "KAS";
 const ILH_SHEET = "INPUT LAPORAN HARIAN";
 
+function columnLetter(idx0) {
+  let n = idx0 + 1;
+  let s = "";
+  while (n > 0) {
+    const r = (n - 1) % 26;
+    s = String.fromCharCode(65 + r) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+}
+
 /**
- * Cari nominal "KAS TUNAI LAPOR" pada sheet REKAP untuk tanggal hari ini.
+ * Temukan blok bulan + kolom tanggal pada sheet REKAP.
  *
  * Pola sheet REKAP (per blok bulan, mis. JUNI = baris 198-247):
- *   - Baris header blok: kolom A = nama bulan, kolom B = "HARI TERAKHIR BULAN
- *     SEBELUMNYA", kolom C..AG = angka tanggal 1..31.
- *   - Di dalam blok terdapat baris "KAS TUNAI LAPOR" (untuk JUNI = baris 226).
- * Saat bulan berganti, blok baru dibuat di bawahnya — fungsi ini mendeteksi
- * blok berdasarkan nama bulan sehingga otomatis mengikuti bulan berjalan.
+ *   - Baris header blok: kolom A = nama bulan, kolom C..AG = angka tanggal 1..31.
+ *   - Di dalam blok ada baris berlabel, mis. "KAS TUNAI LAPOR" (baris 226 utk JUNI)
+ *     dan "KAS TUNAI APLIKASI" (baris 225 utk JUNI).
+ * Blok terdeteksi dari nama bulan di kolom A, sehingga otomatis mengikuti bulan
+ * berjalan saat baris berganti ke blok bulan baru.
  */
-async function readRekapKasTunaiLapor(spreadsheetId, sheetTitle, monthName, day) {
-  const rows = await readRange(spreadsheetId, `'${sheetTitle}'!A1:AG1030`, "UNFORMATTED_VALUE");
-
-  // Blok bulan: baris dengan kolom A = nama bulan (pakai kemunculan terakhir,
-  // untuk berjaga bila nama bulan sama muncul lagi di tahun berikutnya).
+function locateRekapBlock(rows, monthName, day, sheetTitle) {
   let headerIdx = -1;
   for (let i = 0; i < rows.length; i++) {
     const a = rows[i] && rows[i][0];
-    if (typeof a === "string" && a.trim().toUpperCase() === monthName) headerIdx = i;
+    if (typeof a === "string" && a.trim().toUpperCase() === monthName) headerIdx = i; // pakai kemunculan terakhir
   }
   if (headerIdx === -1) {
     throw new Error(
@@ -32,21 +39,6 @@ async function readRekapKasTunaiLapor(spreadsheetId, sheetTitle, monthName, day)
         `Buat dulu blok bulan baru mengikuti pola bulan-bulan sebelumnya.`
     );
   }
-
-  // Baris "KAS TUNAI LAPOR" pertama di dalam blok (offset standar = +28).
-  let kasRowIdx = -1;
-  for (let i = headerIdx + 1; i < Math.min(headerIdx + 51, rows.length); i++) {
-    const a = rows[i] && rows[i][0];
-    if (typeof a === "string" && a.trim().toUpperCase() === "KAS TUNAI LAPOR") {
-      kasRowIdx = i;
-      break;
-    }
-  }
-  if (kasRowIdx === -1) {
-    throw new Error(`Baris "KAS TUNAI LAPOR" tidak ditemukan di blok ${monthName} sheet "${sheetTitle}".`);
-  }
-
-  // Kolom tanggal: header blok berisi 1..31 mulai kolom C (indeks 2).
   const headerRow = rows[headerIdx];
   let colIdx = -1;
   for (let c = 2; c < headerRow.length; c++) {
@@ -58,31 +50,57 @@ async function readRekapKasTunaiLapor(spreadsheetId, sheetTitle, monthName, day)
   if (colIdx === -1) {
     throw new Error(`Kolom tanggal ${day} tidak ditemukan pada blok ${monthName} sheet "${sheetTitle}".`);
   }
+  return { headerIdx, colIdx };
+}
 
-  const raw = (rows[kasRowIdx] || [])[colIdx];
+/** Cari baris berlabel tertentu di dalam satu blok bulan (maks 50 baris ke bawah). */
+function findBlockRow(rows, headerIdx, label, sheetTitle) {
+  for (let i = headerIdx + 1; i < Math.min(headerIdx + 51, rows.length); i++) {
+    const a = rows[i] && rows[i][0];
+    if (typeof a === "string" && a.trim().toUpperCase() === label) return i;
+  }
+  throw new Error(`Baris "${label}" tidak ditemukan di blok sheet "${sheetTitle}".`);
+}
+
+/**
+ * Baca data harian satu sheet REKAP sekaligus tentukan sel-sel terkait:
+ *   - laporNominal/laporCell : nominal "KAS TUNAI LAPOR" (dibaca, untuk sheet KAS).
+ *   - apliCell               : sel "KAS TUNAI APLIKASI" pada kolom hari ini (ditulis).
+ */
+async function loadRekapDaily(spreadsheetId, sheetTitle, monthName, day) {
+  const rows = await readRange(spreadsheetId, `'${sheetTitle}'!A1:AG1030`, "UNFORMATTED_VALUE");
+  const { headerIdx, colIdx } = locateRekapBlock(rows, monthName, day, sheetTitle);
+  const colL = columnLetter(colIdx);
+
+  const laporRow = findBlockRow(rows, headerIdx, "KAS TUNAI LAPOR", sheetTitle);
+  const apliRow = findBlockRow(rows, headerIdx, "KAS TUNAI APLIKASI", sheetTitle);
+
+  const raw = (rows[laporRow] || [])[colIdx];
   const nominal = Number(raw);
   if (raw === undefined || raw === "" || Number.isNaN(nominal)) {
     throw new Error(
       `Nominal KAS TUNAI LAPOR tanggal ${day} di sheet "${sheetTitle}" kosong/tidak valid (nilai: ${raw}).`
     );
   }
-
   return {
-    nominal,
-    cell: `${columnLetter(colIdx)}${kasRowIdx + 1}`,
-    row: kasRowIdx + 1,
+    laporNominal: nominal,
+    laporCell: `${colL}${laporRow + 1}`,
+    apliCell: `${colL}${apliRow + 1}`,
+    colLetter: colL,
   };
 }
 
-function columnLetter(idx0) {
-  let n = idx0 + 1;
-  let s = "";
-  while (n > 0) {
-    const r = (n - 1) % 26;
-    s = String.fromCharCode(65 + r) + s;
-    n = Math.floor((n - 1) / 26);
-  }
-  return s;
+/** Kompatibilitas: hanya bagian "KAS TUNAI LAPOR". */
+async function readRekapKasTunaiLapor(spreadsheetId, sheetTitle, monthName, day) {
+  const r = await loadRekapDaily(spreadsheetId, sheetTitle, monthName, day);
+  return { nominal: r.laporNominal, cell: r.laporCell };
+}
+
+function numOrNull(cellRows, i) {
+  const v = cellRows[i] && cellRows[i][0];
+  if (v === undefined || v === "" || v === null) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
 }
 
 /**
@@ -106,30 +124,41 @@ async function runDailySync() {
     throw new Error("Sheet REKAP KAS DAN TRANSAKSI MAUMBI/PERKAMIL tidak ditemukan di BIAYA & KAS LAUNDRY.");
   }
 
-  // 1) Ambil nominal KAS TUNAI LAPOR hari ini dari kedua sheet REKAP.
-  const maumbi = await readRekapKasTunaiLapor(biayaKasId, rekapMaumbi, monthName, day);
-  const perkamil = await readRekapKasTunaiLapor(biayaKasId, rekapPerkamil, monthName, day);
-  steps.push(`REKAP MAUMBI ${monthName} tgl ${day} (sel ${maumbi.cell}): Rp${maumbi.nominal.toLocaleString("id-ID")}.`);
-  steps.push(`REKAP PERKAMIL ${monthName} tgl ${day} (sel ${perkamil.cell}): Rp${perkamil.nominal.toLocaleString("id-ID")}.`);
+  // 1) Baca blok bulan berjalan dari kedua sheet REKAP (nominal harian + sel tujuan).
+  const maumbi = await loadRekapDaily(biayaKasId, rekapMaumbi, monthName, day);
+  const perkamil = await loadRekapDaily(biayaKasId, rekapPerkamil, monthName, day);
+  steps.push(`REKAP MAUMBI ${monthName} tgl ${day} — KAS TUNAI LAPOR (${maumbi.laporCell}): Rp${maumbi.laporNominal.toLocaleString("id-ID")}.`);
+  steps.push(`REKAP PERKAMIL ${monthName} tgl ${day} — KAS TUNAI LAPOR (${perkamil.laporCell}): Rp${perkamil.laporNominal.toLocaleString("id-ID")}.`);
 
-  // 2) Tulis ke sheet KAS: nominal kas tunai outlet (B2/B3) + tanggal hari ini
-  //    (C2/C3) + tanggal kas bank (C6:C9).
-  await batchWrite(biayaKasId, [
-    { range: `'${KAS_SHEET}'!B2:C3`, values: [[maumbi.nominal, tanggal], [perkamil.nominal, tanggal]] },
-    { range: `'${KAS_SHEET}'!C6:C9`, values: [[tanggal], [tanggal], [tanggal], [tanggal]] },
-  ]);
-  steps.push(`Sheet KAS: B2=Rp${maumbi.nominal.toLocaleString("id-ID")}, B3=Rp${perkamil.nominal.toLocaleString("id-ID")}, C2:C3 dan C6:C9 = ${tanggal}.`);
-
-  // 3) Baca nominal kas bank (B6:B9) dari sheet KAS untuk disalin ke CASHFLOW.
-  const kasRows = await readRange(biayaKasId, `'${KAS_SHEET}'!B6:B9`, "UNFORMATTED_VALUE");
-  const bankNominals = [0, 1, 2, 3].map((i) => {
-    const v = kasRows[i] && kasRows[i][0];
-    return v === undefined || v === "" ? 0 : Number(v);
-  });
+  // 2) Baca dari sheet KAS: kas aplikasi outlet (B4/B5) + kas bank (B6:B9).
+  const kasRows = await readRange(biayaKasId, `'${KAS_SHEET}'!B4:B9`, "UNFORMATTED_VALUE");
+  const apliMaumbi = numOrNull(kasRows, 0); // B4 = KAS APLIKASI MAUMBI
+  const apliPerkamil = numOrNull(kasRows, 1); // B5 = KAS APLIKASI PERKAMIL
+  const bankNominals = [2, 3, 4, 5].map((i) => numOrNull(kasRows, i) ?? 0); // B6:B9
   const bankLabels = ["BCA", "BRI", "BNI", "MANDIRI"];
-  steps.push(
-    `Kas bank dari sheet KAS: ${bankLabels.map((b, i) => `${b}=Rp${bankNominals[i].toLocaleString("id-ID")}`).join(", ")}.`
-  );
+
+  // 3) Susun penulisan ke BIAYA & KAS LAUNDRY.
+  const biayaKasWrites = [
+    // Sheet KAS: nominal kas tunai outlet (B2/B3) + tanggal (C2/C3) + tanggal kas bank (C6:C9).
+    { range: `'${KAS_SHEET}'!B2:C3`, values: [[maumbi.laporNominal, tanggal], [perkamil.laporNominal, tanggal]] },
+    { range: `'${KAS_SHEET}'!C6:C9`, values: [[tanggal], [tanggal], [tanggal], [tanggal]] },
+  ];
+  // Salin kas aplikasi (KAS!B4/B5) ke baris "KAS TUNAI APLIKASI" REKAP pada kolom hari ini.
+  if (apliMaumbi !== null) {
+    biayaKasWrites.push({ range: `'${rekapMaumbi}'!${maumbi.apliCell}`, values: [[apliMaumbi]] });
+    steps.push(`KAS APLIKASI MAUMBI (KAS!B4=Rp${apliMaumbi.toLocaleString("id-ID")}) → REKAP MAUMBI ${maumbi.apliCell}.`);
+  } else {
+    steps.push("KAS!B4 (kas aplikasi MAUMBI) kosong/tidak valid — penulisan ke REKAP MAUMBI baris KAS TUNAI APLIKASI dilewati.");
+  }
+  if (apliPerkamil !== null) {
+    biayaKasWrites.push({ range: `'${rekapPerkamil}'!${perkamil.apliCell}`, values: [[apliPerkamil]] });
+    steps.push(`KAS APLIKASI PERKAMIL (KAS!B5=Rp${apliPerkamil.toLocaleString("id-ID")}) → REKAP PERKAMIL ${perkamil.apliCell}.`);
+  } else {
+    steps.push("KAS!B5 (kas aplikasi PERKAMIL) kosong/tidak valid — penulisan ke REKAP PERKAMIL baris KAS TUNAI APLIKASI dilewati.");
+  }
+  await batchWrite(biayaKasId, biayaKasWrites);
+  steps.push(`Sheet KAS: B2=Rp${maumbi.laporNominal.toLocaleString("id-ID")}, B3=Rp${perkamil.laporNominal.toLocaleString("id-ID")}, C2:C3 & C6:C9 = ${tanggal}.`);
+  steps.push(`Kas bank: ${bankLabels.map((b, i) => `${b}=Rp${bankNominals[i].toLocaleString("id-ID")}`).join(", ")}.`);
 
   // 4) Tulis ke CASHFLOW sheet INPUT LAPORAN HARIAN:
   //    - B2:C3  : kas tunai outlet + tanggal (copy dari KAS B2:C3)
@@ -139,7 +168,7 @@ async function runDailySync() {
   //    - C16:C25: tanggal baris lainnya
   const colC = (n) => Array.from({ length: n }, () => [tanggal]);
   await batchWrite(cashflow.id, [
-    { range: `'${ILH_SHEET}'!B2:C3`, values: [[maumbi.nominal, tanggal], [perkamil.nominal, tanggal]] },
+    { range: `'${ILH_SHEET}'!B2:C3`, values: [[maumbi.laporNominal, tanggal], [perkamil.laporNominal, tanggal]] },
     { range: `'${ILH_SHEET}'!C4:C5`, values: colC(2) },
     { range: `'${ILH_SHEET}'!B6:C9`, values: bankNominals.map((n) => [n, tanggal]) },
     { range: `'${ILH_SHEET}'!C10:C15`, values: colC(6) },
@@ -151,11 +180,12 @@ async function runDailySync() {
     ok: true,
     tanggal,
     bulan: `${monthName} ${year}`,
-    maumbi: maumbi.nominal,
-    perkamil: perkamil.nominal,
+    maumbi: maumbi.laporNominal,
+    perkamil: perkamil.laporNominal,
+    kasAplikasi: { MAUMBI: apliMaumbi, PERKAMIL: apliPerkamil },
     bank: Object.fromEntries(bankLabels.map((b, i) => [b, bankNominals[i]])),
     steps,
   };
 }
 
-module.exports = { runDailySync, readRekapKasTunaiLapor };
+module.exports = { runDailySync, readRekapKasTunaiLapor, loadRekapDaily };
