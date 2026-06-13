@@ -99,7 +99,7 @@ app.post("/api/config/cashflow", wrap(async (req, res) => {
 // ---------- Monitoring ----------
 
 app.get("/api/dashboard", wrap(async (req, res) => {
-  const kasRows = await readRange(cfg.BIAYA_KAS_SPREADSHEET_ID, `'KAS'!A1:C15`);
+  const kasRows = await readRange(cfg.BIAYA_KAS_SPREADSHEET_ID, `'KAS'!A1:D15`);
   let ilhRows = [];
   let cashflowError = null;
   try {

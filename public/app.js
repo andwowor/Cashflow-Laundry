@@ -91,24 +91,36 @@ $("#btn-save-cashflow").addEventListener("click", async () => {
 });
 
 // ================= Monitoring =================
-function renderSheetTable(el, rows, highlightToday) {
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
+  );
+}
+
+function renderSheetTable(el, rows, opts = {}) {
   if (!rows || rows.length === 0) {
     el.innerHTML = `<p class="error">Data tidak tersedia.</p>`;
     return;
   }
-  const today = highlightToday || "";
+  const today = opts.today || "";
+  const colCount = opts.colCount || 3;
+  const numericCols = opts.numericCols || [1]; // kolom angka (rata kanan)
+  const headerFallback = opts.headerFallback || {}; // judul cadangan bila header sheet kosong
+  const dateCol = opts.dateCol ?? 2; // kolom tanggal untuk sorotan "hari ini"
+
   const html = ["<table><tbody>"];
   rows.forEach((r, i) => {
-    const cells = [r[0] ?? "", r[1] ?? "", r[2] ?? ""];
     const isHeader = i === 0;
-    const isToday = !isHeader && String(cells[2]).trim() === today;
+    const isToday = !isHeader && String(r[dateCol] ?? "").trim() === today;
     html.push(`<tr${isToday ? ' class="today"' : ""}>`);
-    cells.forEach((c, j) => {
+    for (let j = 0; j < colCount; j++) {
       const tag = isHeader ? "th" : "td";
-      const cls = !isHeader && j === 1 ? ' class="num"' : "";
-      const val = !isHeader && j === 1 && c !== "" ? c : c;
-      html.push(`<${tag}${cls}>${val}</${tag}>`);
-    });
+      let val = r[j];
+      if (val === undefined || val === null) val = "";
+      if (isHeader && val === "" && headerFallback[j]) val = headerFallback[j];
+      const cls = !isHeader && numericCols.includes(j) ? ' class="num"' : "";
+      html.push(`<${tag}${cls}>${escapeHtml(val)}</${tag}>`);
+    }
     html.push("</tr>");
   });
   html.push("</tbody></table>");
@@ -118,11 +130,16 @@ function renderSheetTable(el, rows, highlightToday) {
 async function loadDashboard() {
   try {
     const data = await api("/api/dashboard");
-    renderSheetTable($("#table-kas"), data.kas, data.today);
+    renderSheetTable($("#table-kas"), data.kas, {
+      today: data.today,
+      colCount: 4,
+      numericCols: [1, 3],
+      headerFallback: { 3: "SELISIH" },
+    });
     if (data.cashflowError) {
-      $("#table-ilh").innerHTML = `<p class="error">${data.cashflowError}</p>`;
+      $("#table-ilh").innerHTML = `<p class="error">${escapeHtml(data.cashflowError)}</p>`;
     } else {
-      renderSheetTable($("#table-ilh"), data.laporanHarian, data.today);
+      renderSheetTable($("#table-ilh"), data.laporanHarian, { today: data.today, colCount: 3, numericCols: [1] });
     }
   } catch (e) {
     $("#table-kas").innerHTML = `<p class="error">${e.message}</p>`;
