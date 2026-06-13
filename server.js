@@ -104,10 +104,12 @@ app.post("/api/config/cashflow", wrap(async (req, res) => {
 app.get("/api/dashboard", wrap(async (req, res) => {
   const kasRows = await readRange(cfg.BIAYA_KAS_SPREADSHEET_ID, `'KAS'!A1:D15`);
   let ilhRows = [];
+  let pendapatanRows = [];
   let cashflowError = null;
   try {
     const cashflow = await resolveCashflowSpreadsheetId();
     ilhRows = await readRange(cashflow.id, `'INPUT LAPORAN HARIAN'!A1:C25`);
+    pendapatanRows = await readRange(cashflow.id, `'MONITORING PENDAPATAN'!A1:C9`);
   } catch (e) {
     cashflowError = e.message;
   }
@@ -115,6 +117,7 @@ app.get("/api/dashboard", wrap(async (req, res) => {
     ok: true,
     kas: kasRows,
     laporanHarian: ilhRows,
+    pendapatan: pendapatanRows,
     cashflowError,
     today: cfg.todaySheetDate(),
     lastSync: cfg.getLastSync(),

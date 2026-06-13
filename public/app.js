@@ -251,9 +251,12 @@ async function loadDashboard() {
       headerFallback: { 3: "SELISIH" },
     });
     if (data.cashflowError) {
-      $("#table-ilh").innerHTML = `<p class="error">${escapeHtml(data.cashflowError)}</p>`;
+      const err = `<p class="error">${escapeHtml(data.cashflowError)}</p>`;
+      $("#table-ilh").innerHTML = err;
+      $("#table-pendapatan").innerHTML = err;
     } else {
       renderSheetTable($("#table-ilh"), data.laporanHarian, { today: data.today, colCount: 3, numericCols: [1] });
+      renderSheetTable($("#table-pendapatan"), data.pendapatan, { colCount: 3, numericCols: [1, 2], dateCol: -1 });
     }
   } catch (e) {
     $("#table-kas").innerHTML = `<p class="error">${e.message}</p>`;
