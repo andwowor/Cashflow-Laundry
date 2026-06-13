@@ -52,6 +52,23 @@ function isoToDDMMYYYY(iso) {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
 }
 
+/** Pastikan semua baris sudah "centang hijau" di STATUS LAPOR APLIKASI & VERIFIKASI OWNER. */
+function assertGreenReady(rowsArr) {
+  const notReady = [];
+  for (const r of rowsArr) {
+    const ok = norm(r[COL.status]) === "SUDAH INPUT" && norm(r[COL.verifikasi]) === "SUDAH VERIFIKASI OWNER";
+    if (!ok) notReady.push(norm(r[COL.nomor]) || "?");
+  }
+  if (notReady.length) {
+    const err = new Error(
+      `Export dibatalkan: ${notReady.length} baris belum bercentang hijau pada STATUS LAPOR APLIKASI dan VERIFIKASI OWNER ` +
+        `(NOMOR: ${notReady.join(", ")}). Ubah kedua statusnya menjadi centang hijau dulu sebelum export.`
+    );
+    err.code = "NOT_READY";
+    throw err;
+  }
+}
+
 /**
  * Daftar biaya untuk di-copy ke INPUT PENGGUNAAN BIAYA.
  * Baris HILANG dari daftar HANYA setelah di-export (lihat exportRows). Perubahan
@@ -126,15 +143,21 @@ async function exportRows(rowNumbers) {
   const id = cfg.BIAYA_KAS_SPREADSHEET_ID;
   const raw = await readRange(id, `'${BIAYA_SHEET}'!A1:N`, "UNFORMATTED_VALUE");
 
-  const values = [];
+  const selected = [];
   for (const rn of rowNumbers) {
     const r = raw[Number(rn) - 1]; // 0-based
     if (!r || !norm(r[COL.keterangan])) continue;
+    selected.push(r);
+  }
+  if (selected.length === 0) throw new Error("Tidak ada baris valid untuk diexport.");
+  assertGreenReady(selected); // hanya baris bercentang hijau dua-duanya yang boleh diexport
+
+  const values = selected.map((r) => {
     const tgl = r[COL.tanggal];
     const tglStr = typeof tgl === "number" ? isoToDDMMYYYY(serialToISO(tgl)) : norm(tgl);
     const nominal = r[COL.nominal];
     const kode = r[COL.kode];
-    values.push([
+    return [
       norm(r[COL.keterangan]), // B KETERANGAN
       typeof nominal === "number" ? nominal : Number(nominal) || norm(nominal), // C NOMINAL
       tglStr, // D TANGGAL
@@ -142,9 +165,8 @@ async function exportRows(rowNumbers) {
       norm(r[COL.status]), // F STATUS LAPOR APLIKASI SMARTLINK
       norm(r[COL.sumberDana]), // G SUMBER DANA
       kode == null || kode === "" ? "" : kode, // H KODE TRANSAKSI
-    ]);
-  }
-  if (values.length === 0) throw new Error("Tidak ada baris valid untuk diexport.");
+    ];
+  });
 
   const cashflow = await resolveCashflowSpreadsheetId();
   // Lokasi append: baris kosong terbawah (dicek live; aman thd pengisian manual).
@@ -159,9 +181,7 @@ async function exportRows(rowNumbers) {
   // Tandai baris yang di-export agar hilang permanen dari daftar (apa pun status/verifikasinya).
   const state = loadExported();
   state.seeded = true;
-  for (const rn of rowNumbers) {
-    const r = raw[Number(rn) - 1];
-    if (!r) continue;
+  for (const r of selected) {
     const k = rowKey(r);
     if (k) state.keys.add(k);
   }
@@ -200,7 +220,7 @@ async function exportSetoranOwner(rowNumbers) {
   const { year, month } = cfg.nowInBusinessTz();
   const monthName = cfg.MONTH_NAMES_ID[month - 1];
 
-  const values = [];
+  const setoran = [];
   let skipped = 0;
   for (const rn of rowNumbers) {
     const r = raw[Number(rn) - 1];
@@ -209,10 +229,20 @@ async function exportSetoranOwner(rowNumbers) {
       skipped++;
       continue;
     }
+    setoran.push(r);
+  }
+  if (setoran.length === 0) {
+    throw new Error(
+      "Tidak ada baris 'Setoran Owner' yang dicentang." + (skipped ? ` (${skipped} baris non-Setoran Owner dilewati)` : "")
+    );
+  }
+  assertGreenReady(setoran); // hanya baris bercentang hijau dua-duanya yang boleh diexport
+
+  const values = setoran.map((r) => {
     const tgl = r[COL.tanggal];
     const tglStr = typeof tgl === "number" ? isoToDDMMYYYY(serialToISO(tgl)) : norm(tgl);
     const nominal = r[COL.nominal];
-    values.push([
+    return [
       "DAILY DRIVER", // A POS BIAYA
       norm(r[COL.ketPenggunaan]), // B KETERANGAN (dari KETERANGAN PENGGUNAAN)
       typeof nominal === "number" ? nominal : Number(nominal) || norm(nominal), // C NOMINAL
@@ -222,13 +252,8 @@ async function exportSetoranOwner(rowNumbers) {
       "PENDAPATAN USAHA", // G SUMBER DANA
       monthName, // H BUDGET BULAN
       year, // I TAHUN BUDGET
-    ]);
-  }
-  if (values.length === 0) {
-    throw new Error(
-      "Tidak ada baris 'Setoran Owner' yang dicentang." + (skipped ? ` (${skipped} baris non-Setoran Owner dilewati)` : "")
-    );
-  }
+    ];
+  });
 
   const analisaId = cfg.ANALISA_SPREADSHEET_ID;
   const colA = await readRange(analisaId, `'${ANALISA_SHEET}'!A2:A`);

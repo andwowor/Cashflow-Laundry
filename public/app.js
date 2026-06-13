@@ -747,10 +747,24 @@ $("#btn-qbank-submit").addEventListener("click", async () => {
 // ================= Monitoring Biaya =================
 let MONBIAYA = null;
 let MONBIAYA_LOADED = false;
+const MB_TANGGAL_COL = 4; // TANGGAL
 const MB_STATUS_COL = 10; // STATUS LAPOR APLIKASI
 const MB_KODE_COL = 11; // KODE TRANSAKSI
 const MB_VERIF_COL = 12; // VERIFIKASI OWNER
 const MB_KOREKSI_COL = 13; // KETERANGAN KOREKSI (alasan penolakan)
+
+// Baris "siap" = kedua kolom sudah centang hijau (bisa diexport, tanggal tidak merah).
+function mbRowReady(status, verif) {
+  return status === "SUDAH INPUT" && verif === "SUDAH VERIFIKASI OWNER";
+}
+// Perbarui tanda merah kolom tanggal sesuai status/verifikasi terkini pada baris.
+function mbRefreshRow(tr) {
+  if (!tr) return;
+  const s = tr.querySelector(".mb-status");
+  const v = tr.querySelector(".mb-verif");
+  const tgl = tr.querySelector(".mb-tgl");
+  if (tgl) tgl.classList.toggle("mb-tgl-red", !mbRowReady(s && s.dataset.val, v && v.dataset.val));
+}
 const MB_HIDDEN = new Set([8, 9]); // POS BIAYA APLIKASI & ITEM BIAYA: tidak ditampilkan
 
 function mbUpdateCount() {
@@ -776,9 +790,13 @@ function renderMonBiaya() {
     .join("");
   const body = MONBIAYA.rows
     .map((r) => {
+      const ready = mbRowReady(r.status, r.verifikasi);
       const tds = r.cells
         .map((c, col) => {
           if (MB_HIDDEN.has(col)) return ""; // kolom disembunyikan
+          if (col === MB_TANGGAL_COL) {
+            return `<td class="mb-tgl${ready ? "" : " mb-tgl-red"}">${escapeHtml(c)}</td>`;
+          }
           if (col === MB_STATUS_COL) {
             return `<td><button class="mb-btn mb-status" data-row="${r.row}" data-val="${escapeHtml(c)}" title="${escapeHtml(c || "(kosong)")}">${escapeHtml(mbLabel(c))}</button></td>`;
           }
@@ -830,6 +848,7 @@ async function mbCycleStatus(btn, field) {
     btn.dataset.val = next;
     btn.textContent = mbLabel(next);
     btn.title = next || "(kosong)";
+    mbRefreshRow(btn.closest("tr")); // perbarui tanda merah kolom tanggal
   } catch (e) {
     btn.textContent = prevLabel;
     btn.classList.add("err");
@@ -889,6 +908,7 @@ async function mbSaveKoreksi(row, inputEl, btn) {
         vbtn.textContent = mbLabel(r.verifikasi);
         vbtn.title = r.verifikasi;
       }
+      mbRefreshRow(inputEl.closest("tr")); // koreksi -> SALAH INPUT -> tanggal merah
     }
     showLog($("#monbiaya-result"), `✔ Keterangan koreksi disimpan${r.verifikasi ? " · Verifikasi Owner → SALAH INPUT" : ""}.`);
   } catch (e) {
