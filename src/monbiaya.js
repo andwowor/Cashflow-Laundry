@@ -1,10 +1,21 @@
 "use strict";
 
+const path = require("path");
 const cfg = require("./config");
 const { readRange, batchWrite, resolveCashflowSpreadsheetId } = require("./sheets");
 
 const BIAYA_SHEET = "BIAYA";
 const INPUT_SHEET = "INPUT PENGGUNAAN BIAYA";
+
+// Catatan baris yang sudah di-export (hilang dari daftar). Kunci = NOMOR (kolom A).
+const EXPORTED_FILE = path.join(cfg.DATA_DIR, "monbiaya_exported.json");
+function loadExported() {
+  const d = cfg.readJsonFile(EXPORTED_FILE, { seeded: false, keys: [] });
+  return { seeded: !!d.seeded, keys: new Set(d.keys || []) };
+}
+function saveExported(state) {
+  cfg.writeJsonFile(EXPORTED_FILE, { seeded: state.seeded, keys: Array.from(state.keys) });
+}
 
 // Opsi dropdown pada sheet BIAYA.
 const STATUS_OPTIONS = ["SUDAH INPUT", "BELUM INPUT"]; // kolom K
@@ -25,6 +36,11 @@ function norm(v) {
   return String(v == null ? "" : v).trim();
 }
 
+/** Kunci unik baris BIAYA = NOMOR (kolom A). */
+function rowKey(r) {
+  return norm(r[COL.nomor]);
+}
+
 function serialToISO(serial) {
   const ms = Math.round(serial) * 86400000 + Date.UTC(1899, 11, 30);
   const d = new Date(ms);
@@ -36,26 +52,41 @@ function isoToDDMMYYYY(iso) {
 }
 
 /**
- * Daftar biaya yang masih perlu tindakan: tampil selama BELUM "SUDAH INPUT"
- * (kolom STATUS LAPOR APLIKASI) ATAU BELUM "SUDAH VERIFIKASI OWNER" (kolom
- * VERIFIKASI OWNER). Baris hilang dari daftar HANYA bila keduanya sudah selesai.
+ * Daftar biaya untuk di-copy ke INPUT PENGGUNAAN BIAYA.
+ * Baris HILANG dari daftar HANYA setelah di-export (lihat exportRows). Perubahan
+ * kolom STATUS LAPOR APLIKASI / VERIFIKASI OWNER tidak menyembunyikan baris.
+ * Sekali (saat pertama dipakai), biaya yang sudah "SUDAH INPUT" DAN "SUDAH
+ * VERIFIKASI OWNER" dianggap historis/sudah-ditangani agar daftar awal ringkas.
  */
 async function list() {
   const id = cfg.BIAYA_KAS_SPREADSHEET_ID;
   const rows = await readRange(id, `'${BIAYA_SHEET}'!A1:N`, "FORMATTED_VALUE");
+  const state = loadExported();
+
+  if (!state.seeded) {
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i] || [];
+      if (!norm(r[COL.keterangan])) continue;
+      if (norm(r[COL.status]) === "SUDAH INPUT" && norm(r[COL.verifikasi]) === "SUDAH VERIFIKASI OWNER") {
+        const k = rowKey(r);
+        if (k) state.keys.add(k);
+      }
+    }
+    state.seeded = true;
+    saveExported(state);
+  }
+
   const out = [];
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i] || [];
     if (!norm(r[COL.keterangan])) continue; // baris kosong
-    const status = norm(r[COL.status]);
-    const verif = norm(r[COL.verifikasi]);
-    // Sembunyikan hanya bila SUDAH INPUT dan SUDAH VERIFIKASI OWNER (dua-duanya).
-    if (status === "SUDAH INPUT" && verif === "SUDAH VERIFIKASI OWNER") continue;
+    const k = rowKey(r);
+    if (k && state.keys.has(k)) continue; // sudah di-export / historis -> sembunyikan
     out.push({
       row: i + 1, // nomor baris di sheet
       cells: HEADERS.map((_, c) => (r[c] == null ? "" : String(r[c]))),
-      status,
-      verifikasi: verif,
+      status: norm(r[COL.status]),
+      verifikasi: norm(r[COL.verifikasi]),
       kode: norm(r[COL.kode]),
     });
   }
@@ -123,6 +154,17 @@ async function exportRows(rowNumbers) {
   }
   const endRow = appendRow + values.length - 1;
   await batchWrite(cashflow.id, [{ range: `'${INPUT_SHEET}'!B${appendRow}:H${endRow}`, values }]);
+
+  // Tandai baris yang di-export agar hilang permanen dari daftar (apa pun status/verifikasinya).
+  const state = loadExported();
+  state.seeded = true;
+  for (const rn of rowNumbers) {
+    const r = raw[Number(rn) - 1];
+    if (!r) continue;
+    const k = rowKey(r);
+    if (k) state.keys.add(k);
+  }
+  saveExported(state);
 
   return { ok: true, sheet: INPUT_SHEET, barisAwal: appendRow, barisAkhir: endRow, jumlah: values.length };
 }
