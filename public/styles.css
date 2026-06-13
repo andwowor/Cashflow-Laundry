@@ -198,6 +198,9 @@ input[type="file"] { font-family: "Segoe UI", Arial, sans-serif; font-size: 13px
 .mb-copy { margin-left: 6px; padding: 2px 8px; font-size: 11px; border-radius: 6px; border: 1px solid var(--line); background: #fff; cursor: pointer; font-family: "Segoe UI", Arial, sans-serif; }
 .mb-copy:hover { border-color: var(--teal); }
 #monbiaya-count { font-weight: 600; color: var(--teal); }
+#monbiaya-grid .mb-koreksi { width: auto; min-width: 200px; padding: 4px 8px; font-size: 12px; }
+.mb-koreksi-save { margin-left: 6px; padding: 4px 10px; font-size: 11px; border-radius: 6px; border: 1px solid var(--line); background: #fff; cursor: pointer; font-family: "Segoe UI", Arial, sans-serif; }
+.mb-koreksi-save:hover { border-color: var(--teal); }
 
 /* Pratinjau input biaya: kolom cukup lebar agar isi terlihat penuh; tabel boleh
    menggulir horizontal bila melebihi lebar layar. */

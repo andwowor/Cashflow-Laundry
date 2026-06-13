@@ -169,6 +169,23 @@ async function exportRows(rowNumbers) {
   return { ok: true, sheet: INPUT_SHEET, barisAwal: appendRow, barisAkhir: endRow, jumlah: values.length };
 }
 
+/**
+ * Tulis KETERANGAN KOREKSI (kolom N) sebagai alasan penolakan. Bila teks terisi,
+ * VERIFIKASI OWNER (kolom M) otomatis di-set "SALAH INPUT".
+ */
+async function setKoreksi(row, text) {
+  if (!Number.isInteger(row) || row < 2) throw new Error("Baris tidak valid.");
+  const teks = text == null ? "" : String(text);
+  const data = [{ range: `'${BIAYA_SHEET}'!N${row}`, values: [[teks]] }];
+  let verifikasi = null;
+  if (teks.trim()) {
+    data.push({ range: `'${BIAYA_SHEET}'!M${row}`, values: [["SALAH INPUT"]] });
+    verifikasi = "SALAH INPUT";
+  }
+  await batchWrite(cfg.BIAYA_KAS_SPREADSHEET_ID, data);
+  return { ok: true, row, text: teks, verifikasi };
+}
+
 /** Munculkan kembali baris (berdasarkan NOMOR) dengan menghapusnya dari daftar ter-export. */
 function restore(nomors) {
   const state = loadExported();
@@ -184,4 +201,4 @@ function restore(nomors) {
   return { ok: true, removed, nomors: Array.from(want) };
 }
 
-module.exports = { list, setStatus, exportRows, restore };
+module.exports = { list, setStatus, setKoreksi, exportRows, restore };

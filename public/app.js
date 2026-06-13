@@ -750,6 +750,7 @@ let MONBIAYA_LOADED = false;
 const MB_STATUS_COL = 10; // STATUS LAPOR APLIKASI
 const MB_KODE_COL = 11; // KODE TRANSAKSI
 const MB_VERIF_COL = 12; // VERIFIKASI OWNER
+const MB_KOREKSI_COL = 13; // KETERANGAN KOREKSI (alasan penolakan)
 const MB_HIDDEN = new Set([8, 9]); // POS BIAYA APLIKASI & ITEM BIAYA: tidak ditampilkan
 
 function mbUpdateCount() {
@@ -786,6 +787,9 @@ function renderMonBiaya() {
           }
           if (col === MB_KODE_COL) {
             return `<td>${escapeHtml(c)} <button class="mb-copy" data-kode="${escapeHtml(c)}" title="Salin kode">⧉ Salin</button></td>`;
+          }
+          if (col === MB_KOREKSI_COL) {
+            return `<td><input type="text" class="mb-koreksi" data-row="${r.row}" value="${escapeHtml(c)}" placeholder="alasan penolakan…"><button class="mb-koreksi-save" data-row="${r.row}">Simpan</button></td>`;
           }
           return `<td>${escapeHtml(c)}</td>`;
         })
@@ -867,12 +871,53 @@ async function mbCopy(btn) {
   }
 }
 
+async function mbSaveKoreksi(row, inputEl, btn) {
+  btn.disabled = true;
+  const prev = btn.textContent;
+  btn.textContent = "…";
+  try {
+    const r = await api("/api/monbiaya/koreksi", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ row, text: inputEl.value }),
+    });
+    if (r.verifikasi) {
+      const tr = inputEl.closest("tr");
+      const vbtn = tr && tr.querySelector(".mb-verif");
+      if (vbtn) {
+        vbtn.dataset.val = r.verifikasi;
+        vbtn.textContent = mbLabel(r.verifikasi);
+        vbtn.title = r.verifikasi;
+      }
+    }
+    showLog($("#monbiaya-result"), `✔ Keterangan koreksi disimpan${r.verifikasi ? " · Verifikasi Owner → SALAH INPUT" : ""}.`);
+  } catch (e) {
+    showLog($("#monbiaya-result"), "✘ Gagal simpan koreksi: " + e.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = prev;
+  }
+}
+
 // Event delegation untuk tabel monitoring biaya.
 $("#monbiaya-table").addEventListener("click", (e) => {
   const t = e.target;
   if (t.classList.contains("mb-status")) mbCycleStatus(t, "status");
   else if (t.classList.contains("mb-verif")) mbCycleStatus(t, "verifikasi");
   else if (t.classList.contains("mb-copy")) mbCopy(t);
+  else if (t.classList.contains("mb-koreksi-save")) {
+    const tr = t.closest("tr");
+    const inp = tr && tr.querySelector(".mb-koreksi");
+    if (inp) mbSaveKoreksi(Number(t.dataset.row), inp, t);
+  }
+});
+$("#monbiaya-table").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && e.target.classList.contains("mb-koreksi")) {
+    e.preventDefault();
+    const tr = e.target.closest("tr");
+    const btn = tr && tr.querySelector(".mb-koreksi-save");
+    if (btn) mbSaveKoreksi(Number(e.target.dataset.row), e.target, btn);
+  }
 });
 $("#monbiaya-table").addEventListener("change", (e) => {
   if (e.target.id === "mb-checkall") {
