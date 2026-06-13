@@ -142,6 +142,7 @@ $$(".tab").forEach((btn) => {
     $$(".panel").forEach((p) => p.classList.remove("active"));
     btn.classList.add("active");
     $("#tab-" + btn.dataset.tab).classList.add("active");
+    if (btn.dataset.tab === "monbiaya" && !MONBIAYA_LOADED) loadMonBiaya();
   });
 });
 
@@ -740,6 +741,147 @@ $("#btn-qbank-submit").addEventListener("click", async () => {
     showLog(out, "✘ " + e.message, true);
   } finally {
     $("#btn-qbank-submit").disabled = false;
+  }
+});
+
+// ================= Monitoring Biaya =================
+let MONBIAYA = null;
+let MONBIAYA_LOADED = false;
+const MB_STATUS_COL = 10; // STATUS LAPOR APLIKASI
+const MB_KODE_COL = 11; // KODE TRANSAKSI
+const MB_VERIF_COL = 12; // VERIFIKASI OWNER
+
+function mbUpdateCount() {
+  const n = $$("#monbiaya-table .mb-check:checked").length;
+  $("#monbiaya-count").textContent = `${n} dipilih`;
+}
+
+function renderMonBiaya() {
+  const el = $("#monbiaya-table");
+  if (!MONBIAYA || !MONBIAYA.rows.length) {
+    el.innerHTML = `<p class="hint">Tidak ada biaya yang menunggu (semua sudah input &amp; terverifikasi). 🎉</p>`;
+    mbUpdateCount();
+    return;
+  }
+  const heads = ['<th><input type="checkbox" id="mb-checkall" title="Pilih semua"></th>']
+    .concat(MONBIAYA.headers.map((h) => `<th>${escapeHtml(h)}</th>`))
+    .join("");
+  const body = MONBIAYA.rows
+    .map((r) => {
+      const tds = r.cells
+        .map((c, col) => {
+          if (col === MB_STATUS_COL) {
+            return `<td><button class="mb-btn mb-status" data-row="${r.row}" data-val="${escapeHtml(c)}">${escapeHtml(c || "—")}</button></td>`;
+          }
+          if (col === MB_VERIF_COL) {
+            return `<td><button class="mb-btn mb-verif" data-row="${r.row}" data-val="${escapeHtml(c)}">${escapeHtml(c || "—")}</button></td>`;
+          }
+          if (col === MB_KODE_COL) {
+            return `<td>${escapeHtml(c)} <button class="mb-copy" data-kode="${escapeHtml(c)}" title="Salin kode">⧉ Salin</button></td>`;
+          }
+          return `<td>${escapeHtml(c)}</td>`;
+        })
+        .join("");
+      return `<tr><td style="text-align:center"><input type="checkbox" class="mb-check" data-row="${r.row}"></td>${tds}</tr>`;
+    })
+    .join("");
+  el.innerHTML = `<table id="monbiaya-grid"><thead><tr>${heads}</tr></thead><tbody>${body}</tbody></table>`;
+  mbUpdateCount();
+}
+
+async function loadMonBiaya() {
+  const el = $("#monbiaya-table");
+  el.innerHTML = "Memuat…";
+  try {
+    MONBIAYA = await api("/api/monbiaya/list");
+    MONBIAYA_LOADED = true;
+    renderMonBiaya();
+  } catch (e) {
+    el.innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
+  }
+}
+
+async function mbCycleStatus(btn, field) {
+  const opts = field === "status" ? MONBIAYA.statusOptions : MONBIAYA.verifOptions;
+  const cur = btn.dataset.val || "";
+  const idx = opts.indexOf(cur);
+  const next = opts[(idx + 1) % opts.length];
+  const prevLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "…";
+  try {
+    await api("/api/monbiaya/status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ row: Number(btn.dataset.row), field, value: next }),
+    });
+    btn.dataset.val = next;
+    btn.textContent = next;
+  } catch (e) {
+    btn.textContent = prevLabel;
+    showLog($("#monbiaya-result"), "✘ Gagal ubah status: " + e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function mbCopy(btn) {
+  const text = btn.dataset.kode || "";
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+    const old = btn.textContent;
+    btn.textContent = "✓ Tersalin";
+    setTimeout(() => (btn.textContent = old), 1200);
+  } catch {
+    showLog($("#monbiaya-result"), "✘ Gagal menyalin kode.", true);
+  }
+}
+
+// Event delegation untuk tabel monitoring biaya.
+$("#monbiaya-table").addEventListener("click", (e) => {
+  const t = e.target;
+  if (t.classList.contains("mb-status")) mbCycleStatus(t, "status");
+  else if (t.classList.contains("mb-verif")) mbCycleStatus(t, "verifikasi");
+  else if (t.classList.contains("mb-copy")) mbCopy(t);
+});
+$("#monbiaya-table").addEventListener("change", (e) => {
+  if (e.target.id === "mb-checkall") {
+    $$("#monbiaya-table .mb-check").forEach((c) => (c.checked = e.target.checked));
+  }
+  if (e.target.classList.contains("mb-check") || e.target.id === "mb-checkall") mbUpdateCount();
+});
+
+$("#btn-monbiaya-refresh").addEventListener("click", loadMonBiaya);
+
+$("#btn-monbiaya-export").addEventListener("click", async () => {
+  const out = $("#monbiaya-result");
+  const rows = $$("#monbiaya-table .mb-check:checked").map((c) => Number(c.dataset.row));
+  if (!rows.length) return showLog(out, "✘ Centang minimal satu baris untuk diexport.", true);
+  const btn = $("#btn-monbiaya-export");
+  btn.disabled = true;
+  try {
+    const r = await api("/api/monbiaya/export", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows }),
+    });
+    showLog(out, `✔ ${r.jumlah} baris diexport ke ${r.sheet} (baris ${r.barisAwal}–${r.barisAkhir}).`);
+    await loadMonBiaya();
+  } catch (e) {
+    showLog(out, "✘ " + e.message, true);
+  } finally {
+    btn.disabled = false;
   }
 });
 

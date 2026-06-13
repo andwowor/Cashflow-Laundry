@@ -14,6 +14,7 @@ const biaya = require("./src/biaya");
 const kas = require("./src/kas");
 const qris = require("./src/qris");
 const qrisbank = require("./src/qrisbank");
+const monbiaya = require("./src/monbiaya");
 const { MODEL } = require("./src/claude");
 const auth = require("./src/auth");
 
@@ -190,6 +191,21 @@ app.post("/api/qrisbank/analyze", upload.array("files", 10), wrap(async (req, re
 
 app.post("/api/qrisbank/submit", wrap(async (req, res) => {
   res.json(await qrisbank.submit((req.body || {}).entries));
+}));
+
+// ---------- Monitoring biaya (sheet BIAYA) ----------
+
+app.get("/api/monbiaya/list", wrap(async (req, res) => {
+  res.json({ ok: true, ...(await monbiaya.list()) });
+}));
+
+app.post("/api/monbiaya/status", wrap(async (req, res) => {
+  const { row, field, value } = req.body || {};
+  res.json(await monbiaya.setStatus(Number(row), field, value));
+}));
+
+app.post("/api/monbiaya/export", wrap(async (req, res) => {
+  res.json(await monbiaya.exportRows((req.body || {}).rows || []));
 }));
 
 // ---------- Start ----------

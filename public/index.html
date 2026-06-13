@@ -17,6 +17,7 @@
     </div>
     <nav class="tabs">
       <button class="tab active" data-tab="monitor">Monitoring</button>
+      <button class="tab" data-tab="monbiaya">Monitoring Biaya</button>
       <button class="tab" data-tab="biaya">Input Biaya</button>
       <button class="tab" data-tab="kas">Input Kas</button>
       <button class="tab" data-tab="pengaturan">Pengaturan</button>
@@ -49,6 +50,24 @@
         </div>
       </div>
       <button id="btn-refresh" class="btn-ghost">⟳ Muat ulang data</button>
+    </section>
+
+    <!-- ============ TAB MONITORING BIAYA ============ -->
+    <section id="tab-monbiaya" class="panel">
+      <div class="card">
+        <h2>Monitoring Biaya</h2>
+        <p class="hint">Daftar biaya pada sheet <b>BIAYA</b> yang <b>belum</b> "SUDAH INPUT" (Status Lapor Aplikasi)
+          dan <b>belum</b> "SUDAH VERIFIKASI OWNER" (Verifikasi Owner). Tombol <b>Status</b> &amp; <b>Verifikasi</b>
+          mengubah nilai langsung di sheet; tombol <b>Salin</b> menyalin kode transaksi. Centang baris lalu
+          <b>Export</b> untuk menyalin ke sheet INPUT PENGGUNAAN BIAYA (ditambahkan di baris kosong terbawah).</p>
+        <div class="actions">
+          <button id="btn-monbiaya-refresh" class="btn-ghost">⟳ Muat ulang</button>
+          <span id="monbiaya-count" class="hint">0 dipilih</span>
+          <button id="btn-monbiaya-export" class="btn-primary">⤓ Export tercentang → INPUT PENGGUNAAN BIAYA</button>
+        </div>
+        <div id="monbiaya-result" class="result-log hidden"></div>
+        <div id="monbiaya-table" class="table-wrap">Memuat…</div>
+      </div>
     </section>
 
     <!-- ============ TAB INPUT BIAYA ============ -->
