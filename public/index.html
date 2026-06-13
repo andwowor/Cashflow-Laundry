@@ -117,6 +117,34 @@
           <p class="hint">Total → B15 <i>(INPUT LAPORAN HARIAN)</i></p>
         </div>
       </div>
+
+      <div class="card" id="qris-card">
+        <h3>5. Pendapatan EDC Harian → sheet INPUT QRIS</h3>
+        <p class="hint">Dibaca dari screenshot: Tanggal (kolom A) · Nominal (kolom B) · Outlet (kolom C, dropdown
+          MAUMBI/PERKAMIL — diisi otomatis bila terbaca, selain itu Anda pilih sendiri).
+          Data ditambahkan di baris terbawah yang kosong (dicek live tiap submit).</p>
+        <div class="upload-row">
+          <input type="file" id="qris-files" accept="image/*" multiple />
+          <button id="btn-qris-analyze" class="btn-primary">🔍 Analisis</button>
+        </div>
+        <div id="qris-loading" class="loading hidden">Claude sedang membaca screenshot…</div>
+        <div id="qris-error" class="error hidden"></div>
+
+        <div id="qris-preview" class="hidden" style="margin-top: 12px;">
+          <h4 style="margin:0 0 8px; font-family:'Segoe UI',Arial,sans-serif;">Pratinjau — periksa sebelum submit</h4>
+          <div class="table-wrap">
+            <table id="qris-table">
+              <thead><tr><th>Tanggal</th><th>Nominal (Rp)</th><th>Outlet</th><th>Catatan AI</th><th></th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="actions">
+            <button id="btn-qris-add" class="btn-ghost">+ Tambah baris manual</button>
+            <button id="btn-qris-submit" class="btn-primary">💾 Submit ke INPUT QRIS</button>
+          </div>
+          <div id="qris-result" class="result-log hidden"></div>
+        </div>
+      </div>
     </section>
 
     <!-- ============ TAB PENGATURAN ============ -->

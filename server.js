@@ -12,6 +12,7 @@ const { serviceAccountEmail } = require("./src/google");
 const { runDailySync } = require("./src/sync");
 const biaya = require("./src/biaya");
 const kas = require("./src/kas");
+const qris = require("./src/qris");
 const { MODEL } = require("./src/claude");
 const auth = require("./src/auth");
 
@@ -155,6 +156,19 @@ app.post("/api/kas/analyze", upload.array("files", 10), wrap(async (req, res) =>
 app.post("/api/kas/submit", wrap(async (req, res) => {
   const { jenis, items } = req.body || {};
   res.json(await kas.submit(jenis, items));
+}));
+
+// ---------- Input pendapatan EDC harian (sheet INPUT QRIS) ----------
+
+app.post("/api/qris/analyze", upload.array("files", 10), wrap(async (req, res) => {
+  if (!req.files || req.files.length === 0) {
+    return res.status(400).json({ ok: false, error: "Upload minimal satu screenshot." });
+  }
+  res.json({ ok: true, entries: await qris.analyze(req.files) });
+}));
+
+app.post("/api/qris/submit", wrap(async (req, res) => {
+  res.json(await qris.submit((req.body || {}).rows));
 }));
 
 // ---------- Start ----------

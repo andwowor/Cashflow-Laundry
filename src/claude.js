@@ -178,4 +178,61 @@ async function extractKas({ images, jenis, todayIso }) {
   return JSON.parse(firstText(response)).items;
 }
 
-module.exports = { extractBiaya, extractKas, MODEL };
+/**
+ * Ekstraksi screenshot pendapatan EDC/QRIS harian menjadi baris-baris
+ * {tanggal, nominal, outlet} untuk sheet INPUT QRIS.
+ */
+async function extractQris({ images, todayIso }) {
+  const schema = {
+    type: "object",
+    properties: {
+      entries: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            tanggal: {
+              type: ["string", "null"],
+              description: "Tanggal transaksi pada bukti, format YYYY-MM-DD. null jika tidak terbaca.",
+            },
+            nominal: { type: "integer", description: "Nominal rupiah, bilangan bulat." },
+            outlet: {
+              type: ["string", "null"],
+              description: "MAUMBI atau PERKAMIL bila nama/merchant outlet terlihat jelas pada bukti; selain itu null.",
+            },
+            catatan: { type: "string", description: "Apa yang terbaca (mis. nama merchant/outlet, tanggal, label EDC)." },
+          },
+          required: ["tanggal", "nominal", "outlet", "catatan"],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ["entries"],
+    additionalProperties: false,
+  };
+
+  const system = [
+    "Kamu membaca screenshot/laporan pendapatan EDC harian bisnis laundry (outlet MAUMBI & PERKAMIL).",
+    "Ekstrak setiap baris pendapatan menjadi: tanggal, nominal, dan outlet.",
+    "Angka rupiah memakai titik sebagai pemisah ribuan (mis. 1.234.567 = 1234567).",
+    "Outlet hanya diisi bila nama/merchant outlet terlihat (mengandung 'Maumbi' atau 'Perkamil'); selain itu null.",
+    "Satu screenshot bisa memuat beberapa baris/tanggal — buat satu entry per baris transaksi.",
+  ].join("\n");
+
+  const content = [
+    ...images.map((img) => imageBlock(img.base64, img.mediaType)),
+    { type: "text", text: `Hari ini: ${todayIso}.\nKeluarkan entries sesuai skema.` },
+  ];
+
+  const response = await client().messages.create({
+    model: MODEL,
+    max_tokens: 8000,
+    system,
+    messages: [{ role: "user", content }],
+    output_config: { format: { type: "json_schema", schema } },
+  });
+
+  return JSON.parse(firstText(response)).entries;
+}
+
+module.exports = { extractBiaya, extractKas, extractQris, MODEL };

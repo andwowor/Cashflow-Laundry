@@ -373,6 +373,88 @@ function initKasCard(card) {
 
 $$(".kas-card").forEach(initKasCard);
 
+// ================= Pendapatan EDC Harian (INPUT QRIS) =================
+const QRIS_OUTLETS = ["MAUMBI", "PERKAMIL"];
+
+function addQrisRow(entry) {
+  const tbody = $("#qris-table tbody");
+  const tr = document.createElement("tr");
+  const outletOpts = ['<option value="">— pilih —</option>']
+    .concat(QRIS_OUTLETS.map((o) => `<option${o === entry.outlet ? " selected" : ""}>${o}</option>`))
+    .join("");
+  tr.innerHTML = `
+    <td><input type="date" class="q-tanggal" value="${entry.tanggal || ""}"></td>
+    <td><input type="number" class="q-nominal" value="${entry.nominal ?? ""}" min="1"></td>
+    <td><select class="q-outlet">${outletOpts}</select></td>
+    <td><small>${escapeHtml(entry.catatan || "")}</small></td>
+    <td><button class="btn-mini" title="Hapus baris">✕</button></td>`;
+  tr.querySelector(".btn-mini").addEventListener("click", () => tr.remove());
+  tbody.appendChild(tr);
+}
+
+$("#btn-qris-analyze").addEventListener("click", async () => {
+  const files = $("#qris-files").files;
+  const errEl = $("#qris-error");
+  errEl.classList.add("hidden");
+  if (!files.length) {
+    errEl.textContent = "Pilih dulu screenshot pendapatan EDC.";
+    errEl.classList.remove("hidden");
+    return;
+  }
+  $("#qris-loading").classList.remove("hidden");
+  $("#btn-qris-analyze").disabled = true;
+  try {
+    const fd = new FormData();
+    for (const f of files) fd.append("files", f);
+    const data = await api("/api/qris/analyze", { method: "POST", body: fd });
+    $("#qris-table tbody").innerHTML = "";
+    data.entries.forEach(addQrisRow);
+    $("#qris-preview").classList.remove("hidden");
+    $("#qris-result").classList.add("hidden");
+    if (!data.entries.length) {
+      errEl.textContent = "Tidak ada baris yang terbaca dari screenshot.";
+      errEl.classList.remove("hidden");
+    }
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.classList.remove("hidden");
+  } finally {
+    $("#qris-loading").classList.add("hidden");
+    $("#btn-qris-analyze").disabled = false;
+  }
+});
+
+$("#btn-qris-add").addEventListener("click", () => {
+  addQrisRow({ tanggal: new Date().toISOString().slice(0, 10) });
+  $("#qris-preview").classList.remove("hidden");
+});
+
+$("#btn-qris-submit").addEventListener("click", async () => {
+  const out = $("#qris-result");
+  const rows = $$("#qris-table tbody tr").map((tr) => ({
+    tanggal: tr.querySelector(".q-tanggal").value,
+    nominal: tr.querySelector(".q-nominal").value,
+    outlet: tr.querySelector(".q-outlet").value,
+  }));
+  if (!rows.length) return showLog(out, "✘ Tidak ada baris.", true);
+  $("#btn-qris-submit").disabled = true;
+  try {
+    const r = await api("/api/qris/submit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows }),
+    });
+    showLog(out, `✔ ${r.jumlah} baris tersimpan di ${r.sheet} (baris ${r.barisAwal}–${r.barisAkhir}).`);
+    $("#qris-table tbody").innerHTML = "";
+    $("#qris-files").value = "";
+    $("#qris-preview").classList.add("hidden");
+  } catch (e) {
+    showLog(out, "✘ " + e.message, true);
+  } finally {
+    $("#btn-qris-submit").disabled = false;
+  }
+});
+
 // ================= Init =================
 loadStatus();
 loadDashboard();
