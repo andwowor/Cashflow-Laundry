@@ -819,7 +819,17 @@ async function mbCycleStatus(btn, field) {
     btn.textContent = next;
   } catch (e) {
     btn.textContent = prevLabel;
-    showLog($("#monbiaya-result"), "✘ Gagal ubah status: " + e.message, true);
+    btn.classList.add("err");
+    setTimeout(() => btn.classList.remove("err"), 1500);
+    const isProtected = /protected/i.test(e.message || "");
+    const kolom = field === "verifikasi" ? "VERIFIKASI OWNER (kolom M)" : "STATUS LAPOR APLIKASI (kolom K)";
+    showLog(
+      $("#monbiaya-result"),
+      isProtected
+        ? `✘ Tidak bisa mengubah ${kolom} — sel DIPROTEKSI di sheet BIAYA. Tambahkan service account ke daftar editor yang diizinkan pada proteksi kolom itu (Data → Lindungi sheet dan rentang), lalu coba lagi.`
+        : `✘ Gagal mengubah ${kolom}: ${e.message}`,
+      true
+    );
   } finally {
     btn.disabled = false;
   }

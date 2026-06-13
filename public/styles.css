@@ -192,6 +192,7 @@ input[type="file"] { font-family: "Segoe UI", Arial, sans-serif; font-size: 13px
 #monbiaya-grid th, #monbiaya-grid td { white-space: nowrap; }
 .mb-btn { padding: 4px 10px; border-radius: 6px; border: 1px solid var(--line); background: #fff; cursor: pointer; font-size: 12px; font-family: "Segoe UI", Arial, sans-serif; white-space: nowrap; }
 .mb-btn:hover { border-color: var(--teal); }
+.mb-btn.err { background: #f7d9d2; border-color: var(--err); color: var(--err); }
 .mb-status[data-val="BELUM INPUT"], .mb-verif[data-val="SALAH INPUT"] { color: var(--err); border-color: #e6c3bb; }
 .mb-status[data-val="SUDAH INPUT"], .mb-verif[data-val="SUDAH VERIFIKASI OWNER"] { color: var(--ok); border-color: #bfe0c8; }
 .mb-copy { margin-left: 6px; padding: 2px 8px; font-size: 11px; border-radius: 6px; border: 1px solid var(--line); background: #fff; cursor: pointer; font-family: "Segoe UI", Arial, sans-serif; }
