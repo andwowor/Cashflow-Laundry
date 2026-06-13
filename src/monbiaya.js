@@ -37,6 +37,22 @@ function norm(v) {
   return String(v == null ? "" : v).trim();
 }
 
+/**
+ * Rapikan teks keterangan: jadikan daftar dipisah ", " yang rapi.
+ * - "+" diperlakukan sebagai pemisah → koma.
+ * - Setiap item di-trim, spasi ganda diciutkan, item kosong dibuang.
+ * Contoh: "Super pel+handsoap+persembahan bocil" -> "Super pel, handsoap, persembahan bocil";
+ *         "Telur, ubi,kacang ijo+buah" -> "Telur, ubi, kacang ijo, buah".
+ */
+function tidyKeterangan(text) {
+  const parts = String(text == null ? "" : text)
+    .replace(/\+/g, ",")
+    .split(",")
+    .map((p) => p.trim().replace(/\s+/g, " "))
+    .filter((p) => p.length > 0);
+  return parts.join(", ");
+}
+
 /** Kunci unik baris BIAYA = NOMOR (kolom A). */
 function rowKey(r) {
   return norm(r[COL.nomor]);
@@ -244,7 +260,7 @@ async function exportSetoranOwner(rowNumbers) {
     const nominal = r[COL.nominal];
     return [
       "DAILY DRIVER", // A POS BIAYA
-      norm(r[COL.ketPenggunaan]), // B KETERANGAN (dari KETERANGAN PENGGUNAAN)
+      tidyKeterangan(r[COL.ketPenggunaan]), // B KETERANGAN (dari KETERANGAN PENGGUNAAN, dirapikan)
       typeof nominal === "number" ? nominal : Number(nominal) || norm(nominal), // C NOMINAL
       tglStr, // D TANGGAL
       monthName, // E BIAYA BULAN
