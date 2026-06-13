@@ -137,28 +137,39 @@ async function runDailySync() {
   const bankNominals = [2, 3, 4, 5].map((i) => numOrNull(kasRows, i) ?? 0); // B6:B9
   const bankLabels = ["BCA", "BRI", "BNI", "MANDIRI"];
 
-  // 3) Susun penulisan ke BIAYA & KAS LAUNDRY.
-  const biayaKasWrites = [
-    // Sheet KAS: nominal kas tunai outlet (B2/B3) + tanggal (C2/C3) + tanggal kas bank (C6:C9).
+  // 3) Tulis ke sheet KAS (inti): nominal kas tunai outlet (B2/B3) + tanggal
+  //    (C2/C3) + tanggal kas bank (C6:C9).
+  await batchWrite(biayaKasId, [
     { range: `'${KAS_SHEET}'!B2:C3`, values: [[maumbi.laporNominal, tanggal], [perkamil.laporNominal, tanggal]] },
     { range: `'${KAS_SHEET}'!C6:C9`, values: [[tanggal], [tanggal], [tanggal], [tanggal]] },
-  ];
-  // Salin kas aplikasi (KAS!B4/B5) ke baris "KAS TUNAI APLIKASI" REKAP pada kolom hari ini.
-  if (apliMaumbi !== null) {
-    biayaKasWrites.push({ range: `'${rekapMaumbi}'!${maumbi.apliCell}`, values: [[apliMaumbi]] });
-    steps.push(`KAS APLIKASI MAUMBI (KAS!B4=Rp${apliMaumbi.toLocaleString("id-ID")}) → REKAP MAUMBI ${maumbi.apliCell}.`);
-  } else {
-    steps.push("KAS!B4 (kas aplikasi MAUMBI) kosong/tidak valid — penulisan ke REKAP MAUMBI baris KAS TUNAI APLIKASI dilewati.");
-  }
-  if (apliPerkamil !== null) {
-    biayaKasWrites.push({ range: `'${rekapPerkamil}'!${perkamil.apliCell}`, values: [[apliPerkamil]] });
-    steps.push(`KAS APLIKASI PERKAMIL (KAS!B5=Rp${apliPerkamil.toLocaleString("id-ID")}) → REKAP PERKAMIL ${perkamil.apliCell}.`);
-  } else {
-    steps.push("KAS!B5 (kas aplikasi PERKAMIL) kosong/tidak valid — penulisan ke REKAP PERKAMIL baris KAS TUNAI APLIKASI dilewati.");
-  }
-  await batchWrite(biayaKasId, biayaKasWrites);
+  ]);
   steps.push(`Sheet KAS: B2=Rp${maumbi.laporNominal.toLocaleString("id-ID")}, B3=Rp${perkamil.laporNominal.toLocaleString("id-ID")}, C2:C3 & C6:C9 = ${tanggal}.`);
   steps.push(`Kas bank: ${bankLabels.map((b, i) => `${b}=Rp${bankNominals[i].toLocaleString("id-ID")}`).join(", ")}.`);
+
+  // 3b) Salin kas aplikasi (KAS!B4/B5) ke baris "KAS TUNAI APLIKASI" di REKAP
+  //     pada kolom hari ini. Ditulis TERPISAH & toleran: bila sel REKAP
+  //     diproteksi, sinkronisasi inti (KAS + CASHFLOW) tetap berhasil.
+  const rekapWrites = [];
+  if (apliMaumbi !== null) rekapWrites.push({ range: `'${rekapMaumbi}'!${maumbi.apliCell}`, values: [[apliMaumbi]] });
+  else steps.push("KAS!B4 (kas aplikasi MAUMBI) kosong/tidak valid — penulisan ke REKAP MAUMBI dilewati.");
+  if (apliPerkamil !== null) rekapWrites.push({ range: `'${rekapPerkamil}'!${perkamil.apliCell}`, values: [[apliPerkamil]] });
+  else steps.push("KAS!B5 (kas aplikasi PERKAMIL) kosong/tidak valid — penulisan ke REKAP PERKAMIL dilewati.");
+
+  if (rekapWrites.length) {
+    try {
+      await batchWrite(biayaKasId, rekapWrites);
+      if (apliMaumbi !== null) steps.push(`KAS APLIKASI MAUMBI (KAS!B4=Rp${apliMaumbi.toLocaleString("id-ID")}) → REKAP MAUMBI ${maumbi.apliCell}.`);
+      if (apliPerkamil !== null) steps.push(`KAS APLIKASI PERKAMIL (KAS!B5=Rp${apliPerkamil.toLocaleString("id-ID")}) → REKAP PERKAMIL ${perkamil.apliCell}.`);
+    } catch (err) {
+      const isProtected = /protected/i.test(err.message || "");
+      steps.push(
+        "⚠ Kas aplikasi GAGAL ditulis ke baris KAS TUNAI APLIKASI di REKAP" +
+          (isProtected
+            ? " — sel tersebut DIPROTEKSI di spreadsheet. Hapus proteksi pada baris KAS TUNAI APLIKASI (atau izinkan service account mengeditnya), lalu jalankan lagi. Sinkronisasi lain tetap berhasil."
+            : `: ${err.message}`)
+      );
+    }
+  }
 
   // 4) Tulis ke CASHFLOW sheet INPUT LAPORAN HARIAN:
   //    - B2:C3  : kas tunai outlet + tanggal (copy dari KAS B2:C3)
