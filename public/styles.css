@@ -123,6 +123,7 @@ table { border-collapse: collapse; width: 100%; font-size: 13px; }
 th, td { border: 1px solid var(--line); padding: 6px 9px; text-align: left; }
 th { background: #eef1ea; font-weight: 600; }
 td.num { text-align: right; font-variant-numeric: tabular-nums; }
+td.num-neg { color: var(--err); font-weight: 600; }
 tr.today td { background: #fdf3e3; }
 
 input[type="text"], input[type="number"], input[type="date"], select {

@@ -208,6 +208,12 @@ function escapeHtml(s) {
   );
 }
 
+// Nilai dianggap negatif bila (setelah buang "Rp"/spasi) diawali "-", "−", atau "(".
+function isNegativeValue(s) {
+  const t = String(s == null ? "" : s).trim().replace(/^rp\s*/i, "");
+  return /^[-−(]/.test(t);
+}
+
 function renderSheetTable(el, rows, opts = {}) {
   if (!rows || rows.length === 0) {
     el.innerHTML = `<p class="error">Data tidak tersedia.</p>`;
@@ -218,6 +224,7 @@ function renderSheetTable(el, rows, opts = {}) {
   const numericCols = opts.numericCols || [1]; // kolom angka (rata kanan)
   const headerFallback = opts.headerFallback || {}; // judul cadangan bila header sheet kosong
   const dateCol = opts.dateCol ?? 2; // kolom tanggal untuk sorotan "hari ini"
+  const redNegative = !!opts.redNegative; // warnai merah nilai negatif pada kolom angka
 
   const html = ["<table><tbody>"];
   rows.forEach((r, i) => {
@@ -229,7 +236,10 @@ function renderSheetTable(el, rows, opts = {}) {
       let val = r[j];
       if (val === undefined || val === null) val = "";
       if (isHeader && val === "" && headerFallback[j]) val = headerFallback[j];
-      const cls = !isHeader && numericCols.includes(j) ? ' class="num"' : "";
+      let cls = "";
+      if (!isHeader && numericCols.includes(j)) {
+        cls = ` class="num${redNegative && isNegativeValue(val) ? " num-neg" : ""}"`;
+      }
       html.push(`<${tag}${cls}>${escapeHtml(val)}</${tag}>`);
     }
     html.push("</tr>");
@@ -257,7 +267,7 @@ async function loadDashboard() {
       $("#table-kontrol").innerHTML = err;
     } else {
       renderSheetTable($("#table-ilh"), data.laporanHarian, { today: data.today, colCount: 3, numericCols: [1] });
-      renderSheetTable($("#table-pendapatan"), data.pendapatan, { colCount: 3, numericCols: [1, 2], dateCol: -1 });
+      renderSheetTable($("#table-pendapatan"), data.pendapatan, { colCount: 3, numericCols: [1, 2], dateCol: -1, redNegative: true });
       renderSheetTable($("#table-kontrol"), data.kontrolKas, { colCount: 2, numericCols: [1], dateCol: -1 });
     }
   } catch (e) {
