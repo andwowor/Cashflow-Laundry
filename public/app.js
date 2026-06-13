@@ -254,9 +254,11 @@ async function loadDashboard() {
       const err = `<p class="error">${escapeHtml(data.cashflowError)}</p>`;
       $("#table-ilh").innerHTML = err;
       $("#table-pendapatan").innerHTML = err;
+      $("#table-kontrol").innerHTML = err;
     } else {
       renderSheetTable($("#table-ilh"), data.laporanHarian, { today: data.today, colCount: 3, numericCols: [1] });
       renderSheetTable($("#table-pendapatan"), data.pendapatan, { colCount: 3, numericCols: [1, 2], dateCol: -1 });
+      renderSheetTable($("#table-kontrol"), data.kontrolKas, { colCount: 2, numericCols: [1], dateCol: -1 });
     }
   } catch (e) {
     $("#table-kas").innerHTML = `<p class="error">${e.message}</p>`;

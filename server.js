@@ -105,11 +105,13 @@ app.get("/api/dashboard", wrap(async (req, res) => {
   const kasRows = await readRange(cfg.BIAYA_KAS_SPREADSHEET_ID, `'KAS'!A1:D15`);
   let ilhRows = [];
   let pendapatanRows = [];
+  let kontrolRows = [];
   let cashflowError = null;
   try {
     const cashflow = await resolveCashflowSpreadsheetId();
     ilhRows = await readRange(cashflow.id, `'INPUT LAPORAN HARIAN'!A1:C25`);
     pendapatanRows = await readRange(cashflow.id, `'MONITORING PENDAPATAN'!A1:C9`);
+    kontrolRows = await readRange(cashflow.id, `'KONTROL KAS'!A1:B33`);
   } catch (e) {
     cashflowError = e.message;
   }
@@ -118,6 +120,7 @@ app.get("/api/dashboard", wrap(async (req, res) => {
     kas: kasRows,
     laporanHarian: ilhRows,
     pendapatan: pendapatanRows,
+    kontrolKas: kontrolRows,
     cashflowError,
     today: cfg.todaySheetDate(),
     lastSync: cfg.getLastSync(),
