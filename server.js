@@ -15,6 +15,7 @@ const kas = require("./src/kas");
 const qris = require("./src/qris");
 const qrisbank = require("./src/qrisbank");
 const monbiaya = require("./src/monbiaya");
+const setoran = require("./src/setoran");
 const { MODEL } = require("./src/claude");
 const auth = require("./src/auth");
 
@@ -220,6 +221,12 @@ app.post("/api/monbiaya/unhide", wrap(async (req, res) => {
 
 app.post("/api/monbiaya/hide", wrap(async (req, res) => {
   res.json(monbiaya.hide((req.body || {}).nomors || []));
+}));
+
+// ---------- Input setoran kas (sheet REKAP, baris SETORAN KAS) ----------
+
+app.post("/api/setoran/submit", wrap(async (req, res) => {
+  res.json(await setoran.submit(req.body || {}));
 }));
 
 app.post("/api/monbiaya/koreksi", wrap(async (req, res) => {

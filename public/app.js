@@ -1041,7 +1041,37 @@ async function mbExport(endpoint, btn) {
 $("#btn-monbiaya-export").addEventListener("click", (e) => mbExport("/api/monbiaya/export", e.currentTarget));
 $("#btn-monbiaya-export-so").addEventListener("click", (e) => mbExport("/api/monbiaya/export-setoran", e.currentTarget));
 
+// ================= Input Setoran Kas =================
+$("#btn-setoran-submit").addEventListener("click", async () => {
+  const out = $("#setoran-result");
+  const tanggal = $("#setoran-tanggal").value;
+  const nominal = $("#setoran-nominal").value;
+  const outlet = $("#setoran-outlet").value;
+  if (!tanggal) return showLog(out, "✘ Pilih tanggal.", true);
+  if (!nominal || Number(nominal) <= 0) return showLog(out, "✘ Nominal tidak valid.", true);
+  if (!outlet) return showLog(out, "✘ Pilih outlet.", true);
+  const btn = $("#btn-setoran-submit");
+  btn.disabled = true;
+  try {
+    const r = await api("/api/setoran/submit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tanggal, nominal, outlet }),
+    });
+    showLog(out, `✔ Setoran ${fmtRp(r.nominal)} (${r.tanggal}, ${r.outlet}) ditulis ke ${r.sheet} sel ${r.cell}.`);
+    $("#setoran-nominal").value = "";
+  } catch (e) {
+    showLog(out, "✘ " + e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 // ================= Init =================
+{
+  const st = $("#setoran-tanggal");
+  if (st && !st.value) st.value = new Date().toISOString().slice(0, 10); // default hari ini
+}
 initDropzone($("#dz-biaya"), $("#biaya-files"), $("#dz-biaya-count"));
 initDropzone($("#dz-qris"), $("#qris-files"), $("#dz-qris-count"));
 initDropzone($("#dz-qbank"), $("#qbank-files"), $("#dz-qbank-count"));

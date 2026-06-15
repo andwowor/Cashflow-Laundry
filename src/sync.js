@@ -96,6 +96,14 @@ async function readRekapKasTunaiLapor(spreadsheetId, sheetTitle, monthName, day)
   return { nominal: r.laporNominal, cell: r.laporCell };
 }
 
+/** Cari alamat sel pada baris berlabel `label` di blok bulan `monthName`, kolom tanggal `day`. */
+async function findRekapTargetCell(spreadsheetId, sheetTitle, monthName, day, label) {
+  const rows = await readRange(spreadsheetId, `'${sheetTitle}'!A1:AG1030`, "UNFORMATTED_VALUE");
+  const { headerIdx, colIdx } = locateRekapBlock(rows, monthName, day, sheetTitle);
+  const rowIdx = findBlockRow(rows, headerIdx, label, sheetTitle);
+  return { cell: `${columnLetter(colIdx)}${rowIdx + 1}`, row: rowIdx + 1, colLetter: columnLetter(colIdx) };
+}
+
 function numOrNull(cellRows, i) {
   const v = cellRows[i] && cellRows[i][0];
   if (v === undefined || v === "" || v === null) return null;
@@ -201,4 +209,4 @@ async function runDailySync() {
   };
 }
 
-module.exports = { runDailySync, readRekapKasTunaiLapor, loadRekapDaily };
+module.exports = { runDailySync, readRekapKasTunaiLapor, loadRekapDaily, findRekapTargetCell };

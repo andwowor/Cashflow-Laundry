@@ -20,6 +20,7 @@
       <button class="tab" data-tab="monbiaya">Monitoring Biaya</button>
       <button class="tab" data-tab="biaya">Input Biaya</button>
       <button class="tab" data-tab="kas">Input Kas</button>
+      <button class="tab" data-tab="setoran">Setoran Kas</button>
       <button class="tab" data-tab="pengaturan">Pengaturan</button>
       <button class="tab logout" id="btn-logout" title="Keluar">⎋ Keluar</button>
     </nav>
@@ -224,6 +225,30 @@
           </div>
           <div id="qbank-result" class="result-log hidden"></div>
         </div>
+      </div>
+    </section>
+
+    <!-- ============ TAB SETORAN KAS ============ -->
+    <section id="tab-setoran" class="panel">
+      <div class="card">
+        <h2>Input Setoran Kas</h2>
+        <p class="hint">Menulis nominal setoran ke baris <b>SETORAN KAS</b> pada sheet REKAP
+          (BIAYA &amp; KAS LAUNDRY), di kolom sesuai <b>tanggal</b> (tgl 1 → kolom C, dst).
+          <b>Outlet</b> menentukan sheet: Maumbi → REKAP MAUMBI, Perkamil → REKAP PERKAMIL.</p>
+        <div class="upload-row">
+          <label class="hint" style="margin:0">Tanggal</label>
+          <input type="date" id="setoran-tanggal" style="max-width:170px" />
+          <label class="hint" style="margin:0">Nominal (Rp)</label>
+          <input type="number" id="setoran-nominal" min="1" placeholder="mis. 500000" style="max-width:160px" />
+          <label class="hint" style="margin:0">Outlet</label>
+          <select id="setoran-outlet" style="max-width:150px">
+            <option value="">— pilih —</option>
+            <option>MAUMBI</option>
+            <option>PERKAMIL</option>
+          </select>
+          <button id="btn-setoran-submit" class="btn-primary">💾 Simpan Setoran</button>
+        </div>
+        <div id="setoran-result" class="result-log hidden"></div>
       </div>
     </section>
 
