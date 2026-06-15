@@ -104,8 +104,9 @@ async function submit(buffer, sheetName) {
   const oldB = await readRange(id, `'${target}'!B${TARGET_START}:B`);
   const oldLast = TARGET_START + oldB.length - 1;
 
+  // Pemisah argumen ";" sesuai locale Indonesia pada spreadsheet (bukan ",").
   const sFormulas = [];
-  for (let r = TARGET_START; r <= endRow; r++) sFormulas.push([`=LEFT(Q${r},6)`]);
+  for (let r = TARGET_START; r <= endRow; r++) sFormulas.push([`=LEFT(Q${r};6)`]);
 
   await batchWrite(id, [
     { range: `'${target}'!A${TARGET_START}:R${endRow}`, values: rows },
