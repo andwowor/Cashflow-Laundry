@@ -21,6 +21,7 @@
       <button class="tab" data-tab="biaya">Input Biaya</button>
       <button class="tab" data-tab="kas">Input Kas</button>
       <button class="tab" data-tab="setoran">Setoran Kas</button>
+      <button class="tab" data-tab="transaksi">Upload Transaksi</button>
       <button class="tab" data-tab="pengaturan">Pengaturan</button>
       <button class="tab logout" id="btn-logout" title="Keluar">⎋ Keluar</button>
     </nav>
@@ -249,6 +250,32 @@
           <button id="btn-setoran-submit" class="btn-primary">💾 Simpan Setoran</button>
         </div>
         <div id="setoran-result" class="result-log hidden"></div>
+      </div>
+    </section>
+
+    <!-- ============ TAB UPLOAD TRANSAKSI ============ -->
+    <section id="tab-transaksi" class="panel">
+      <div class="card">
+        <h2>Upload Data Transaksi</h2>
+        <p class="hint">Upload file ekspor <b>.xlsx</b> (Rekap Transaksi). Data <b>baris 28 s/d terbawah</b>
+          (kolom A–R) akan ditulis ke sheet <b>DAFTAR PELUNASAN</b> bulan berjalan mulai <b>baris 4</b>,
+          dan kolom S diisi formula otomatis. Sheet bulan berjalan dideteksi otomatis (bisa diganti manual).</p>
+        <div class="upload-row">
+          <input type="file" id="trx-file" accept=".xlsx,.xls,.csv" />
+          <button id="btn-trx-analyze" class="btn-primary">🔍 Periksa File</button>
+        </div>
+        <div id="trx-loading" class="loading hidden">Membaca file…</div>
+        <div id="trx-error" class="error hidden"></div>
+
+        <div id="trx-preview" class="hidden" style="margin-top: 12px;">
+          <p class="hint" id="trx-info"></p>
+          <div class="upload-row">
+            <label class="hint" style="margin:0">Sheet tujuan</label>
+            <select id="trx-sheet" style="max-width:280px"></select>
+            <button id="btn-trx-submit" class="btn-primary">💾 Upload ke Sheet</button>
+          </div>
+          <div id="trx-result" class="result-log hidden"></div>
+        </div>
       </div>
     </section>
 

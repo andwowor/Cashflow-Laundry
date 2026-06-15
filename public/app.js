@@ -1067,6 +1067,67 @@ $("#btn-setoran-submit").addEventListener("click", async () => {
   }
 });
 
+// ================= Upload Data Transaksi =================
+$("#btn-trx-analyze").addEventListener("click", async () => {
+  const errEl = $("#trx-error");
+  errEl.classList.add("hidden");
+  const file = $("#trx-file").files[0];
+  if (!file) {
+    errEl.textContent = "Pilih file ekspor (.xlsx) dulu.";
+    errEl.classList.remove("hidden");
+    return;
+  }
+  $("#trx-loading").classList.remove("hidden");
+  $("#btn-trx-analyze").disabled = true;
+  try {
+    const fd = new FormData();
+    fd.append("file", file);
+    const d = await api("/api/transaksi/analyze", { method: "POST", body: fd });
+    const sel = $("#trx-sheet");
+    sel.innerHTML = (d.sheets || [])
+      .map((s) => `<option${s === d.resolved ? " selected" : ""}>${escapeHtml(s)}</option>`)
+      .join("");
+    if (!d.sheets || !d.sheets.length) {
+      sel.innerHTML = `<option value="">(tidak ada sheet DAFTAR PELUNASAN)</option>`;
+    }
+    const resolvedNote = d.resolved
+      ? `Sheet tujuan terdeteksi: <b>${escapeHtml(d.resolved)}</b>.`
+      : `<span style="color:#b3402f">Sheet bulan ${escapeHtml(d.monthKey)} belum terdeteksi — pilih manual di bawah.</span>`;
+    $("#trx-info").innerHTML = `Terbaca <b>${d.jumlah}</b> baris data (mulai baris 28). ${resolvedNote} Akan ditulis mulai baris 4.`;
+    $("#trx-preview").classList.remove("hidden");
+    $("#trx-result").classList.add("hidden");
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.classList.remove("hidden");
+  } finally {
+    $("#trx-loading").classList.add("hidden");
+    $("#btn-trx-analyze").disabled = false;
+  }
+});
+
+$("#btn-trx-submit").addEventListener("click", async () => {
+  const out = $("#trx-result");
+  const file = $("#trx-file").files[0];
+  const sheet = $("#trx-sheet").value;
+  if (!file) return showLog(out, "✘ File tidak ada, pilih lagi.", true);
+  if (!sheet) return showLog(out, "✘ Pilih sheet tujuan.", true);
+  const btn = $("#btn-trx-submit");
+  btn.disabled = true;
+  try {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("sheet", sheet);
+    const r = await api("/api/transaksi/submit", { method: "POST", body: fd });
+    let msg = `✔ ${r.jumlah} baris ditulis ke "${r.sheet}" (baris ${r.barisAwal}–${r.barisAkhir}).`;
+    if (r.dibersihkan) msg += ` ${r.dibersihkan} baris sisa lama dibersihkan.`;
+    showLog(out, msg);
+  } catch (e) {
+    showLog(out, "✘ " + e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 // ================= Init =================
 {
   const st = $("#setoran-tanggal");

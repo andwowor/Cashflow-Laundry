@@ -16,6 +16,7 @@ const qris = require("./src/qris");
 const qrisbank = require("./src/qrisbank");
 const monbiaya = require("./src/monbiaya");
 const setoran = require("./src/setoran");
+const transaksi = require("./src/transaksi");
 const { MODEL } = require("./src/claude");
 const auth = require("./src/auth");
 
@@ -58,6 +59,12 @@ const upload = multer({
     const ok = ["image/png", "image/jpeg", "image/webp", "image/gif"].includes(file.mimetype);
     cb(ok ? null : new Error("Format gambar harus PNG/JPEG/WebP/GIF."), ok);
   },
+});
+
+// Upload dokumen (xlsx/xls/csv) untuk import data transaksi.
+const uploadDoc = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024, files: 1 },
 });
 
 const wrap = (fn) => (req, res) =>
@@ -227,6 +234,18 @@ app.post("/api/monbiaya/hide", wrap(async (req, res) => {
 
 app.post("/api/setoran/submit", wrap(async (req, res) => {
   res.json(await setoran.submit(req.body || {}));
+}));
+
+// ---------- Upload data transaksi (sheet DAFTAR PELUNASAN bulan berjalan) ----------
+
+app.post("/api/transaksi/analyze", uploadDoc.single("file"), wrap(async (req, res) => {
+  if (!req.file) return res.status(400).json({ ok: false, error: "Upload file ekspor transaksi (.xlsx)." });
+  res.json({ ok: true, ...(await transaksi.analyze(req.file.buffer)) });
+}));
+
+app.post("/api/transaksi/submit", uploadDoc.single("file"), wrap(async (req, res) => {
+  if (!req.file) return res.status(400).json({ ok: false, error: "Upload file ekspor transaksi (.xlsx)." });
+  res.json(await transaksi.submit(req.file.buffer, (req.body || {}).sheet || ""));
 }));
 
 app.post("/api/monbiaya/koreksi", wrap(async (req, res) => {
