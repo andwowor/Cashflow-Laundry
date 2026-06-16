@@ -1078,7 +1078,7 @@ function slViewRow(r) {
   return [
     `<td>${escapeHtml(c[SL_COL.subjek])}</td>`,
     `<td class="sl-ket" data-text="${escapeHtml(c[SL_COL.keterangan])}" title="Klik untuk menyalin">${escapeHtml(c[SL_COL.keterangan])}</td>`,
-    `<td class="num">${escapeHtml(c[SL_COL.nominal])}</td>`,
+    `<td class="num sl-nom" data-text="${escapeHtml(c[SL_COL.nominal])}" title="Klik untuk menyalin">${escapeHtml(c[SL_COL.nominal])}</td>`,
     `<td>${escapeHtml(c[SL_COL.tanggal])}</td>`,
     `<td>${escapeHtml(c[SL_COL.outlet])}</td>`,
     `<td style="text-align:center">${slStatusBtn(r)}</td>`,
@@ -1184,7 +1184,8 @@ async function slToggleStatus(btn) {
   }
 }
 
-async function slCopyKet(td) {
+// Salin teks sel (dipakai kolom KETERANGAN & NOMINAL).
+async function slCopyCell(td) {
   const text = td.dataset.text || "";
   try {
     await copyTextToClipboard(text);
@@ -1192,7 +1193,7 @@ async function slCopyKet(td) {
     setTimeout(() => td.classList.remove("copied"), 900);
     showLog($("#sl-result"), `✔ Disalin: "${text}"`);
   } catch {
-    showLog($("#sl-result"), "✘ Gagal menyalin keterangan.", true);
+    showLog($("#sl-result"), "✘ Gagal menyalin teks.", true);
   }
 }
 
@@ -1254,7 +1255,7 @@ $("#sl-table").addEventListener("click", (e) => {
   else if (t.classList.contains("sl-cancel")) {
     SMART_EDIT = null;
     renderSmart();
-  } else if (t.classList.contains("sl-ket")) slCopyKet(t);
+  } else if (t.classList.contains("sl-ket") || t.classList.contains("sl-nom")) slCopyCell(t);
 });
 $("#sl-table").addEventListener("change", (e) => {
   if (e.target.id === "sl-checkall") {

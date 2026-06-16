@@ -212,9 +212,9 @@ input[type="file"] { font-family: "Segoe UI", Arial, sans-serif; font-size: 13px
 .sl-status:hover { filter: brightness(0.97); }
 .sl-status.sl-no { color: var(--err); border-color: #e6c3bb; }
 .sl-status.sl-ok { color: var(--ok); border-color: #bfe0c8; }
-.sl-ket { cursor: pointer; color: var(--teal); text-decoration: underline dotted; }
-.sl-ket:hover { color: var(--amber); }
-.sl-ket.copied { background: #d8efdf; }
+.sl-ket, .sl-nom { cursor: pointer; color: var(--teal); text-decoration: underline dotted; }
+.sl-ket:hover, .sl-nom:hover { color: var(--amber); }
+.sl-ket.copied, .sl-nom.copied { background: #d8efdf; }
 .sl-edit, .sl-save, .sl-cancel { padding: 3px 10px; border-radius: 6px; border: 1px solid var(--line); background: #fff; cursor: pointer; font-size: 12px; font-family: "Segoe UI", Arial, sans-serif; }
 .sl-edit:hover, .sl-cancel:hover { border-color: var(--teal); }
 .sl-save { background: var(--amber); color: #fff; border-color: var(--amber); }
