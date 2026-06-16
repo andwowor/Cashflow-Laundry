@@ -49,6 +49,14 @@ app.post("/api/logout", (req, res) => {
   res.json({ ok: true });
 });
 
+// Logo bisa diakses tanpa login (dipakai di halaman login & dashboard).
+// Salin file logo ke public/logo.jpeg. Bila belum ada → 404 (tampilan jatuh ke ikon ◍).
+app.get("/logo.jpeg", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "logo.jpeg"), (err) => {
+    if (err && !res.headersSent) res.status(404).end();
+  });
+});
+
 // Semua route di bawah ini wajib login.
 app.use(auth.requireAuth);
 app.use(express.static(path.join(__dirname, "public")));
