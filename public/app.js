@@ -143,6 +143,7 @@ $$(".tab").forEach((btn) => {
     btn.classList.add("active");
     $("#tab-" + btn.dataset.tab).classList.add("active");
     if (btn.dataset.tab === "monbiaya" && !MONBIAYA_LOADED) loadMonBiaya();
+    if (btn.dataset.tab === "smartlink" && !SMART_LOADED) loadSmart();
   });
 });
 
@@ -1040,6 +1041,238 @@ async function mbExport(endpoint, btn) {
 
 $("#btn-monbiaya-export").addEventListener("click", (e) => mbExport("/api/monbiaya/export", e.currentTarget));
 $("#btn-monbiaya-export-so").addEventListener("click", (e) => mbExport("/api/monbiaya/export-setoran", e.currentTarget));
+
+// ================= Lapor Smartlink (sheet INPUT PENGGUNAAN BIAYA) =================
+let SMART = null;
+let SMART_LOADED = false;
+let SMART_EDIT = null; // nomor baris yang sedang diedit
+const SMART_CHECKED = new Set(); // nomor baris tercentang (untuk disembunyikan)
+
+// Indeks kolom A..H pada cells[].
+const SL_COL = { subjek: 0, keterangan: 1, nominal: 2, tanggal: 3, outlet: 4, status: 5, sumberDana: 6, kode: 7 };
+
+async function copyTextToClipboard(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    await navigator.clipboard.writeText(text);
+  } else {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+  }
+}
+
+// Tombol status: ✘ merah (BELUM INPUT) / ✓ hijau (SUDAH INPUT). Simbol mewakili
+// nilai dropdown, nilai aslinya tetap ditulis di sheet.
+function slStatusBtn(r) {
+  const sudah = r.status === "SUDAH INPUT";
+  return `<button class="sl-status ${sudah ? "sl-ok" : "sl-no"}" data-row="${r.row}" data-val="${escapeHtml(r.status)}" title="${escapeHtml(r.status || "(kosong)")} — klik untuk ubah">${sudah ? "✓" : "✘"}</button>`;
+}
+
+function slViewRow(r) {
+  const c = r.cells;
+  return [
+    `<td>${escapeHtml(c[SL_COL.subjek])}</td>`,
+    `<td class="sl-ket" data-text="${escapeHtml(c[SL_COL.keterangan])}" title="Klik untuk menyalin">${escapeHtml(c[SL_COL.keterangan])}</td>`,
+    `<td class="num">${escapeHtml(c[SL_COL.nominal])}</td>`,
+    `<td>${escapeHtml(c[SL_COL.tanggal])}</td>`,
+    `<td>${escapeHtml(c[SL_COL.outlet])}</td>`,
+    `<td style="text-align:center">${slStatusBtn(r)}</td>`,
+    `<td>${escapeHtml(c[SL_COL.sumberDana])}</td>`,
+    `<td>${escapeHtml(c[SL_COL.kode])}</td>`,
+    `<td><button class="sl-edit" data-row="${r.row}" title="Edit baris">✎</button></td>`,
+  ].join("");
+}
+
+function slEditRow(r) {
+  const c = r.cells;
+  const e = r.edit;
+  const ketOpts = ['<option value="">— pilih —</option>']
+    .concat((SMART.daftarBiaya || []).map((d) => `<option${d.keterangan === e.keterangan ? " selected" : ""}>${escapeHtml(d.keterangan)}</option>`))
+    .join("");
+  const sumberOpts = ['<option value="">—</option>']
+    .concat((SMART.sumberDana || []).map((s) => `<option${s === e.sumberDana ? " selected" : ""}>${escapeHtml(s)}</option>`))
+    .join("");
+  return [
+    `<td>${escapeHtml(c[SL_COL.subjek])}</td>`,
+    `<td><select class="sl-f-ket">${ketOpts}</select></td>`,
+    `<td><input type="number" class="sl-f-nom" min="1" value="${escapeHtml(e.nominal)}"></td>`,
+    `<td><input type="date" class="sl-f-tgl" value="${escapeHtml(e.tanggalIso)}"></td>`,
+    `<td>${escapeHtml(c[SL_COL.outlet])}</td>`,
+    `<td style="text-align:center">${escapeHtml(c[SL_COL.status])}</td>`,
+    `<td><select class="sl-f-sumber">${sumberOpts}</select></td>`,
+    `<td>${escapeHtml(c[SL_COL.kode])}</td>`,
+    `<td><button class="sl-save" data-row="${r.row}">💾 Simpan</button> <button class="sl-cancel" data-row="${r.row}">Batal</button></td>`,
+  ].join("");
+}
+
+function slUpdateCount() {
+  $("#sl-count").textContent = `${SMART_CHECKED.size} dipilih`;
+}
+
+function renderSmart() {
+  const el = $("#sl-table");
+  if (!SMART || !SMART.rows.length) {
+    el.innerHTML = `<p class="hint">Tidak ada biaya berstatus BELUM INPUT. 🎉</p>`;
+    slUpdateCount();
+    return;
+  }
+  const heads = ['<th><input type="checkbox" id="sl-checkall" title="Pilih semua"></th>']
+    .concat(SMART.headers.map((h) => `<th>${escapeHtml(h)}</th>`))
+    .concat(["<th>Edit</th>"])
+    .join("");
+  const body = SMART.rows
+    .map((r) => {
+      const editing = SMART_EDIT === r.row;
+      const checked = SMART_CHECKED.has(r.row) ? " checked" : "";
+      const inner = editing ? slEditRow(r) : slViewRow(r);
+      return `<tr data-row="${r.row}"><td style="text-align:center"><input type="checkbox" class="sl-check" data-row="${r.row}"${checked}></td>${inner}</tr>`;
+    })
+    .join("");
+  el.innerHTML = `<table id="sl-grid"><thead><tr>${heads}</tr></thead><tbody>${body}</tbody></table>`;
+  slUpdateCount();
+}
+
+async function loadSmart() {
+  const el = $("#sl-table");
+  el.innerHTML = "Memuat…";
+  SMART_EDIT = null;
+  try {
+    SMART = await api("/api/moninput/list");
+    SMART_LOADED = true;
+    // Buang centang untuk baris yang sudah tidak ada lagi di daftar.
+    const valid = new Set(SMART.rows.map((r) => r.row));
+    for (const n of Array.from(SMART_CHECKED)) if (!valid.has(n)) SMART_CHECKED.delete(n);
+    renderSmart();
+  } catch (e) {
+    el.innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
+  }
+}
+
+async function slToggleStatus(btn) {
+  const row = Number(btn.dataset.row);
+  const cur = btn.dataset.val || "BELUM INPUT";
+  const next = cur === "SUDAH INPUT" ? "BELUM INPUT" : "SUDAH INPUT";
+  const prev = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "…";
+  try {
+    await api("/api/moninput/status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ row, value: next }),
+    });
+    const r = SMART.rows.find((x) => x.row === row);
+    if (r) {
+      r.status = next;
+      r.cells[SL_COL.status] = next;
+    }
+    const sudah = next === "SUDAH INPUT";
+    btn.dataset.val = next;
+    btn.textContent = sudah ? "✓" : "✘";
+    btn.className = `sl-status ${sudah ? "sl-ok" : "sl-no"}`;
+    btn.title = next + " — klik untuk ubah";
+  } catch (e) {
+    btn.textContent = prev;
+    showLog($("#sl-result"), "✘ Gagal mengubah status: " + e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function slCopyKet(td) {
+  const text = td.dataset.text || "";
+  try {
+    await copyTextToClipboard(text);
+    td.classList.add("copied");
+    setTimeout(() => td.classList.remove("copied"), 900);
+    showLog($("#sl-result"), `✔ Disalin: "${text}"`);
+  } catch {
+    showLog($("#sl-result"), "✘ Gagal menyalin keterangan.", true);
+  }
+}
+
+async function slSave(row) {
+  const tr = $(`#sl-grid tr[data-row="${row}"]`);
+  if (!tr) return;
+  const keterangan = tr.querySelector(".sl-f-ket").value;
+  const nominal = tr.querySelector(".sl-f-nom").value;
+  const tanggalIso = tr.querySelector(".sl-f-tgl").value;
+  const sumberDana = tr.querySelector(".sl-f-sumber").value;
+  const btn = tr.querySelector(".sl-save");
+  btn.disabled = true;
+  const prev = btn.textContent;
+  btn.textContent = "…";
+  try {
+    await api("/api/moninput/edit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ row, keterangan, nominal, tanggalIso, sumberDana }),
+    });
+    SMART_EDIT = null;
+    await loadSmart(); // muat ulang agar SUBJEK (formula) & format nominal/tanggal ikut diperbarui
+    showLog($("#sl-result"), `✔ Baris ${row} diperbarui.`);
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = prev;
+    showLog($("#sl-result"), "✘ Gagal menyimpan: " + e.message, true);
+  }
+}
+
+async function slHide() {
+  const rows = Array.from(SMART_CHECKED);
+  if (!rows.length) return showLog($("#sl-result"), "✘ Centang minimal satu baris untuk disembunyikan.", true);
+  const btn = $("#btn-sl-hide");
+  btn.disabled = true;
+  try {
+    const r = await api("/api/moninput/hide", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows }),
+    });
+    SMART_CHECKED.clear();
+    await loadSmart();
+    showLog($("#sl-result"), `✔ ${r.hidden} baris disembunyikan dari daftar.`);
+  } catch (e) {
+    showLog($("#sl-result"), "✘ " + e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+$("#sl-table").addEventListener("click", (e) => {
+  const t = e.target;
+  if (t.classList.contains("sl-status")) slToggleStatus(t);
+  else if (t.classList.contains("sl-edit")) {
+    SMART_EDIT = Number(t.dataset.row);
+    renderSmart();
+  } else if (t.classList.contains("sl-save")) slSave(Number(t.dataset.row));
+  else if (t.classList.contains("sl-cancel")) {
+    SMART_EDIT = null;
+    renderSmart();
+  } else if (t.classList.contains("sl-ket")) slCopyKet(t);
+});
+$("#sl-table").addEventListener("change", (e) => {
+  if (e.target.id === "sl-checkall") {
+    SMART.rows.forEach((r) => {
+      if (e.target.checked) SMART_CHECKED.add(r.row);
+      else SMART_CHECKED.delete(r.row);
+    });
+    $$("#sl-table .sl-check").forEach((c) => (c.checked = e.target.checked));
+    slUpdateCount();
+  } else if (e.target.classList.contains("sl-check")) {
+    const row = Number(e.target.dataset.row);
+    if (e.target.checked) SMART_CHECKED.add(row);
+    else SMART_CHECKED.delete(row);
+    slUpdateCount();
+  }
+});
+$("#btn-sl-refresh").addEventListener("click", loadSmart);
+$("#btn-sl-hide").addEventListener("click", slHide);
 
 // ================= Input Setoran Kas =================
 $("#btn-setoran-submit").addEventListener("click", async () => {

@@ -205,6 +205,23 @@ input[type="file"] { font-family: "Segoe UI", Arial, sans-serif; font-size: 13px
 #monbiaya-grid td.mb-tgl-red { background: #f7d9d2; color: var(--err); font-weight: 600; }
 #monbiaya-grid td.mb-subjek-yellow { background: #fcefb4; font-weight: 600; }
 
+/* Lapor Smartlink (INPUT PENGGUNAAN BIAYA) */
+#sl-grid { font-size: 12.5px; width: auto; min-width: 100%; }
+#sl-grid th, #sl-grid td { white-space: nowrap; }
+.sl-status { padding: 2px 11px; border-radius: 6px; border: 1px solid var(--line); background: #fff; cursor: pointer; font-size: 14px; font-weight: 700; line-height: 1.1; }
+.sl-status:hover { filter: brightness(0.97); }
+.sl-status.sl-no { color: var(--err); border-color: #e6c3bb; }
+.sl-status.sl-ok { color: var(--ok); border-color: #bfe0c8; }
+.sl-ket { cursor: pointer; color: var(--teal); text-decoration: underline dotted; }
+.sl-ket:hover { color: var(--amber); }
+.sl-ket.copied { background: #d8efdf; }
+.sl-edit, .sl-save, .sl-cancel { padding: 3px 10px; border-radius: 6px; border: 1px solid var(--line); background: #fff; cursor: pointer; font-size: 12px; font-family: "Segoe UI", Arial, sans-serif; }
+.sl-edit:hover, .sl-cancel:hover { border-color: var(--teal); }
+.sl-save { background: var(--amber); color: #fff; border-color: var(--amber); }
+.sl-save:hover { filter: brightness(1.08); }
+#sl-grid select, #sl-grid input[type="number"], #sl-grid input[type="date"] { min-width: 130px; padding: 5px 7px; }
+#sl-count { font-weight: 600; color: var(--teal); }
+
 /* Pratinjau input biaya: kolom cukup lebar agar isi terlihat penuh; tabel boleh
    menggulir horizontal bila melebihi lebar layar. */
 #biaya-table { width: auto; min-width: 100%; font-size: 13px; }

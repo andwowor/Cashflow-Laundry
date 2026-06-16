@@ -15,6 +15,7 @@ const kas = require("./src/kas");
 const qris = require("./src/qris");
 const qrisbank = require("./src/qrisbank");
 const monbiaya = require("./src/monbiaya");
+const moninput = require("./src/moninput");
 const setoran = require("./src/setoran");
 const transaksi = require("./src/transaksi");
 const { MODEL } = require("./src/claude");
@@ -228,6 +229,30 @@ app.post("/api/monbiaya/unhide", wrap(async (req, res) => {
 
 app.post("/api/monbiaya/hide", wrap(async (req, res) => {
   res.json(monbiaya.hide((req.body || {}).nomors || []));
+}));
+
+// ---------- Monitoring biaya BELUM INPUT (sheet INPUT PENGGUNAAN BIAYA, CASHFLOW) ----------
+
+app.get("/api/moninput/list", wrap(async (req, res) => {
+  res.json({ ok: true, ...(await moninput.list()) });
+}));
+
+app.post("/api/moninput/status", wrap(async (req, res) => {
+  const { row, value } = req.body || {};
+  res.json(await moninput.setStatus(Number(row), value));
+}));
+
+app.post("/api/moninput/edit", wrap(async (req, res) => {
+  const { row, keterangan, nominal, tanggalIso, sumberDana } = req.body || {};
+  res.json(await moninput.saveEdit(Number(row), { keterangan, nominal, tanggalIso, sumberDana }));
+}));
+
+app.post("/api/moninput/hide", wrap(async (req, res) => {
+  res.json(moninput.hide((req.body || {}).rows || []));
+}));
+
+app.post("/api/moninput/unhide", wrap(async (req, res) => {
+  res.json(moninput.restore((req.body || {}).rows || []));
 }));
 
 // ---------- Input setoran kas (sheet REKAP, baris SETORAN KAS) ----------

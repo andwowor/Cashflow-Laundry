@@ -18,6 +18,7 @@
     <nav class="tabs">
       <button class="tab active" data-tab="monitor">Monitoring</button>
       <button class="tab" data-tab="monbiaya">Monitoring Biaya</button>
+      <button class="tab" data-tab="smartlink">Lapor Smartlink</button>
       <button class="tab" data-tab="biaya">Input Biaya</button>
       <button class="tab" data-tab="kas">Input Kas</button>
       <button class="tab" data-tab="setoran">Setoran Kas</button>
@@ -86,6 +87,28 @@
         </div>
         <div id="monbiaya-result" class="result-log hidden"></div>
         <div id="monbiaya-table" class="table-wrap">Memuat…</div>
+      </div>
+    </section>
+
+    <!-- ============ TAB LAPOR SMARTLINK ============ -->
+    <section id="tab-smartlink" class="panel">
+      <div class="card">
+        <h2>Status Lapor Smartlink</h2>
+        <p class="hint">Daftar biaya pada sheet <b>INPUT PENGGUNAAN BIAYA</b> (CASHFLOW bulan ini) yang
+          <b>STATUS LAPOR APLIKASI SMARTLINK</b>-nya masih <b>BELUM INPUT</b>.
+          Klik tanda <b style="color:#b3402f">✘</b> untuk menandai <b>SUDAH INPUT</b> (jadi centang hijau
+          <b style="color:#1d7a3e">✓</b>) — ini menulis ke sheet, bukan mengubah daftar dropdown.
+          Klik <b>teks Keterangan</b> untuk langsung menyalinnya. Klik <b>✎</b> untuk mengedit
+          Keterangan, Nominal, Tanggal, &amp; Sumber Dana. Mengubah status <b>tidak</b> langsung
+          menghilangkan baris — untuk menghilangkannya, centang kotak di kiri lalu tekan
+          <b>Konfirmasi sembunyikan</b>.</p>
+        <div class="actions">
+          <button id="btn-sl-refresh" class="btn-ghost">⟳ Muat ulang</button>
+          <span id="sl-count" class="hint">0 dipilih</span>
+          <button id="btn-sl-hide" class="btn-primary">✓ Konfirmasi sembunyikan tercentang</button>
+        </div>
+        <div id="sl-result" class="result-log hidden"></div>
+        <div id="sl-table" class="table-wrap">Memuat…</div>
       </div>
     </section>
 
