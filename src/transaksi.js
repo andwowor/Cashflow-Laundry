@@ -48,16 +48,28 @@ async function resolveSheet() {
  * Bila pembacaan langsung gagal, arsip dibuka ulang dengan fflate (paham ZIP64)
  * lalu dikemas ulang sebagai ZIP standar yang bisa dibaca SheetJS — semua
  * pemrosesan nilai (tanggal serial, persen, angka) tetap lewat SheetJS.
+ *
+ * Bila arsip ZIP-nya sendiri tidak utuh (mis. file terpotong saat diunduh:
+ * direktori pusat ZIP hilang), fflate juga gagal → beri pesan yang jelas &
+ * bisa ditindaklanjuti, bukan "Unsupported ZIP Compression method NaN".
  */
 function readWorkbook(buffer) {
   try {
     return XLSX.read(buffer, { type: "buffer" });
   } catch (err) {
+    const u8 = new Uint8Array(buffer);
+    const isZip = u8[0] === 0x50 && u8[1] === 0x4b; // tanda tangan "PK"
+    if (!isZip) throw err; // bukan arsip ZIP/xlsx — kembalikan error asli
     let files;
     try {
-      files = unzipSync(new Uint8Array(buffer));
+      files = unzipSync(u8);
     } catch {
-      throw err; // bukan masalah ZIP64 — kembalikan error pembacaan asli
+      throw new Error(
+        "File .xlsx tidak bisa dibaca — sepertinya rusak atau tidak lengkap " +
+          "(arsip ZIP tidak utuh, mis. file terpotong saat diunduh/diekspor). " +
+          "Coba unduh atau ekspor ulang file transaksinya dari sistem sumber, " +
+          "lalu upload lagi."
+      );
     }
     const rezipped = zipSync(files);
     return XLSX.read(rezipped, { type: "array" });
