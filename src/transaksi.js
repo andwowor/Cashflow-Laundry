@@ -1,6 +1,7 @@
 "use strict";
 
 const XLSX = require("xlsx");
+const { unzipSync, zipSync } = require("fflate");
 const cfg = require("./config");
 const { readRange, batchWrite, getSheetTitles } = require("./sheets");
 
@@ -40,9 +41,32 @@ async function resolveSheet() {
   return { sheets, resolved, monthKey: `${cfg.MONTH_NAMES_ID[month - 1]} ${year}` };
 }
 
+/**
+ * Baca workbook dengan toleran terhadap arsip ZIP64. File .xlsx ekspor yang
+ * besar kadang ditulis dalam format ZIP64 yang TIDAK didukung SheetJS 0.18.5
+ * (gejalanya: "Unsupported ZIP Compression method NaN" / "Bad compressed size").
+ * Bila pembacaan langsung gagal, arsip dibuka ulang dengan fflate (paham ZIP64)
+ * lalu dikemas ulang sebagai ZIP standar yang bisa dibaca SheetJS — semua
+ * pemrosesan nilai (tanggal serial, persen, angka) tetap lewat SheetJS.
+ */
+function readWorkbook(buffer) {
+  try {
+    return XLSX.read(buffer, { type: "buffer" });
+  } catch (err) {
+    let files;
+    try {
+      files = unzipSync(new Uint8Array(buffer));
+    } catch {
+      throw err; // bukan masalah ZIP64 — kembalikan error pembacaan asli
+    }
+    const rezipped = zipSync(files);
+    return XLSX.read(rezipped, { type: "array" });
+  }
+}
+
 /** Baca file ekspor (xlsx/xls/csv) → array baris (A..R) dari baris 28 s/d data terbawah. */
 function parseBuffer(buffer) {
-  const wb = XLSX.read(buffer, { type: "buffer" });
+  const wb = readWorkbook(buffer);
   const ws = wb.Sheets[wb.SheetNames[0]];
   if (!ws) throw new Error("File tidak berisi sheet yang bisa dibaca.");
   const all = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, blankrows: true, defval: "" });
