@@ -825,7 +825,7 @@ function renderMonBiaya() {
             return `<td><button class="mb-btn mb-verif" data-row="${r.row}" data-val="${escapeHtml(c)}" title="${escapeHtml(c || "(kosong)")}">${escapeHtml(mbLabel(c))}</button></td>`;
           }
           if (col === MB_KODE_COL) {
-            return `<td>${escapeHtml(c)} <button class="mb-copy" data-kode="${escapeHtml(c)}" title="Salin kode">⧉ Salin</button></td>`;
+            return `<td class="mb-kode" data-kode="${escapeHtml(c)}" title="Klik untuk menyalin">${escapeHtml(c)}</td>`;
           }
           if (col === MB_KOREKSI_COL) {
             return `<td><input type="text" class="mb-koreksi" data-row="${r.row}" value="${escapeHtml(c)}" placeholder="alasan penolakan…"><button class="mb-koreksi-save" data-row="${r.row}">Simpan</button></td>`;
@@ -888,24 +888,13 @@ async function mbCycleStatus(btn, field) {
   }
 }
 
-async function mbCopy(btn) {
-  const text = btn.dataset.kode || "";
+async function mbCopy(el) {
+  const text = el.dataset.kode || "";
   try {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(text);
-    } else {
-      const ta = document.createElement("textarea");
-      ta.value = text;
-      ta.style.position = "fixed";
-      ta.style.opacity = "0";
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand("copy");
-      document.body.removeChild(ta);
-    }
-    const old = btn.textContent;
-    btn.textContent = "✓ Tersalin";
-    setTimeout(() => (btn.textContent = old), 1200);
+    await copyTextToClipboard(text);
+    el.classList.add("copied");
+    setTimeout(() => el.classList.remove("copied"), 900);
+    showLog($("#monbiaya-result"), `✔ Kode disalin: "${text}"`);
   } catch {
     showLog($("#monbiaya-result"), "✘ Gagal menyalin kode.", true);
   }
@@ -945,7 +934,7 @@ $("#monbiaya-table").addEventListener("click", (e) => {
   const t = e.target;
   if (t.classList.contains("mb-status")) mbCycleStatus(t, "status");
   else if (t.classList.contains("mb-verif")) mbCycleStatus(t, "verifikasi");
-  else if (t.classList.contains("mb-copy")) mbCopy(t);
+  else if (t.classList.contains("mb-kode")) mbCopy(t);
   else if (t.classList.contains("mb-koreksi-save")) {
     const tr = t.closest("tr");
     const inp = tr && tr.querySelector(".mb-koreksi");

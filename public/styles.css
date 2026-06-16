@@ -196,8 +196,9 @@ input[type="file"] { font-family: "Segoe UI", Arial, sans-serif; font-size: 13px
 .mb-btn.err { background: #f7d9d2; border-color: var(--err); color: var(--err); }
 .mb-status[data-val="BELUM INPUT"], .mb-verif[data-val="SALAH INPUT"] { color: var(--err); border-color: #e6c3bb; }
 .mb-status[data-val="SUDAH INPUT"], .mb-verif[data-val="SUDAH VERIFIKASI OWNER"] { color: var(--ok); border-color: #bfe0c8; }
-.mb-copy { margin-left: 6px; padding: 2px 8px; font-size: 11px; border-radius: 6px; border: 1px solid var(--line); background: #fff; cursor: pointer; font-family: "Segoe UI", Arial, sans-serif; }
-.mb-copy:hover { border-color: var(--teal); }
+#monbiaya-grid td.mb-kode { cursor: pointer; color: var(--teal); text-decoration: underline dotted; }
+#monbiaya-grid td.mb-kode:hover { color: var(--amber); }
+#monbiaya-grid td.mb-kode.copied { background: #d8efdf; }
 #monbiaya-count { font-weight: 600; color: var(--teal); }
 #monbiaya-grid .mb-koreksi { width: auto; min-width: 200px; padding: 4px 8px; font-size: 12px; }
 .mb-koreksi-save { margin-left: 6px; padding: 4px 10px; font-size: 11px; border-radius: 6px; border: 1px solid var(--line); background: #fff; cursor: pointer; font-family: "Segoe UI", Arial, sans-serif; }
