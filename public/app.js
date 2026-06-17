@@ -1463,3 +1463,10 @@ initDropzone($("#dz-qris"), $("#qris-files"), $("#dz-qris-count"));
 initDropzone($("#dz-qbank"), $("#qbank-files"), $("#dz-qbank-count"));
 loadStatus();
 loadDashboard();
+
+// Daftarkan service worker agar dashboard bisa di-install lewat Chrome (PWA).
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}

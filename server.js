@@ -58,6 +58,18 @@ app.get("/logo.jpeg", (req, res) => {
   });
 });
 
+// Aset PWA (installable lewat Chrome) — dapat diakses tanpa login.
+const sendPublic = (file, type) => (req, res) => {
+  if (type) res.type(type);
+  res.sendFile(path.join(__dirname, "public", file), (err) => {
+    if (err && !res.headersSent) res.status(404).end();
+  });
+};
+app.get("/manifest.webmanifest", sendPublic("manifest.webmanifest", "application/manifest+json"));
+app.get("/sw.js", sendPublic("sw.js", "application/javascript"));
+app.get("/icon.svg", sendPublic("icon.svg", "image/svg+xml"));
+app.get("/icon-maskable.svg", sendPublic("icon-maskable.svg", "image/svg+xml"));
+
 // Semua route di bawah ini wajib login.
 app.use(auth.requireAuth);
 app.use(express.static(path.join(__dirname, "public")));

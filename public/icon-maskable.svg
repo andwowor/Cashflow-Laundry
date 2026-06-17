@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Co Clean Laundry">
+  <rect width="512" height="512" fill="#f3eedf"/>
+  <g fill="none" stroke="#17697b">
+    <circle cx="256" cy="256" r="118" stroke-width="36"/>
+    <circle cx="256" cy="256" r="60" stroke-width="27"/>
+  </g>
+  <circle cx="256" cy="256" r="20" fill="#17697b"/>
+</svg>

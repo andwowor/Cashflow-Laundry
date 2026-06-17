@@ -1,0 +1,16 @@
+{
+  "name": "Dashboard Kas Laundry — Co Clean",
+  "short_name": "Kas Laundry",
+  "description": "Dashboard monitoring kas, biaya, dan setoran Co Clean Laundry.",
+  "lang": "id",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f3eedf",
+  "theme_color": "#17697b",
+  "icons": [
+    { "src": "/logo.jpeg", "type": "image/jpeg", "sizes": "512x512", "purpose": "any" },
+    { "src": "/icon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any" },
+    { "src": "/icon-maskable.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "maskable" }
+  ]
+}
