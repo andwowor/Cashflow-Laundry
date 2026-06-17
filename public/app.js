@@ -144,6 +144,7 @@ $$(".tab").forEach((btn) => {
     $("#tab-" + btn.dataset.tab).classList.add("active");
     if (btn.dataset.tab === "monbiaya" && !MONBIAYA_LOADED) loadMonBiaya();
     if (btn.dataset.tab === "smartlink" && !SMART_LOADED) loadSmart();
+    if (btn.dataset.tab === "riwayat" && !RB_LOADED) rbOpen();
   });
 });
 
@@ -1349,6 +1350,107 @@ $("#btn-trx-submit").addEventListener("click", async () => {
   } finally {
     btn.disabled = false;
   }
+});
+
+// ================= Riwayat Biaya per Bulan =================
+let RB = null;
+let RB_LOADED = false;
+const RB_MONTHS = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+
+function rbDefaultYM() {
+  const t = (STATUS && STATUS.today) || "";
+  const m = t.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (m) return { month: Number(m[2]), year: Number(m[3]) };
+  const d = new Date();
+  return { month: d.getMonth() + 1, year: d.getFullYear() };
+}
+
+function rbInitSelectors() {
+  const ms = $("#rb-month");
+  if (ms && !ms.options.length) {
+    ms.innerHTML = RB_MONTHS.map((m, i) => `<option value="${i + 1}">${m}</option>`).join("");
+  }
+  const ys = $("#rb-year");
+  if (ys && !ys.options.length) {
+    const def = rbDefaultYM();
+    const top = Math.max(def.year, new Date().getFullYear());
+    const years = [];
+    for (let y = top; y >= 2025; y--) years.push(y);
+    ys.innerHTML = years.map((y) => `<option value="${y}">${y}</option>`).join("");
+  }
+}
+
+function rbRender() {
+  if (!RB) return;
+  const fs = $("#rb-subjek").value;
+  const fk = $("#rb-ket").value;
+  const rows = RB.rows.filter((r) => (!fs || r.subjek === fs) && (!fk || r.keterangan === fk));
+  const total = rows.reduce((s, r) => s + (Number(r.nominal) || 0), 0);
+
+  $("#rb-total").classList.remove("hidden");
+  $("#rb-total").innerHTML =
+    `Total biaya (${rows.length} baris): <b>${fmtRp(total)}</b>` +
+    (RB.spreadsheetTitle ? ` &nbsp;·&nbsp; sumber: ${escapeHtml(RB.spreadsheetTitle)}` : "");
+
+  const el = $("#rb-table");
+  if (!rows.length) {
+    el.innerHTML = `<p class="hint">Tidak ada biaya untuk pilihan ini.</p>`;
+    return;
+  }
+  const heads = RB.headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("");
+  const body = rows
+    .map((r) => `<tr>${r.cells.map((c, i) => `<td${i === 2 ? ' class="num"' : ""}>${escapeHtml(c)}</td>`).join("")}</tr>`)
+    .join("");
+  el.innerHTML = `<table id="rb-grid"><thead><tr>${heads}</tr></thead><tbody>${body}</tbody></table>`;
+}
+
+async function rbLoad() {
+  rbInitSelectors();
+  const month = Number($("#rb-month").value);
+  const year = Number($("#rb-year").value);
+  const el = $("#rb-table");
+  el.innerHTML = "Memuat…";
+  $("#rb-result").classList.add("hidden");
+  const btn = $("#btn-rb-load");
+  btn.disabled = true;
+  try {
+    RB = await api(`/api/riwayat-biaya?year=${year}&month=${month}`);
+    const subjOpts = ['<option value="">— semua subjek —</option>']
+      .concat(RB.subjekOptions.map((s) => `<option>${escapeHtml(s)}</option>`))
+      .join("");
+    const ketOpts = ['<option value="">— semua keterangan —</option>']
+      .concat(RB.keteranganOptions.map((s) => `<option>${escapeHtml(s)}</option>`))
+      .join("");
+    $("#rb-subjek").innerHTML = subjOpts;
+    $("#rb-ket").innerHTML = ketOpts;
+    $("#rb-filters").style.display = "flex";
+    rbRender();
+  } catch (e) {
+    $("#rb-filters").style.display = "none";
+    $("#rb-total").classList.add("hidden");
+    el.innerHTML = "";
+    showLog($("#rb-result"), "✘ " + e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function rbOpen() {
+  rbInitSelectors();
+  const ym = rbDefaultYM();
+  if ($("#rb-month")) $("#rb-month").value = String(ym.month);
+  if ($("#rb-year")) $("#rb-year").value = String(ym.year);
+  RB_LOADED = true;
+  rbLoad();
+}
+
+$("#btn-rb-load").addEventListener("click", rbLoad);
+$("#rb-subjek").addEventListener("change", rbRender);
+$("#rb-ket").addEventListener("change", rbRender);
+$("#btn-rb-reset").addEventListener("click", () => {
+  $("#rb-subjek").value = "";
+  $("#rb-ket").value = "";
+  rbRender();
 });
 
 // ================= Init =================

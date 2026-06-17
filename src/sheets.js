@@ -39,6 +39,19 @@ async function getSheetTitles(spreadsheetId) {
   };
 }
 
+/** Cari ID spreadsheet berdasarkan judul persis (di Drive, termasuk shared drive). */
+async function findSpreadsheetIdByTitle(title) {
+  const drive = driveClient();
+  const res = await drive.files.list({
+    q: `name = '${String(title).replace(/'/g, "\\'")}' and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false`,
+    fields: "files(id, name)",
+    pageSize: 5,
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true,
+  });
+  return ((res.data.files || [])[0] || {}).id || null;
+}
+
 /**
  * Resolusi spreadsheet CASHFLOW bulan berjalan.
  * Urutan: env CASHFLOW_SPREADSHEET_ID → override manual (berlaku untuk bulan
@@ -60,16 +73,8 @@ async function resolveCashflowSpreadsheetId() {
   }
 
   const expectedTitle = `CASHFLOW DAN BIAYA ${monthKey}`;
-  const drive = driveClient();
-  const res = await drive.files.list({
-    q: `name = '${expectedTitle}' and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false`,
-    fields: "files(id, name)",
-    pageSize: 5,
-    supportsAllDrives: true,
-    includeItemsFromAllDrives: true,
-  });
-  const file = (res.data.files || [])[0];
-  if (!file) {
+  const foundId = await findSpreadsheetIdByTitle(expectedTitle);
+  if (!foundId) {
     const err = new Error(
       `Spreadsheet "${expectedTitle}" tidak ditemukan. Pastikan file sudah dibagikan ke service account, ` +
         `atau masukkan link spreadsheet bulan ini lewat menu Pengaturan.`
@@ -77,9 +82,9 @@ async function resolveCashflowSpreadsheetId() {
     err.code = "CASHFLOW_NOT_FOUND";
     throw err;
   }
-  stored.cashflowAuto = { id: file.id, monthKey, title: file.name };
+  stored.cashflowAuto = { id: foundId, monthKey, title: expectedTitle };
   cfg.saveStoredConfig(stored);
-  return { id: file.id, source: "auto-discovery", monthKey, title: file.name };
+  return { id: foundId, source: "auto-discovery", monthKey, title: expectedTitle };
 }
 
 /** Simpan override manual link CASHFLOW untuk bulan berjalan. */
@@ -95,4 +100,5 @@ module.exports = {
   getSheetTitles,
   resolveCashflowSpreadsheetId,
   setCashflowOverride,
+  findSpreadsheetIdByTitle,
 };

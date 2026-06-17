@@ -16,6 +16,7 @@ const qris = require("./src/qris");
 const qrisbank = require("./src/qrisbank");
 const monbiaya = require("./src/monbiaya");
 const moninput = require("./src/moninput");
+const riwayat = require("./src/riwayat");
 const setoran = require("./src/setoran");
 const transaksi = require("./src/transaksi");
 const { MODEL } = require("./src/claude");
@@ -261,6 +262,17 @@ app.post("/api/moninput/hide", wrap(async (req, res) => {
 
 app.post("/api/moninput/unhide", wrap(async (req, res) => {
   res.json(moninput.restore((req.body || {}).rows || []));
+}));
+
+// ---------- Riwayat biaya per bulan (sheet INPUT PENGGUNAAN BIAYA) ----------
+
+app.get("/api/riwayat-biaya", wrap(async (req, res) => {
+  const year = Number(req.query.year);
+  const month = Number(req.query.month);
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+    return res.status(400).json({ ok: false, error: "Bulan/tahun tidak valid." });
+  }
+  res.json({ ok: true, ...(await riwayat.list(year, month)) });
 }));
 
 // ---------- Input setoran kas (sheet REKAP, baris SETORAN KAS) ----------

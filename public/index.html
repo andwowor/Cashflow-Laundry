@@ -20,6 +20,7 @@
       <button class="tab active" data-tab="monitor">Monitoring</button>
       <button class="tab" data-tab="monbiaya">Monitoring Biaya</button>
       <button class="tab" data-tab="smartlink">Lapor Smartlink</button>
+      <button class="tab" data-tab="riwayat">Riwayat Biaya</button>
       <button class="tab" data-tab="biaya">Input Biaya</button>
       <button class="tab" data-tab="kas">Input Kas</button>
       <button class="tab" data-tab="setoran">Setoran Kas</button>
@@ -110,6 +111,33 @@
         </div>
         <div id="sl-result" class="result-log hidden"></div>
         <div id="sl-table" class="table-wrap">Memuat…</div>
+      </div>
+    </section>
+
+    <!-- ============ TAB RIWAYAT BIAYA ============ -->
+    <section id="tab-riwayat" class="panel">
+      <div class="card">
+        <h2>Riwayat Biaya per Bulan</h2>
+        <p class="hint">Pilih <b>bulan &amp; tahun</b> untuk melihat seluruh biaya pada sheet
+          <b>INPUT PENGGUNAAN BIAYA</b> bulan tersebut. Saring dengan <b>Subjek Biaya</b> dan/atau
+          <b>Keterangan</b>; <b>total biaya</b> mengikuti hasil saringan.</p>
+        <div class="upload-row">
+          <label class="hint" style="margin:0">Bulan</label>
+          <select id="rb-month" style="max-width:160px"></select>
+          <label class="hint" style="margin:0">Tahun</label>
+          <select id="rb-year" style="max-width:120px"></select>
+          <button id="btn-rb-load" class="btn-primary">Tampilkan</button>
+        </div>
+        <div class="upload-row" id="rb-filters" style="display:none">
+          <label class="hint" style="margin:0">Subjek Biaya</label>
+          <select id="rb-subjek" style="max-width:260px"></select>
+          <label class="hint" style="margin:0">Keterangan</label>
+          <select id="rb-ket" style="max-width:260px"></select>
+          <button id="btn-rb-reset" class="btn-ghost">↺ Reset filter</button>
+        </div>
+        <div id="rb-total" class="last-sync hidden"></div>
+        <div id="rb-result" class="result-log hidden"></div>
+        <div id="rb-table" class="table-wrap"></div>
       </div>
     </section>
 
