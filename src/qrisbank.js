@@ -8,7 +8,9 @@ const SHEET = "DATA QRIS";
 
 /** Serial number Google Sheets (hari sejak 1899-12-30) → "YYYY-MM-DD". */
 function serialToISO(serial) {
-  const ms = Math.round(serial) * 86400000 + Date.UTC(1899, 11, 30);
+  // Ambil bagian TANGGAL saja (floor), JANGAN dibulatkan: serial dengan komponen
+  // waktu (mis. 46189,5 = 16 Juni siang) tidak boleh naik ke hari berikutnya.
+  const ms = Math.floor(serial + 1e-9) * 86400000 + Date.UTC(1899, 11, 30);
   const d = new Date(ms);
   const y = d.getUTCFullYear();
   const m = String(d.getUTCMonth() + 1).padStart(2, "0");
