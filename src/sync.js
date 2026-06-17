@@ -1,5 +1,6 @@
 "use strict";
 
+const path = require("path");
 const cfg = require("./config");
 const { readRange, batchWrite, getSheetTitles, resolveCashflowSpreadsheetId } = require("./sheets");
 
@@ -112,6 +113,51 @@ function numOrNull(cellRows, i) {
 }
 
 /**
+ * Jumlahkan SISA SALDO deposit pelanggan per OUTLET dari sheet DEPOSIT
+ * (BIAYA & KAS LAUNDRY). Struktur kolom: A=nama, B=tanggal, C=OUTLET,
+ * D=nominal transaksi deposit (masuk + / keluar −). Data mulai baris 3
+ * (baris 2 = total seluruh outlet, diabaikan). Sisa saldo per outlet =
+ * jumlah kolom D untuk outlet tersebut.
+ */
+async function loadDepositTotals(spreadsheetId, sheetTitle) {
+  const rows = await readRange(spreadsheetId, `'${sheetTitle}'!A3:D`, "UNFORMATTED_VALUE");
+  const totals = { MAUMBI: 0, PERKAMIL: 0 };
+  const counts = { MAUMBI: 0, PERKAMIL: 0 };
+  for (const r of rows) {
+    if (!r) continue;
+    const outlet = String(r[2] == null ? "" : r[2]).trim().toUpperCase();
+    const key = outlet.includes("MAUMBI") ? "MAUMBI" : outlet.includes("PERKAMIL") ? "PERKAMIL" : null;
+    if (!key) continue;
+    const n = Number(r[3]);
+    if (!Number.isFinite(n)) continue;
+    totals[key] += n;
+    counts[key] += 1;
+  }
+  return { totals, counts };
+}
+
+// State lokal agar penambahan deposit ke B4/B5 INPUT LAPORAN HARIAN bersifat
+// idempoten: menyimpan nilai yang TERAKHIR kita tulis + deposit yang ditambahkan,
+// per outlet, untuk tanggal berjalan. Dengan ini, menekan "Update Harian"
+// berkali-kali tidak menambah deposit dua kali, dan nilai hasil upload (Input Kas)
+// tidak pernah hilang.
+const DEPOSIT_STATE_FILE = path.join(cfg.DATA_DIR, "kas_aplikasi_deposit_state.json");
+function loadDepositState() {
+  const d = cfg.readJsonFile(DEPOSIT_STATE_FILE, {});
+  const w = d.written || {};
+  const dep = d.deposit || {};
+  const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  return {
+    date: d.date || "",
+    written: { MAUMBI: num(w.MAUMBI), PERKAMIL: num(w.PERKAMIL) },
+    deposit: { MAUMBI: num(dep.MAUMBI) ?? 0, PERKAMIL: num(dep.PERKAMIL) ?? 0 },
+  };
+}
+function saveDepositState(s) {
+  cfg.writeJsonFile(DEPOSIT_STATE_FILE, s);
+}
+
+/**
  * Eksekusi tombol "Update Harian" — seluruh rangkaian perintah dalam satu klik.
  */
 async function runDailySync() {
@@ -144,6 +190,34 @@ async function runDailySync() {
   const apliPerkamil = numOrNull(kasRows, 1); // B5 = KAS APLIKASI PERKAMIL
   const bankNominals = [2, 3, 4, 5].map((i) => numOrNull(kasRows, i) ?? 0); // B6:B9
   const bankLabels = ["BCA", "BRI", "BNI", "MANDIRI"];
+
+  // 2b) Sisa saldo deposit pelanggan per outlet (sheet DEPOSIT). Dipakai untuk
+  //     menambah B4/B5 INPUT LAPORAN HARIAN. Toleran: bila gagal/ tak ada,
+  //     B4/B5 tidak disentuh sama sekali (nilai hasil upload tetap utuh).
+  let depositOk = false;
+  const depositTotals = { MAUMBI: 0, PERKAMIL: 0 };
+  const depositCounts = { MAUMBI: 0, PERKAMIL: 0 };
+  const depositSheet =
+    meta.sheets.find((t) => t.trim().toUpperCase() === "DEPOSIT") ||
+    meta.sheets.find((t) => t.trim().toUpperCase().startsWith("DEPOSIT"));
+  if (!depositSheet) {
+    steps.push("⚠ Sheet DEPOSIT tidak ditemukan — B4/B5 INPUT LAPORAN HARIAN tidak ditambah deposit (nilai lama dibiarkan).");
+  } else {
+    try {
+      const dep = await loadDepositTotals(biayaKasId, depositSheet);
+      depositTotals.MAUMBI = dep.totals.MAUMBI;
+      depositTotals.PERKAMIL = dep.totals.PERKAMIL;
+      depositCounts.MAUMBI = dep.counts.MAUMBI;
+      depositCounts.PERKAMIL = dep.counts.PERKAMIL;
+      depositOk = true;
+      steps.push(
+        `Sisa saldo deposit (sheet ${depositSheet}): MAUMBI Rp${depositTotals.MAUMBI.toLocaleString("id-ID")} (${depositCounts.MAUMBI} transaksi), ` +
+          `PERKAMIL Rp${depositTotals.PERKAMIL.toLocaleString("id-ID")} (${depositCounts.PERKAMIL} transaksi).`
+      );
+    } catch (err) {
+      steps.push(`⚠ Gagal membaca sheet DEPOSIT: ${err.message}. B4/B5 tidak ditambah deposit (nilai lama dibiarkan).`);
+    }
+  }
 
   // 3) Tulis ke sheet KAS (inti): nominal kas tunai outlet (B2/B3) + tanggal
   //    (C2/C3) + tanggal kas bank (C6:C9).
@@ -186,14 +260,67 @@ async function runDailySync() {
   //    - C10:C15: tanggal kas bank aplikasi + belum settlement
   //    - C16:C25: tanggal baris lainnya
   const colC = (n) => Array.from({ length: n }, () => [tanggal]);
-  await batchWrite(cashflow.id, [
+  const ilhWrites = [
     { range: `'${ILH_SHEET}'!B2:C3`, values: [[maumbi.laporNominal, tanggal], [perkamil.laporNominal, tanggal]] },
     { range: `'${ILH_SHEET}'!C4:C5`, values: colC(2) },
     { range: `'${ILH_SHEET}'!B6:C9`, values: bankNominals.map((n) => [n, tanggal]) },
     { range: `'${ILH_SHEET}'!C10:C15`, values: colC(6) },
     { range: `'${ILH_SHEET}'!C16:C25`, values: colC(10) },
-  ]);
-  steps.push(`CASHFLOW ${ILH_SHEET}: B2:B3 & B6:B9 terisi nominal, C2:C25 = ${tanggal}.`);
+  ];
+
+  // 4b) B4/B5 = nilai hasil upload (Input Kas → Kas Aplikasi Outlet) + sisa saldo
+  //     deposit per outlet. Nilai dasar (tanpa deposit) dipulihkan dari state lokal
+  //     supaya tombol bisa ditekan berulang tanpa menambah deposit dua kali, dan
+  //     nilai hasil upload tidak pernah dihapus. Hanya jika deposit berhasil dibaca.
+  let b4Final = null;
+  let b5Final = null;
+  if (depositOk) {
+    const cur = await readRange(cashflow.id, `'${ILH_SHEET}'!B4:B5`, "UNFORMATTED_VALUE");
+    const curB4 = numOrNull(cur, 0);
+    const curB5 = numOrNull(cur, 1);
+    const st = loadDepositState();
+    const sameDay = st.date === tanggal;
+    // Pulihkan nilai dasar: bila sel masih sama persis dengan yang terakhir kita
+    // tulis (hari yang sama), berarti sudah memuat deposit → kurangi lagi.
+    const baseOf = (curVal, outlet) => {
+      if (curVal === null) return null;
+      const wrote = sameDay ? st.written[outlet] : null;
+      if (wrote !== null && Math.abs(curVal - wrote) < 0.5) return curVal - (st.deposit[outlet] || 0);
+      return curVal; // nilai baru (hasil upload terbaru / hari baru)
+    };
+    const baseB4 = baseOf(curB4, "MAUMBI");
+    const baseB5 = baseOf(curB5, "PERKAMIL");
+    if (baseB4 !== null) {
+      b4Final = baseB4 + depositTotals.MAUMBI;
+      ilhWrites.push({ range: `'${ILH_SHEET}'!B4`, values: [[b4Final]] });
+    } else {
+      steps.push("B4 INPUT LAPORAN HARIAN kosong — upload Kas Aplikasi Outlet MAUMBI dulu (deposit belum ditambahkan).");
+    }
+    if (baseB5 !== null) {
+      b5Final = baseB5 + depositTotals.PERKAMIL;
+      ilhWrites.push({ range: `'${ILH_SHEET}'!B5`, values: [[b5Final]] });
+    } else {
+      steps.push("B5 INPUT LAPORAN HARIAN kosong — upload Kas Aplikasi Outlet PERKAMIL dulu (deposit belum ditambahkan).");
+    }
+    saveDepositState({
+      date: tanggal,
+      written: {
+        MAUMBI: b4Final !== null ? b4Final : sameDay ? st.written.MAUMBI : null,
+        PERKAMIL: b5Final !== null ? b5Final : sameDay ? st.written.PERKAMIL : null,
+      },
+      deposit: {
+        MAUMBI: b4Final !== null ? depositTotals.MAUMBI : sameDay ? st.deposit.MAUMBI : 0,
+        PERKAMIL: b5Final !== null ? depositTotals.PERKAMIL : sameDay ? st.deposit.PERKAMIL : 0,
+      },
+    });
+  }
+
+  await batchWrite(cashflow.id, ilhWrites);
+  steps.push(
+    `CASHFLOW ${ILH_SHEET}: B2:B3 & B6:B9 nominal, C2:C25 = ${tanggal}.` +
+      (b4Final !== null ? ` B4=Rp${b4Final.toLocaleString("id-ID")} (upload+deposit ${depositTotals.MAUMBI.toLocaleString("id-ID")}).` : "") +
+      (b5Final !== null ? ` B5=Rp${b5Final.toLocaleString("id-ID")} (upload+deposit ${depositTotals.PERKAMIL.toLocaleString("id-ID")}).` : "")
+  );
 
   cfg.recordLastSync(); // catat waktu update harian terakhir (sinkronisasi inti sukses)
 
@@ -204,6 +331,8 @@ async function runDailySync() {
     maumbi: maumbi.laporNominal,
     perkamil: perkamil.laporNominal,
     kasAplikasi: { MAUMBI: apliMaumbi, PERKAMIL: apliPerkamil },
+    deposit: depositOk ? { ...depositTotals } : null,
+    kasAplikasiPlusDeposit: { MAUMBI: b4Final, PERKAMIL: b5Final },
     bank: Object.fromEntries(bankLabels.map((b, i) => [b, bankNominals[i]])),
     steps,
   };
