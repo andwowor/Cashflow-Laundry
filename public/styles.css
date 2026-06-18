@@ -278,6 +278,11 @@ input[type="file"] { font-family: var(--font); font-size: 13.5px; }
 #sl-grid select, #sl-grid input[type="number"], #sl-grid input[type="date"] { min-width: 130px; padding: 7px 9px; }
 #sl-count { font-weight: 700; color: var(--teal-dark); }
 
+/* ===================== Deposit Pelanggan ===================== */
+#dep-trx-grid { font-size: 13px; }
+#dep-trx-grid th, #dep-trx-grid td { white-space: nowrap; }
+#dep-trx h3 { font-size: 15px; }
+
 /* ===================== Daftar Biaya Baru ===================== */
 .db-field { margin: 12px 0; max-width: 520px; }
 .db-field label { display: block; font-size: 13.5px; font-weight: 700; color: var(--ink); margin-bottom: 5px; }

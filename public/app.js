@@ -1618,20 +1618,50 @@ let DEP_LOADED = false;
 function depShowBalance() {
   const nama = $("#dep-cust").value;
   const el = $("#dep-balance");
+  const trxEl = $("#dep-trx");
   if (!nama || !DEP) {
     el.classList.add("hidden");
+    trxEl.classList.add("hidden");
     return;
   }
   const c = DEP.customers.find((x) => x.nama === nama);
   el.classList.remove("hidden");
-  if (!c) {
-    el.innerHTML = `Saldo deposit <b>${escapeHtml(nama)}</b>: <b>${fmtRp(0)}</b>`;
+  const saldo = c ? c.saldo : 0;
+  const neg = saldo < 0;
+  el.innerHTML =
+    `Saldo deposit <b>${escapeHtml(nama)}</b>: <b style="color:${neg ? "var(--err)" : "var(--teal-dark)"}">${fmtRp(saldo)}</b>` +
+    ` <span class="hint">· ${c ? c.transaksi : 0} transaksi</span>`;
+
+  // Daftar transaksi deposit pelanggan (urut sheet) + saldo berjalan.
+  const list = (DEP.transactions || []).filter((t) => t.nama === nama);
+  if (!list.length) {
+    trxEl.classList.remove("hidden");
+    trxEl.innerHTML = `<p class="hint">Belum ada transaksi deposit untuk pelanggan ini.</p>`;
     return;
   }
-  const neg = c.saldo < 0;
-  el.innerHTML =
-    `Saldo deposit <b>${escapeHtml(nama)}</b>: <b style="color:${neg ? "var(--err)" : "var(--teal-dark)"}">${fmtRp(c.saldo)}</b>` +
-    ` <span class="hint">· ${c.transaksi} transaksi</span>`;
+  let run = 0;
+  const body = list
+    .map((t) => {
+      run += Number(t.jumlah) || 0;
+      const jNeg = Number(t.jumlah) < 0;
+      const jenis = jNeg ? "Pemakaian" : "Penambahan";
+      return (
+        `<tr>` +
+        `<td>${escapeHtml(t.tanggal || "")}</td>` +
+        `<td>${escapeHtml(t.outlet || "")}</td>` +
+        `<td>${escapeHtml(jenis)}</td>` +
+        `<td class="num" style="color:${jNeg ? "var(--err)" : "var(--teal-dark)"};font-weight:700">${fmtRp(t.jumlah)}</td>` +
+        `<td class="num">${fmtRp(run)}</td>` +
+        `</tr>`
+      );
+    })
+    .join("");
+  trxEl.classList.remove("hidden");
+  trxEl.innerHTML =
+    `<h3 style="margin:6px 0 8px">Daftar Transaksi Deposit — ${escapeHtml(nama)}</h3>` +
+    `<div class="table-wrap"><table id="dep-trx-grid"><thead><tr>` +
+    `<th>Tanggal</th><th>Outlet</th><th>Jenis</th><th>Jumlah</th><th>Saldo Berjalan</th>` +
+    `</tr></thead><tbody>${body}</tbody></table></div>`;
 }
 
 async function loadDeposit() {

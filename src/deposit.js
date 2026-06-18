@@ -81,6 +81,7 @@ async function summary() {
   const bal = new Map();
   const cnt = new Map();
   const outletSet = new Set();
+  const transactions = []; // {nama, tanggal, outlet, jumlah} dalam urutan sheet (baris 3 ke bawah)
   let lastRow = DATA_START_ROW - 1;
   for (let i = DATA_START_ROW - 1; i < fmt.length; i++) {
     const fr = fmt[i] || [];
@@ -94,6 +95,7 @@ async function summary() {
     if (nama) {
       bal.set(nama, (bal.get(nama) || 0) + j);
       cnt.set(nama, (cnt.get(nama) || 0) + 1);
+      transactions.push({ row: i + 1, nama, tanggal: norm(fr[cols.tanggal]), outlet, jumlah: j });
     }
   }
 
@@ -104,7 +106,7 @@ async function summary() {
   let outlets = Array.from(outletSet).sort((a, b) => collator.compare(a, b));
   if (!outlets.length) outlets = ["MAUMBI", "PERKAMIL"];
 
-  return { sheet, headers, columns: cols, customers, outlets, lastRow, nextRow: lastRow + 1 };
+  return { sheet, headers, columns: cols, customers, outlets, transactions, lastRow, nextRow: lastRow + 1 };
 }
 
 /**
