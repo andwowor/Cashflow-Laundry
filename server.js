@@ -18,6 +18,7 @@ const monbiaya = require("./src/monbiaya");
 const moninput = require("./src/moninput");
 const riwayat = require("./src/riwayat");
 const daftarbiaya = require("./src/daftarbiaya");
+const deposit = require("./src/deposit");
 const setoran = require("./src/setoran");
 const transaksi = require("./src/transaksi");
 const { MODEL } = require("./src/claude");
@@ -296,6 +297,16 @@ app.get("/api/daftarbiaya/options", wrap(async (req, res) => {
 
 app.post("/api/daftarbiaya/submit", wrap(async (req, res) => {
   res.json(await daftarbiaya.submit(req.body || {}));
+}));
+
+// ---------- Deposit pelanggan (sheet DEPOSIT, BIAYA & KAS) ----------
+
+app.get("/api/deposit/summary", wrap(async (req, res) => {
+  res.json({ ok: true, ...(await deposit.summary()) });
+}));
+
+app.post("/api/deposit/submit", wrap(async (req, res) => {
+  res.json(await deposit.submit(req.body || {}));
 }));
 
 // ---------- Input setoran kas (sheet REKAP, baris SETORAN KAS) ----------

@@ -146,6 +146,7 @@ $$(".tab").forEach((btn) => {
     if (btn.dataset.tab === "smartlink" && !SMART_LOADED) loadSmart();
     if (btn.dataset.tab === "riwayat" && !RB_LOADED) rbOpen();
     if (btn.dataset.tab === "daftarbiaya" && !DB_LOADED) loadDaftarBiaya();
+    if (btn.dataset.tab === "deposit" && !DEP_LOADED) loadDeposit();
   });
 });
 
@@ -1609,6 +1610,127 @@ $("#tab-daftarbiaya").addEventListener("click", (e) => {
   else if (t.dataset.for === "item") dbRecommendItem(true);
 });
 $("#btn-db-preview").addEventListener("click", dbPreview);
+
+// ================= Deposit Pelanggan (sheet DEPOSIT) =================
+let DEP = null;
+let DEP_LOADED = false;
+
+function depShowBalance() {
+  const nama = $("#dep-cust").value;
+  const el = $("#dep-balance");
+  if (!nama || !DEP) {
+    el.classList.add("hidden");
+    return;
+  }
+  const c = DEP.customers.find((x) => x.nama === nama);
+  el.classList.remove("hidden");
+  if (!c) {
+    el.innerHTML = `Saldo deposit <b>${escapeHtml(nama)}</b>: <b>${fmtRp(0)}</b>`;
+    return;
+  }
+  const neg = c.saldo < 0;
+  el.innerHTML =
+    `Saldo deposit <b>${escapeHtml(nama)}</b>: <b style="color:${neg ? "var(--err)" : "var(--teal-dark)"}">${fmtRp(c.saldo)}</b>` +
+    ` <span class="hint">· ${c.transaksi} transaksi</span>`;
+}
+
+async function loadDeposit() {
+  DEP_LOADED = true;
+  $("#dep-error").classList.add("hidden");
+  try {
+    DEP = await api("/api/deposit/summary");
+    const opts = ['<option value="">— pilih —</option>']
+      .concat(DEP.customers.map((c) => `<option value="${escapeHtml(c.nama)}">${escapeHtml(c.nama)}</option>`))
+      .join("");
+    $("#dep-cust").innerHTML = opts;
+    $("#dl-dep-cust").innerHTML = DEP.customers.map((c) => `<option value="${escapeHtml(c.nama)}"></option>`).join("");
+    $("#dep-outlet").innerHTML = ['<option value="">— pilih —</option>']
+      .concat(DEP.outlets.map((o) => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`))
+      .join("");
+    const dt = $("#dep-tanggal");
+    if (dt && !dt.value) dt.value = (STATUS && STATUS.today ? isoFromDDMMYYYY(STATUS.today) : "") || new Date().toISOString().slice(0, 10);
+    depShowBalance();
+  } catch (e) {
+    $("#dep-error").textContent = e.message;
+    $("#dep-error").classList.remove("hidden");
+    DEP_LOADED = false;
+  }
+}
+
+function isoFromDDMMYYYY(s) {
+  const m = String(s || "").match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : "";
+}
+
+function depPreview() {
+  const out = $("#dep-preview");
+  const nama = $("#dep-nama").value.trim();
+  const tanggal = $("#dep-tanggal").value;
+  const outlet = $("#dep-outlet").value;
+  const jenis = $("#dep-jenis").value;
+  const nominal = Math.abs(Number($("#dep-nominal").value));
+  out.classList.remove("hidden");
+  if (!nama || !tanggal || !outlet || !jenis || !Number.isFinite(nominal) || nominal <= 0) {
+    out.innerHTML = `<p class="error">Lengkapi semua: Nama, Tanggal, Outlet, Jenis (PEMAKAIAN/PENAMBAHAN), dan Nominal.</p>`;
+    return;
+  }
+  const signed = jenis === "PEMAKAIAN" ? -nominal : nominal;
+  const warna = signed < 0 ? "var(--err)" : "var(--teal-dark)";
+  const h = DEP ? DEP.headers : { jumlah: "JUMLAH DEPOSIT" };
+  const cur = DEP && DEP.customers.find((x) => x.nama === nama);
+  const saldoStr = cur ? `${fmtRp(cur.saldo)} → <b>${fmtRp(cur.saldo + signed)}</b>` : `${fmtRp(signed)}`;
+  out.innerHTML =
+    `<div class="table-wrap"><table><tbody>
+      <tr><th>Kolom</th><th>Akan diisi</th></tr>
+      <tr><td>Nama Pelanggan</td><td>${escapeHtml(nama)}</td></tr>
+      <tr><td>Tanggal</td><td>${escapeHtml(tanggal.split("-").reverse().join("/"))}</td></tr>
+      <tr><td>Outlet</td><td>${escapeHtml(outlet)}</td></tr>
+      <tr><td>${escapeHtml(h.jumlah)}</td><td style="color:${warna};font-weight:700">${fmtRp(signed)} <span class="hint">(${jenis === "PEMAKAIAN" ? "PEMAKAIAN −" : "PENAMBAHAN +"})</span></td></tr>
+    </tbody></table></div>
+    <p class="hint">Perkiraan saldo ${escapeHtml(nama)}: ${saldoStr}. Ditulis ke <b>${escapeHtml(DEP ? DEP.sheet : "DEPOSIT")}</b> sekitar <b>baris ${DEP ? DEP.nextRow : "?"}</b> (dicek ulang saat menyimpan).</p>
+    <div class="actions"><button id="btn-dep-submit" class="btn-primary">💾 Simpan ke DEPOSIT</button></div>`;
+  $("#btn-dep-submit").addEventListener("click", depSubmit);
+}
+
+async function depSubmit() {
+  const btn = $("#btn-dep-submit");
+  const out = $("#dep-result");
+  const body = {
+    nama: $("#dep-nama").value.trim(),
+    tanggal: $("#dep-tanggal").value,
+    outlet: $("#dep-outlet").value,
+    jenis: $("#dep-jenis").value,
+    nominal: Math.abs(Number($("#dep-nominal").value)),
+  };
+  btn.disabled = true;
+  try {
+    const r = await api("/api/deposit/submit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    showLog(
+      out,
+      `✔ Tercatat di "${r.sheet}" baris ${r.row}: ${r.nama} · ${r.tanggal} · ${r.outlet} · ${fmtRp(r.nominal)} (${r.jenis}).` +
+        (r.saldo != null ? `\n  Saldo ${r.nama} sekarang: ${fmtRp(r.saldo)}.` : "")
+    );
+    $("#dep-nominal").value = "";
+    $("#dep-jenis").value = "";
+    $("#dep-preview").classList.add("hidden");
+    DEP_LOADED = false;
+    await loadDeposit();
+  } catch (e) {
+    showLog(out, "✘ " + e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+$("#dep-cust").addEventListener("change", () => {
+  depShowBalance();
+  if ($("#dep-cust").value && !$("#dep-nama").value.trim()) $("#dep-nama").value = $("#dep-cust").value;
+});
+$("#btn-dep-preview").addEventListener("click", depPreview);
 
 // ================= Init =================
 {
