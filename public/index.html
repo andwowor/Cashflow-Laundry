@@ -29,6 +29,7 @@
       <button class="tab" data-tab="smartlink">Lapor Smartlink</button>
       <button class="tab" data-tab="riwayat">Riwayat Biaya</button>
       <button class="tab" data-tab="biaya">Input Biaya</button>
+      <button class="tab" data-tab="daftarbiaya">Daftar Biaya Baru</button>
       <button class="tab" data-tab="kas">Input Kas</button>
       <button class="tab" data-tab="setoran">Setoran Kas</button>
       <button class="tab" data-tab="transaksi">Upload Transaksi</button>
@@ -195,6 +196,46 @@
           <button id="btn-biaya-submit" class="btn-primary">💾 Submit ke Spreadsheet</button>
         </div>
         <div id="biaya-submit-result" class="result-log hidden"></div>
+      </div>
+    </section>
+
+    <!-- ============ TAB DAFTAR BIAYA BARU ============ -->
+    <section id="tab-daftarbiaya" class="panel">
+      <div class="card">
+        <h2>Tambah Subjek Biaya Baru</h2>
+        <p class="hint">Menambahkan baris baru ke sheet <b>DAFTAR BIAYA</b> (BIAYA &amp; KAS LAUNDRY) pada
+          baris kosong terbawah. Ketik <b>Keterangan Biaya</b>, lalu pilih <b>Pos Biaya</b> →
+          <b>Pos Biaya Aplikasi</b> → <b>Item Biaya</b> dari rekomendasi (boleh diketik sendiri bila perlu).
+          <b>Kode Transaksi</b> terisi otomatis (formula disalin dari baris atasnya). Selalu cek
+          <b>Pratinjau</b> sebelum menyimpan.</p>
+        <div id="db-loading" class="loading">Memuat data DAFTAR BIAYA…</div>
+        <div id="db-form" class="hidden">
+          <div class="db-field">
+            <label>Keterangan Biaya <small>(ketik)</small></label>
+            <input type="text" id="db-keterangan" placeholder="mis. Sabun cuci merk X" />
+          </div>
+          <div class="db-field">
+            <label>Pos Biaya <small>(pilih rekomendasi / ketik)</small> <button type="button" class="db-rec" data-for="pos" title="Isi rekomendasi">↻ Rekomendasi</button></label>
+            <input type="text" id="db-pos" list="dl-db-pos" autocomplete="off" placeholder="pilih atau ketik" />
+            <datalist id="dl-db-pos"></datalist>
+          </div>
+          <div class="db-field">
+            <label>Pos Biaya Aplikasi <small>(pilih rekomendasi / ketik)</small> <button type="button" class="db-rec" data-for="posapl" title="Isi rekomendasi">↻ Rekomendasi</button></label>
+            <input type="text" id="db-posapl" list="dl-db-posapl" autocomplete="off" placeholder="pilih atau ketik" />
+            <datalist id="dl-db-posapl"></datalist>
+          </div>
+          <div class="db-field">
+            <label>Item Biaya <small>(pilih rekomendasi / ketik)</small> <button type="button" class="db-rec" data-for="item" title="Isi rekomendasi">↻ Rekomendasi</button></label>
+            <input type="text" id="db-item" list="dl-db-item" autocomplete="off" placeholder="pilih atau ketik" />
+            <datalist id="dl-db-item"></datalist>
+          </div>
+          <div class="actions">
+            <button id="btn-db-preview" class="btn-ghost">👁 Pratinjau</button>
+          </div>
+          <div id="db-preview" class="hidden"></div>
+          <div id="db-result" class="result-log hidden"></div>
+        </div>
+        <div id="db-error" class="error hidden"></div>
       </div>
     </section>
 

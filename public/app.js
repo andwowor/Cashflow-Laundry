@@ -145,6 +145,7 @@ $$(".tab").forEach((btn) => {
     if (btn.dataset.tab === "monbiaya" && !MONBIAYA_LOADED) loadMonBiaya();
     if (btn.dataset.tab === "smartlink" && !SMART_LOADED) loadSmart();
     if (btn.dataset.tab === "riwayat" && !RB_LOADED) rbOpen();
+    if (btn.dataset.tab === "daftarbiaya" && !DB_LOADED) loadDaftarBiaya();
   });
 });
 
@@ -1452,6 +1453,162 @@ $("#btn-rb-reset").addEventListener("click", () => {
   $("#rb-ket").value = "";
   rbRender();
 });
+
+// ================= Daftar Biaya Baru (sheet DAFTAR BIAYA) =================
+let DB = null;
+let DB_LOADED = false;
+
+function dbTokens(s) {
+  return String(s || "").toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length >= 3);
+}
+
+// Peringkat POS BIAYA berdasarkan kemiripan KETERANGAN BIAYA + frekuensi.
+function dbRankPos(keterangan) {
+  const kt = new Set(dbTokens(keterangan));
+  const score = {};
+  const freq = {};
+  for (const r of DB.rows) {
+    if (!r.posBiaya) continue;
+    freq[r.posBiaya] = (freq[r.posBiaya] || 0) + 1;
+    if (kt.size) {
+      let overlap = 0;
+      for (const t of dbTokens(r.keterangan)) if (kt.has(t)) overlap++;
+      if (overlap) score[r.posBiaya] = (score[r.posBiaya] || 0) + overlap;
+    }
+  }
+  return DB.posBiayaList.slice().sort(
+    (a, b) => (score[b] || 0) - (score[a] || 0) || (freq[b] || 0) - (freq[a] || 0) || a.localeCompare(b, "id")
+  );
+}
+
+// Peringkat nilai child berdasarkan seberapa sering muncul bersama nilai parent.
+function dbRankBy(parentField, parentValue, childField, childList) {
+  const cnt = {};
+  if (parentValue) {
+    for (const r of DB.rows) {
+      if (r[parentField] === parentValue && r[childField]) cnt[r[childField]] = (cnt[r[childField]] || 0) + 1;
+    }
+  }
+  return childList.slice().sort((a, b) => (cnt[b] || 0) - (cnt[a] || 0) || a.localeCompare(b, "id"));
+}
+
+function dbSetDatalist(id, values) {
+  $(id).innerHTML = values.map((v) => `<option value="${escapeHtml(v)}"></option>`).join("");
+}
+
+// Isi datalist sesuai peringkat; bila input kosong (atau force), isi rekomendasi teratas.
+function dbRecommendPos(force) {
+  const ranked = dbRankPos($("#db-keterangan").value);
+  dbSetDatalist("#dl-db-pos", ranked);
+  if (ranked.length && (force || !$("#db-pos").value.trim())) $("#db-pos").value = ranked[0];
+}
+function dbRecommendPosApl(force) {
+  const ranked = dbRankBy("posBiaya", $("#db-pos").value.trim(), "posAplikasi", DB.posAplikasiList);
+  dbSetDatalist("#dl-db-posapl", ranked);
+  if (ranked.length && (force || !$("#db-posapl").value.trim())) $("#db-posapl").value = ranked[0];
+}
+function dbRecommendItem(force) {
+  const ranked = dbRankBy("posAplikasi", $("#db-posapl").value.trim(), "itemAplikasi", DB.itemAplikasiList);
+  dbSetDatalist("#dl-db-item", ranked);
+  if (ranked.length && (force || !$("#db-item").value.trim())) $("#db-item").value = ranked[0];
+}
+
+async function loadDaftarBiaya() {
+  DB_LOADED = true;
+  $("#db-loading").classList.remove("hidden");
+  $("#db-form").classList.add("hidden");
+  $("#db-error").classList.add("hidden");
+  try {
+    DB = await api("/api/daftarbiaya/options");
+    dbSetDatalist("#dl-db-pos", DB.posBiayaList);
+    dbSetDatalist("#dl-db-posapl", DB.posAplikasiList);
+    dbSetDatalist("#dl-db-item", DB.itemAplikasiList);
+    $("#db-loading").classList.add("hidden");
+    $("#db-form").classList.remove("hidden");
+  } catch (e) {
+    $("#db-loading").classList.add("hidden");
+    $("#db-error").textContent = e.message;
+    $("#db-error").classList.remove("hidden");
+    DB_LOADED = false; // izinkan coba lagi saat tab dibuka ulang
+  }
+}
+
+function dbPreview() {
+  if (!DB) return;
+  const out = $("#db-preview");
+  const v = {
+    keterangan: $("#db-keterangan").value.trim(),
+    pos: $("#db-pos").value.trim(),
+    posapl: $("#db-posapl").value.trim(),
+    item: $("#db-item").value.trim(),
+  };
+  if (!v.keterangan || !v.pos || !v.posapl || !v.item) {
+    out.classList.remove("hidden");
+    out.innerHTML = `<p class="error">Lengkapi semua kolom dulu: Keterangan Biaya, Pos Biaya, Pos Biaya Aplikasi, dan Item Biaya.</p>`;
+    return;
+  }
+  const h = DB.headers;
+  out.classList.remove("hidden");
+  out.innerHTML =
+    `<div class="table-wrap"><table><tbody>
+      <tr><th>Kolom</th><th>Akan diisi</th></tr>
+      <tr><td>C — ${escapeHtml(h.keterangan)}</td><td>${escapeHtml(v.keterangan)}</td></tr>
+      <tr><td>D — ${escapeHtml(h.posBiaya)}</td><td>${escapeHtml(v.pos)}</td></tr>
+      <tr><td>E — ${escapeHtml(h.posAplikasi)}</td><td>${escapeHtml(v.posapl)}</td></tr>
+      <tr><td>F — ${escapeHtml(h.itemAplikasi)}</td><td>${escapeHtml(v.item)}</td></tr>
+      <tr><td>G — ${escapeHtml(h.kode)}</td><td><i>otomatis (formula disalin)</i></td></tr>
+    </tbody></table></div>
+    <p class="hint">Akan ditulis ke <b>${escapeHtml(DB.sheet)}</b> sekitar <b>baris ${DB.nextRow}</b>
+      (dicek ulang saat menyimpan).</p>
+    <div class="actions"><button id="btn-db-submit" class="btn-primary">💾 Simpan ke DAFTAR BIAYA</button></div>`;
+  $("#btn-db-submit").addEventListener("click", dbSubmit);
+}
+
+async function dbSubmit() {
+  const btn = $("#btn-db-submit");
+  const out = $("#db-result");
+  const body = {
+    keterangan: $("#db-keterangan").value.trim(),
+    posBiaya: $("#db-pos").value.trim(),
+    posAplikasi: $("#db-posapl").value.trim(),
+    itemAplikasi: $("#db-item").value.trim(),
+  };
+  btn.disabled = true;
+  try {
+    const r = await api("/api/daftarbiaya/submit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    let msg = `✔ Tersimpan ke "${r.sheet}" baris ${r.row}: ${r.keterangan} · ${r.posBiaya} · ${r.posAplikasi} · ${r.itemAplikasi}.`;
+    msg += `\n  Kode Transaksi: ${r.kode || "(kosong)"} — ${r.kodeStatus}`;
+    showLog(out, msg);
+    // reset form & muat ulang data agar baris baru ikut jadi bahan rekomendasi.
+    $("#db-keterangan").value = "";
+    $("#db-pos").value = "";
+    $("#db-posapl").value = "";
+    $("#db-item").value = "";
+    $("#db-preview").classList.add("hidden");
+    DB_LOADED = false;
+    await loadDaftarBiaya();
+  } catch (e) {
+    showLog(out, "✘ " + e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+$("#db-keterangan").addEventListener("input", () => dbRecommendPos(false));
+$("#db-pos").addEventListener("change", () => dbRecommendPosApl(false));
+$("#db-posapl").addEventListener("change", () => dbRecommendItem(false));
+$("#tab-daftarbiaya").addEventListener("click", (e) => {
+  const t = e.target;
+  if (!t.classList.contains("db-rec")) return;
+  if (t.dataset.for === "pos") dbRecommendPos(true);
+  else if (t.dataset.for === "posapl") dbRecommendPosApl(true);
+  else if (t.dataset.for === "item") dbRecommendItem(true);
+});
+$("#btn-db-preview").addEventListener("click", dbPreview);
 
 // ================= Init =================
 {

@@ -17,6 +17,7 @@ const qrisbank = require("./src/qrisbank");
 const monbiaya = require("./src/monbiaya");
 const moninput = require("./src/moninput");
 const riwayat = require("./src/riwayat");
+const daftarbiaya = require("./src/daftarbiaya");
 const setoran = require("./src/setoran");
 const transaksi = require("./src/transaksi");
 const { MODEL } = require("./src/claude");
@@ -285,6 +286,16 @@ app.get("/api/riwayat-biaya", wrap(async (req, res) => {
     return res.status(400).json({ ok: false, error: "Bulan/tahun tidak valid." });
   }
   res.json({ ok: true, ...(await riwayat.list(year, month)) });
+}));
+
+// ---------- Input subjek biaya baru (sheet DAFTAR BIAYA, BIAYA & KAS) ----------
+
+app.get("/api/daftarbiaya/options", wrap(async (req, res) => {
+  res.json({ ok: true, ...(await daftarbiaya.options()) });
+}));
+
+app.post("/api/daftarbiaya/submit", wrap(async (req, res) => {
+  res.json(await daftarbiaya.submit(req.body || {}));
 }));
 
 // ---------- Input setoran kas (sheet REKAP, baris SETORAN KAS) ----------

@@ -39,6 +39,23 @@ async function getSheetTitles(spreadsheetId) {
   };
 }
 
+/** sheetId numerik (gid) untuk satu judul sheet. Null bila tak ada. */
+async function getSheetId(spreadsheetId, title) {
+  const sheets = sheetsClient();
+  const res = await sheets.spreadsheets.get({
+    spreadsheetId,
+    fields: "sheets.properties(sheetId,title)",
+  });
+  const found = (res.data.sheets || []).find((s) => s.properties.title === title);
+  return found ? found.properties.sheetId : null;
+}
+
+/** Jalankan permintaan batchUpdate (mis. copyPaste formula). */
+async function batchUpdateRequests(spreadsheetId, requests) {
+  const sheets = sheetsClient();
+  await sheets.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests } });
+}
+
 /** Cari ID spreadsheet berdasarkan judul persis (di Drive, termasuk shared drive). */
 async function findSpreadsheetIdByTitle(title) {
   const drive = driveClient();
@@ -98,6 +115,8 @@ module.exports = {
   readRange,
   batchWrite,
   getSheetTitles,
+  getSheetId,
+  batchUpdateRequests,
   resolveCashflowSpreadsheetId,
   setCashflowOverride,
   findSpreadsheetIdByTitle,
