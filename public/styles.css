@@ -288,6 +288,9 @@ input[type="file"] { font-family: var(--font); font-size: 13.5px; }
 #al-grid thead th { z-index: 1; }
 #al-grid thead th.al-metric { z-index: 2; background: var(--teal-soft); }
 #al-grid tr.al-bold td { font-weight: 800; }
+#al-grid tr.al-noterow td.al-metric { background: var(--gold-soft); }
+#al-grid .al-note { min-width: 200px; padding: 6px 8px; font-size: 12.5px; }
+#al-grid .al-note.al-note-saved { border-color: var(--ok); box-shadow: 0 0 0 3px rgba(23,105,123,0.16); }
 
 /* ===================== Deposit Pelanggan ===================== */
 #dep-trx-grid { font-size: 13px; }

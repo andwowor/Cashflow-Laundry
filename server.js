@@ -318,6 +318,11 @@ app.get("/api/aliran", wrap(async (req, res) => {
   res.json(await aliran.list(outlet, year, month));
 }));
 
+app.post("/api/aliran/note", wrap(async (req, res) => {
+  const { outlet, year, month, day, text } = req.body || {};
+  res.json(aliran.setNote(String(outlet || ""), Number(year), Number(month), Number(day), text));
+}));
+
 // ---------- Deposit pelanggan (sheet DEPOSIT, BIAYA & KAS) ----------
 
 app.get("/api/deposit/summary", wrap(async (req, res) => {

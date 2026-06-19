@@ -1,5 +1,6 @@
 "use strict";
 
+const path = require("path");
 const cfg = require("./config");
 const { readRange, getSheetTitles } = require("./sheets");
 
@@ -54,6 +55,34 @@ const METRICS = [
 const OUTLETS = ["MAUMBI", "PERKAMIL"];
 const MIN_YEAR = 2026;
 const MIN_MONTH = 3; // Maret 2026
+
+// "Penyebab Selisih & Konklusi" — catatan manual per outlet/bulan/tanggal.
+// Disimpan lokal (tidak menulis ke sheet REKAP agar strukturnya tidak bergeser).
+const NOTES_FILE = path.join(cfg.DATA_DIR, "aliran_notes.json");
+function loadNotes() {
+  return cfg.readJsonFile(NOTES_FILE, {});
+}
+function notesKey(outlet, year, month) {
+  return `${up(outlet)}|${year}-${String(month).padStart(2, "0")}`;
+}
+function getNotes(outlet, year, month) {
+  const all = loadNotes();
+  return all[notesKey(outlet, year, month)] || {}; // { [day]: text }
+}
+function setNote(outlet, year, month, day, text) {
+  if (!OUTLETS.includes(up(outlet))) throw new Error("Outlet harus MAUMBI atau PERKAMIL.");
+  const d = Number(day);
+  if (!Number.isInteger(d) || d < 1 || d > 31) throw new Error("Tanggal tidak valid.");
+  const all = loadNotes();
+  const k = notesKey(outlet, year, month);
+  all[k] = all[k] || {};
+  const t = String(text == null ? "" : text);
+  if (t.trim() === "") delete all[k][String(d)];
+  else all[k][String(d)] = t;
+  if (Object.keys(all[k]).length === 0) delete all[k];
+  cfg.writeJsonFile(NOTES_FILE, all);
+  return { ok: true, outlet: up(outlet), year, month, day: d, text: t };
+}
 
 async function resolveRekapSheet(outlet) {
   const o = up(outlet);
@@ -153,7 +182,8 @@ async function list(outlet, year, month) {
     month,
     days,
     metrics,
+    notes: getNotes(outlet, year, month), // { [day]: text } untuk baris "Penyebab Selisih & Konklusi"
   };
 }
 
-module.exports = { list, OUTLETS, MIN_YEAR, MIN_MONTH };
+module.exports = { list, setNote, OUTLETS, MIN_YEAR, MIN_MONTH };

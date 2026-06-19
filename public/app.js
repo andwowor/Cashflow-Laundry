@@ -1866,7 +1866,14 @@ function alRenderTable() {
       return `<tr${cls}><td class="al-metric">${escapeHtml(m.label)}${m.found ? "" : ' <span class="hint">(tdk ada)</span>'}</td>${tds}</tr>`;
     })
     .join("");
-  el.innerHTML = `<table id="al-grid"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+  const notes = (AL.notes) || {};
+  const noteRow =
+    `<tr class="al-noterow"><td class="al-metric">Penyebab Selisih &amp; Konklusi <small>(ketik)</small></td>` +
+    days
+      .map((d) => `<td><input type="text" class="al-note" data-day="${d}" value="${escapeHtml(notes[d] || "")}" placeholder="catatan…"></td>`)
+      .join("") +
+    `</tr>`;
+  el.innerHTML = `<table id="al-grid"><thead><tr>${head}</tr></thead><tbody>${body}${noteRow}</tbody></table>`;
 }
 
 async function alLoad() {
@@ -1908,6 +1915,26 @@ function alOpen() {
 
 $("#btn-al-load").addEventListener("click", alLoad);
 $("#al-day").addEventListener("change", alRenderTable);
+$("#al-table").addEventListener("change", async (e) => {
+  const t = e.target;
+  if (!t.classList.contains("al-note") || !AL) return;
+  const day = Number(t.dataset.day);
+  const text = t.value;
+  try {
+    await api("/api/aliran/note", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ outlet: AL.outlet, year: AL.year, month: AL.month, day, text }),
+    });
+    AL.notes = AL.notes || {};
+    if (text.trim() === "") delete AL.notes[day];
+    else AL.notes[day] = text;
+    t.classList.add("al-note-saved");
+    setTimeout(() => t.classList.remove("al-note-saved"), 900);
+  } catch (err) {
+    showLog($("#al-result"), "✘ Gagal simpan catatan: " + err.message, true);
+  }
+});
 
 // ================= Init =================
 {
