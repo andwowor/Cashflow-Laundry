@@ -19,6 +19,7 @@ const moninput = require("./src/moninput");
 const riwayat = require("./src/riwayat");
 const daftarbiaya = require("./src/daftarbiaya");
 const deposit = require("./src/deposit");
+const aliran = require("./src/aliran");
 const setoran = require("./src/setoran");
 const transaksi = require("./src/transaksi");
 const { MODEL } = require("./src/claude");
@@ -303,6 +304,18 @@ app.get("/api/daftarbiaya/options", wrap(async (req, res) => {
 
 app.post("/api/daftarbiaya/submit", wrap(async (req, res) => {
   res.json(await daftarbiaya.submit(req.body || {}));
+}));
+
+// ---------- Aliran kas per outlet (sheet REKAP KAS DAN TRANSAKSI) ----------
+
+app.get("/api/aliran", wrap(async (req, res) => {
+  const outlet = String(req.query.outlet || "");
+  const year = Number(req.query.year);
+  const month = Number(req.query.month);
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+    return res.status(400).json({ ok: false, error: "Bulan/tahun tidak valid." });
+  }
+  res.json(await aliran.list(outlet, year, month));
 }));
 
 // ---------- Deposit pelanggan (sheet DEPOSIT, BIAYA & KAS) ----------

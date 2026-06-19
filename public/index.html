@@ -28,6 +28,7 @@
       <button class="tab" data-tab="monbiaya">Monitoring Biaya</button>
       <button class="tab" data-tab="smartlink">Lapor Smartlink</button>
       <button class="tab" data-tab="riwayat">Riwayat Biaya</button>
+      <button class="tab" data-tab="aliran">Aliran Kas</button>
       <button class="tab" data-tab="biaya">Input Biaya</button>
       <button class="tab" data-tab="daftarbiaya">Daftar Biaya Baru</button>
       <button class="tab" data-tab="kas">Input Kas</button>
@@ -147,6 +148,34 @@
         <div id="rb-total" class="last-sync hidden"></div>
         <div id="rb-result" class="result-log hidden"></div>
         <div id="rb-table" class="table-wrap"></div>
+      </div>
+    </section>
+
+    <!-- ============ TAB ALIRAN KAS ============ -->
+    <section id="tab-aliran" class="panel">
+      <div class="card">
+        <h2>Aliran Kas per Outlet</h2>
+        <p class="hint">Pilih <b>outlet</b>, <b>bulan</b> &amp; <b>tahun</b> untuk melihat aliran kas harian
+          dari sheet <b>REKAP KAS DAN TRANSAKSI</b>. Bisa disaring ke <b>satu tanggal</b>. Tanggal yang belum
+          terealisasi (setelah hari ini) tidak ditampilkan. Tersedia mulai Maret 2026.</p>
+        <div class="upload-row">
+          <label class="hint" style="margin:0">Outlet</label>
+          <select id="al-outlet" style="max-width:150px">
+            <option value="MAUMBI">MAUMBI</option>
+            <option value="PERKAMIL">PERKAMIL</option>
+          </select>
+          <label class="hint" style="margin:0">Bulan</label>
+          <select id="al-month" style="max-width:150px"></select>
+          <label class="hint" style="margin:0">Tahun</label>
+          <select id="al-year" style="max-width:110px"></select>
+          <button id="btn-al-load" class="btn-primary">Tampilkan</button>
+        </div>
+        <div class="upload-row" id="al-datebox" style="display:none">
+          <label class="hint" style="margin:0">Tanggal</label>
+          <select id="al-day" style="max-width:170px"></select>
+        </div>
+        <div id="al-result" class="result-log hidden"></div>
+        <div id="al-table" class="table-wrap"></div>
       </div>
     </section>
 

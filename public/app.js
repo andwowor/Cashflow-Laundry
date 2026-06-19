@@ -147,6 +147,7 @@ $$(".tab").forEach((btn) => {
     if (btn.dataset.tab === "riwayat" && !RB_LOADED) rbOpen();
     if (btn.dataset.tab === "daftarbiaya" && !DB_LOADED) loadDaftarBiaya();
     if (btn.dataset.tab === "deposit" && !DEP_LOADED) loadDeposit();
+    if (btn.dataset.tab === "aliran" && !AL_LOADED) alOpen();
   });
 });
 
@@ -1800,6 +1801,113 @@ $("#btn-rekap-blocks").addEventListener("click", async () => {
     btn.disabled = false;
   }
 });
+
+// ================= Aliran Kas per Outlet =================
+let AL = null;
+let AL_LOADED = false;
+const AL_MONTHS = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+
+function alFmt(v) {
+  if (v === null || v === undefined || v === "") return "";
+  const n = Number(v);
+  return isNaN(n) ? String(v) : n.toLocaleString("id-ID");
+}
+
+function alInitSelectors() {
+  const ym = rbDefaultYM(); // {month, year} dari STATUS hari ini
+  const ms = $("#al-month");
+  if (ms && !ms.options.length) {
+    ms.innerHTML = AL_MONTHS.map((m, i) => `<option value="${i + 1}">${m}</option>`).join("");
+  }
+  const ys = $("#al-year");
+  if (ys && !ys.options.length) {
+    const top = Math.max(ym.year, 2026);
+    const years = [];
+    for (let y = top; y >= 2026; y--) years.push(y);
+    ys.innerHTML = years.map((y) => `<option value="${y}">${y}</option>`).join("");
+  }
+  // default = bulan berjalan (minimal Maret 2026)
+  let m = ym.month, y = ym.year;
+  if (y < 2026 || (y === 2026 && m < 3)) { m = 3; y = 2026; }
+  $("#al-month").value = String(m);
+  $("#al-year").value = String(y);
+}
+
+function alRenderTable() {
+  const el = $("#al-table");
+  if (!AL || !AL.days.length) {
+    el.innerHTML = `<p class="hint">Tidak ada data tanggal yang sudah terealisasi untuk pilihan ini.</p>`;
+    return;
+  }
+  // filter satu tanggal (opsional)
+  const sel = $("#al-day").value;
+  const days = sel ? AL.days.filter((d) => String(d) === sel) : AL.days.slice();
+  const dayIdx = days.map((d) => AL.days.indexOf(d));
+
+  const head =
+    `<th class="al-metric">Metrik</th>` + days.map((d) => `<th class="num">${d}</th>`).join("");
+  const body = AL.metrics
+    .map((m) => {
+      const cls = m.highlight ? ' class="al-bold"' : "";
+      const tds = dayIdx
+        .map((i) => {
+          const v = m.values[i];
+          if (m.highlight) {
+            const n = Number(v);
+            let style = "";
+            if (v !== null && v !== "" && !isNaN(n)) {
+              style = n < 0 ? ' style="color:var(--err);font-weight:800"' : n > 0 ? ' style="background:var(--gold-soft);font-weight:800"' : ' style="font-weight:800"';
+            }
+            return `<td class="num"${style}>${alFmt(v)}</td>`;
+          }
+          return `<td class="num">${alFmt(v)}</td>`;
+        })
+        .join("");
+      return `<tr${cls}><td class="al-metric">${escapeHtml(m.label)}${m.found ? "" : ' <span class="hint">(tdk ada)</span>'}</td>${tds}</tr>`;
+    })
+    .join("");
+  el.innerHTML = `<table id="al-grid"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+}
+
+async function alLoad() {
+  alInitSelectors();
+  const outlet = $("#al-outlet").value;
+  const month = Number($("#al-month").value);
+  const year = Number($("#al-year").value);
+  const el = $("#al-table");
+  el.innerHTML = "Memuat…";
+  $("#al-result").classList.add("hidden");
+  $("#al-datebox").style.display = "none";
+  const btn = $("#btn-al-load");
+  btn.disabled = true;
+  try {
+    AL = await api(`/api/aliran?outlet=${encodeURIComponent(outlet)}&year=${year}&month=${month}`);
+    // dropdown tanggal
+    const dopt = ['<option value="">Semua tanggal</option>']
+      .concat(AL.days.map((d) => `<option value="${d}">Tanggal ${d}</option>`))
+      .join("");
+    $("#al-day").innerHTML = dopt;
+    $("#al-day").value = "";
+    $("#al-datebox").style.display = AL.days.length ? "flex" : "none";
+    alRenderTable();
+  } catch (e) {
+    AL = null;
+    el.innerHTML = "";
+    $("#al-datebox").style.display = "none";
+    showLog($("#al-result"), "✘ " + e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function alOpen() {
+  alInitSelectors();
+  AL_LOADED = true;
+  alLoad();
+}
+
+$("#btn-al-load").addEventListener("click", alLoad);
+$("#al-day").addEventListener("change", alRenderTable);
 
 // ================= Init =================
 {

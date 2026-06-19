@@ -278,6 +278,17 @@ input[type="file"] { font-family: var(--font); font-size: 13.5px; }
 #sl-grid select, #sl-grid input[type="number"], #sl-grid input[type="date"] { min-width: 130px; padding: 7px 9px; }
 #sl-count { font-weight: 700; color: var(--teal-dark); }
 
+/* ===================== Aliran Kas per Outlet ===================== */
+#al-grid { font-size: 12.5px; width: auto; min-width: 100%; }
+#al-grid th, #al-grid td { white-space: nowrap; }
+#al-grid td.al-metric, #al-grid th.al-metric {
+  position: sticky; left: 0; background: #fff; text-align: left; font-weight: 600;
+  box-shadow: 1px 0 0 var(--line); min-width: 250px;
+}
+#al-grid thead th { z-index: 1; }
+#al-grid thead th.al-metric { z-index: 2; background: var(--teal-soft); }
+#al-grid tr.al-bold td { font-weight: 800; }
+
 /* ===================== Deposit Pelanggan ===================== */
 #dep-trx-grid { font-size: 13px; }
 #dep-trx-grid th, #dep-trx-grid td { white-space: nowrap; }
