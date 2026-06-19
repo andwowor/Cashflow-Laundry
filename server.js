@@ -9,7 +9,7 @@ const path = require("path");
 const cfg = require("./src/config");
 const { readRange, resolveCashflowSpreadsheetId, setCashflowOverride, getSheetTitles } = require("./src/sheets");
 const { serviceAccountEmail } = require("./src/google");
-const { runDailySync } = require("./src/sync");
+const { runDailySync, inspectRekapBlocks } = require("./src/sync");
 const biaya = require("./src/biaya");
 const kas = require("./src/kas");
 const qris = require("./src/qris");
@@ -164,6 +164,12 @@ app.get("/api/dashboard", wrap(async (req, res) => {
 app.post("/api/sync", wrap(async (req, res) => {
   const result = await runDailySync();
   res.json(result);
+}));
+
+// ---------- Diagnostik baris blok bulan pada sheet REKAP ----------
+
+app.get("/api/rekap/blocks", wrap(async (req, res) => {
+  res.json(await inspectRekapBlocks());
 }));
 
 // ---------- Input biaya ----------

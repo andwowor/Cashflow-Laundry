@@ -1762,6 +1762,45 @@ $("#dep-cust").addEventListener("change", () => {
 });
 $("#btn-dep-preview").addEventListener("click", depPreview);
 
+// ================= Diagnostik baris blok REKAP =================
+$("#btn-rekap-blocks").addEventListener("click", async () => {
+  const out = $("#rekap-blocks-result");
+  const btn = $("#btn-rekap-blocks");
+  btn.disabled = true;
+  out.innerHTML = `<p class="loading">Membaca sheet REKAP…</p>`;
+  try {
+    const r = await api("/api/rekap/blocks");
+    const HI = new Set(["MEI", "JUNI"]); // disorot
+    const parts = (r.rekap || []).map((s) => {
+      const rows = s.blocks
+        .map((b) => {
+          const L = b.labels || {};
+          const hi = HI.has(b.month) ? ' style="background:var(--gold-soft);font-weight:700"' : "";
+          return (
+            `<tr${hi}><td>${escapeHtml(b.month)}</td>` +
+            `<td class="num">${b.blockStart}–${b.blockEnd}</td>` +
+            `<td class="num">${L["KAS TUNAI APLIKASI"] || "-"}</td>` +
+            `<td class="num">${L["KAS TUNAI LAPOR"] || "-"}</td>` +
+            `<td class="num">${L["SETORAN KAS"] || "-"}</td>` +
+            `<td class="num">${L["SELISIH"] || "-"}</td></tr>`
+          );
+        })
+        .join("");
+      return (
+        `<h4 style="margin:14px 0 6px">${escapeHtml(s.sheet)}</h4>` +
+        `<div class="table-wrap"><table><thead><tr>` +
+        `<th>Bulan</th><th>Baris blok</th><th>KAS TUNAI APLIKASI</th><th>KAS TUNAI LAPOR</th><th>SETORAN KAS</th><th>SELISIH</th>` +
+        `</tr></thead><tbody>${rows || '<tr><td colspan="6">Tidak ada blok bulan terdeteksi.</td></tr>'}</tbody></table></div>`
+      );
+    });
+    out.innerHTML = parts.join("") || `<p class="hint">Sheet REKAP tidak ditemukan.</p>`;
+  } catch (e) {
+    out.innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 // ================= Init =================
 {
   const st = $("#setoran-tanggal");

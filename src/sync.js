@@ -338,4 +338,46 @@ async function runDailySync() {
   };
 }
 
-module.exports = { runDailySync, readRekapKasTunaiLapor, loadRekapDaily, findRekapTargetCell };
+/**
+ * Diagnostik: untuk kedua sheet REKAP, temukan setiap blok bulan (baris dengan
+ * nama bulan di kolom A) beserta rentang baris blok dan baris label pentingnya
+ * (KAS TUNAI APLIKASI, KAS TUNAI LAPOR, SETORAN KAS, SELISIH). Berguna untuk
+ * mengetahui "bulan X ada di baris berapa sampai berapa".
+ */
+async function inspectRekapBlocks() {
+  const id = cfg.BIAYA_KAS_SPREADSHEET_ID;
+  const meta = await getSheetTitles(id);
+  const wanted = [];
+  const m1 = meta.sheets.find((t) => t.startsWith("REKAP KAS DAN TRANSAKSI MAUMBI"));
+  const m2 = meta.sheets.find((t) => t.startsWith("REKAP KAS DAN TRANSAKSI PERKAMI"));
+  if (m1) wanted.push(m1);
+  if (m2) wanted.push(m2);
+
+  const MONTHS = new Set(cfg.MONTH_NAMES_ID); // sudah huruf besar
+  const LABELS = ["KAS TUNAI APLIKASI", "KAS TUNAI LAPOR", "SETORAN KAS", "SELISIH"];
+  const cellA = (rows, r) => (rows[r - 1] && rows[r - 1][0] != null ? String(rows[r - 1][0]) : "").trim().toUpperCase();
+
+  const rekap = [];
+  for (const sheet of wanted) {
+    const colA = await readRange(id, `'${sheet}'!A1:A1030`, "FORMATTED_VALUE");
+    const headers = [];
+    for (let i = 0; i < colA.length; i++) {
+      const a = (colA[i] && colA[i][0] != null ? String(colA[i][0]) : "").trim().toUpperCase();
+      if (MONTHS.has(a)) headers.push({ month: a, row: i + 1 });
+    }
+    const sorted = headers.slice().sort((a, b) => a.row - b.row);
+    const blocks = sorted.map((h, idx) => {
+      const end = idx + 1 < sorted.length ? sorted[idx + 1].row - 1 : colA.length;
+      const labels = {};
+      for (let r = h.row + 1; r <= end; r++) {
+        const a = cellA(colA, r);
+        for (const L of LABELS) if (a === L && !(L in labels)) labels[L] = r;
+      }
+      return { month: h.month, blockStart: h.row, blockEnd: end, labels };
+    });
+    rekap.push({ sheet, blocks });
+  }
+  return { ok: true, rekap };
+}
+
+module.exports = { runDailySync, readRekapKasTunaiLapor, loadRekapDaily, findRekapTargetCell, inspectRekapBlocks };
