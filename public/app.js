@@ -1845,7 +1845,7 @@ function alRenderTable() {
   const dayIdx = days.map((d) => AL.days.indexOf(d));
 
   const head =
-    `<th class="al-metric">Metrik</th>` + days.map((d) => `<th class="num">${d}</th>`).join("");
+    `<th class="al-metric">TANGGAL</th>` + days.map((d) => `<th class="num">${d}</th>`).join("");
   const body = AL.metrics
     .map((m) => {
       const cls = m.highlight ? ' class="al-bold"' : "";
