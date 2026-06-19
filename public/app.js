@@ -1870,10 +1870,17 @@ function alRenderTable() {
   const noteRow =
     `<tr class="al-noterow"><td class="al-metric">Penyebab Selisih &amp; Konklusi <small>(ketik)</small></td>` +
     days
-      .map((d) => `<td><input type="text" class="al-note" data-day="${d}" value="${escapeHtml(notes[d] || "")}" placeholder="catatan…"></td>`)
+      .map((d) => `<td><textarea class="al-note" data-day="${d}" rows="1" placeholder="catatan…">${escapeHtml(notes[d] || "")}</textarea></td>`)
       .join("") +
     `</tr>`;
   el.innerHTML = `<table id="al-grid"><thead><tr>${head}</tr></thead><tbody>${body}${noteRow}</tbody></table>`;
+  el.querySelectorAll("textarea.al-note").forEach(alAutoGrow); // sesuaikan tinggi ke isi (wrap ke bawah)
+}
+
+// Tinggikan textarea mengikuti isi (wrap text turun ke bawah, lebar tetap).
+function alAutoGrow(t) {
+  t.style.height = "auto";
+  t.style.height = t.scrollHeight + 2 + "px";
 }
 
 async function alLoad() {
@@ -1915,6 +1922,9 @@ function alOpen() {
 
 $("#btn-al-load").addEventListener("click", alLoad);
 $("#al-day").addEventListener("change", alRenderTable);
+$("#al-table").addEventListener("input", (e) => {
+  if (e.target.classList.contains("al-note")) alAutoGrow(e.target);
+});
 $("#al-table").addEventListener("change", async (e) => {
   const t = e.target;
   if (!t.classList.contains("al-note") || !AL) return;
