@@ -49,7 +49,10 @@
           <p>Satu klik untuk menjalankan seluruh rangkaian: ambil kas tunai hari ini dari REKAP,
              perbarui sheet KAS, lalu salin nominal &amp; tanggal ke INPUT LAPORAN HARIAN.</p>
         </div>
-        <button id="btn-sync" class="btn-primary btn-big">▶ Jalankan Update Harian</button>
+        <div class="sync-actions">
+          <button id="btn-refresh" class="btn-ghost">⟳ Muat ulang data</button>
+          <button id="btn-sync" class="btn-primary btn-big">▶ UPDATE</button>
+        </div>
       </div>
       <div id="last-sync" class="last-sync">Update harian terakhir: memuat…</div>
       <div id="sync-result" class="result-log hidden"></div>
@@ -74,7 +77,6 @@
           <div id="table-kontrol" class="table-wrap">Memuat…</div>
         </div>
       </div>
-      <button id="btn-refresh" class="btn-ghost">⟳ Muat ulang data</button>
     </section>
 
     <!-- ============ TAB MONITORING BIAYA ============ -->

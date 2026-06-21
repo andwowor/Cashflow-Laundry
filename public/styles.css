@@ -120,6 +120,9 @@ main { padding: 26px 26px 70px; max-width: 1500px; margin: 0 auto; }
 .sync-box p { margin: 0; color: #d3e6e8; max-width: 640px; }
 .sync-box .btn-primary { background: var(--bg); color: var(--teal-dark); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18); }
 .sync-box .btn-primary:hover { background: #fff; }
+.sync-actions { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; }
+.sync-actions .btn-ghost { background: rgba(255, 255, 255, 0.14); border-color: rgba(255, 255, 255, 0.45); color: #f4efe2; }
+.sync-actions .btn-ghost:hover { background: rgba(255, 255, 255, 0.26); border-color: #fff; color: #fff; }
 
 .last-sync {
   font-size: 13.5px; color: var(--ink-soft);
@@ -369,6 +372,8 @@ input[type="file"] { font-family: var(--font); font-size: 13.5px; }
   .card h2 { font-size: 19px; }
   .sync-box { flex-direction: column; align-items: stretch; text-align: left; padding: 20px; }
   .sync-box .btn-primary, .btn-big { width: 100%; }
+  .sync-actions { width: 100%; }
+  .sync-actions .btn-ghost, .sync-actions .btn-primary { flex: 1 1 0; width: auto; }
   .actions { gap: 10px; }
   .actions .btn-primary, .actions .btn-ghost { flex: 1 1 auto; }
   th, td { padding: 9px 10px; }

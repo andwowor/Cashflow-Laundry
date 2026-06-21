@@ -296,7 +296,7 @@ $("#btn-sync").addEventListener("click", async () => {
     showLog(out, "✘ GAGAL: " + e.message, true);
   } finally {
     btn.disabled = false;
-    btn.textContent = "▶ Jalankan Update Harian";
+    btn.textContent = "▶ UPDATE";
   }
 });
 
