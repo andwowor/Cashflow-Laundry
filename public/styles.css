@@ -249,6 +249,8 @@ input[type="file"] { font-family: var(--font); font-size: 13.5px; }
   border-radius: 8px; display: inline-block;
 }
 .kas-last b { color: var(--teal-dark); }
+.kas-last.kas-last-old { background: var(--err-soft); color: var(--err); }
+.kas-last.kas-last-old b { color: var(--err); }
 .kas-preview { margin-top: 12px; }
 .kas-preview table input[type="number"] { width: 140px; text-align: right; }
 

@@ -572,6 +572,8 @@ function initKasCard(card) {
 function setKasLast(key, info) {
   const el = document.querySelector(`.kas-last[data-key="${key}"]`);
   if (!el) return;
+  // Merah bila upload terakhir bukan hari ini (atau belum pernah).
+  el.classList.toggle("kas-last-old", !(info && info.today));
   el.innerHTML =
     info && info.display
       ? `🕒 Upload data terakhir: <b>${escapeHtml(info.display)}</b>`

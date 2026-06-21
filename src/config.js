@@ -134,17 +134,19 @@ function recordUpload(key) {
   saveStoredConfig(c);
 }
 
-/** Map { key: { iso, display } } waktu upload terakhir tiap bagian. */
+/** Map { key: { iso, display, today } } waktu upload terakhir tiap bagian. */
 function getUploads() {
   const c = getStoredConfig();
   const u = c.uploads || {};
+  const today = todaySheetDate(); // dd/mm/yyyy
   const out = {};
   for (const k of Object.keys(u)) {
     const iso = u[k] && u[k].iso;
     if (!iso) continue;
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) continue;
-    out[k] = { iso, display: `${formatBusinessDateTime(d)} ${tzLabel()}` };
+    const dt = formatBusinessDateTime(d); // "dd/mm/yyyy HH:MM"
+    out[k] = { iso, display: `${dt} ${tzLabel()}`, today: dt.split(" ")[0] === today };
   }
   return out;
 }
