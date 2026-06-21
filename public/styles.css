@@ -73,6 +73,12 @@ body {
 .tab.active { background: var(--bg); color: var(--teal-dark); box-shadow: var(--shadow); }
 .tab.logout { margin-left: auto; background: rgba(255, 255, 255, 0.16); color: #f4efe2; border-radius: 14px; }
 .tab.logout:hover { background: rgba(207, 70, 58, 0.92); color: #fff; }
+.tab-badge {
+  display: inline-block; margin-left: 7px; min-width: 18px; padding: 0 6px;
+  background: #e0352b; color: #fff; border-radius: 999px;
+  font-size: 11px; font-weight: 800; line-height: 18px; text-align: center;
+  vertical-align: middle; box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+}
 
 main { padding: 26px 26px 70px; max-width: 1500px; margin: 0 auto; }
 

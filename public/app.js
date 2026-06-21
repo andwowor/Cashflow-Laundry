@@ -844,6 +844,23 @@ function renderMonBiaya() {
   mbUpdateCount();
 }
 
+// Tanda notifikasi merah pada judul tab (mis. jumlah biaya yang masih tertampil).
+function updateTabBadge(tabName, count) {
+  const btn = document.querySelector(`.tab[data-tab="${tabName}"]`);
+  if (!btn) return;
+  let b = btn.querySelector(".tab-badge");
+  if (count > 0) {
+    if (!b) {
+      b = document.createElement("span");
+      b.className = "tab-badge";
+      btn.appendChild(b);
+    }
+    b.textContent = count > 99 ? "99+" : String(count);
+  } else if (b) {
+    b.remove();
+  }
+}
+
 async function loadMonBiaya() {
   const el = $("#monbiaya-table");
   el.innerHTML = "Memuat…";
@@ -851,6 +868,7 @@ async function loadMonBiaya() {
     MONBIAYA = await api("/api/monbiaya/list");
     MONBIAYA_LOADED = true;
     renderMonBiaya();
+    updateTabBadge("monbiaya", (MONBIAYA.rows || []).length);
   } catch (e) {
     el.innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
   }
@@ -1141,6 +1159,7 @@ async function loadSmart() {
     const valid = new Set(SMART.rows.map((r) => r.row));
     for (const n of Array.from(SMART_CHECKED)) if (!valid.has(n)) SMART_CHECKED.delete(n);
     renderSmart();
+    updateTabBadge("smartlink", (SMART.rows || []).length);
   } catch (e) {
     el.innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
   }
@@ -1956,6 +1975,10 @@ initDropzone($("#dz-qris"), $("#qris-files"), $("#dz-qris-count"));
 initDropzone($("#dz-qbank"), $("#qbank-files"), $("#dz-qbank-count"));
 loadStatus();
 loadDashboard();
+// Muat daftar Monitoring Biaya & Lapor Smartlink di latar agar tanda notifikasi
+// merah pada judul tab langsung tampil tanpa harus membuka tabnya dulu.
+loadMonBiaya();
+loadSmart();
 
 // Daftarkan service worker agar dashboard bisa di-install lewat Chrome (PWA).
 if ("serviceWorker" in navigator) {
