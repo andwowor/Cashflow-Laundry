@@ -125,6 +125,35 @@ function getLastSync() {
   return { iso: c.lastSync.iso, display: `${formatBusinessDateTime(d)} ${tzLabel()}` };
 }
 
+/** Catat waktu upload terakhir untuk satu bagian (key) di tab Input Kas. */
+function recordUpload(key) {
+  if (!key) return;
+  const c = getStoredConfig();
+  c.uploads = c.uploads || {};
+  c.uploads[String(key)] = { iso: new Date().toISOString() };
+  saveStoredConfig(c);
+}
+
+/** Map { key: { iso, display } } waktu upload terakhir tiap bagian. */
+function getUploads() {
+  const c = getStoredConfig();
+  const u = c.uploads || {};
+  const out = {};
+  for (const k of Object.keys(u)) {
+    const iso = u[k] && u[k].iso;
+    if (!iso) continue;
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) continue;
+    out[k] = { iso, display: `${formatBusinessDateTime(d)} ${tzLabel()}` };
+  }
+  return out;
+}
+
+/** Waktu upload terakhir satu key (atau null). */
+function getUpload(key) {
+  return getUploads()[String(key)] || null;
+}
+
 module.exports = {
   MONTH_NAMES_ID,
   TIMEZONE,
@@ -144,4 +173,7 @@ module.exports = {
   tzLabel,
   recordLastSync,
   getLastSync,
+  recordUpload,
+  getUploads,
+  getUpload,
 };

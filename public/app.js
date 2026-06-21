@@ -168,6 +168,7 @@ async function loadStatus() {
       `${STATUS.monthKey} · hari ini ${STATUS.today} (${STATUS.timezone}) · AI: ${STATUS.model}`;
     $("#bulan-label").textContent = STATUS.cashflow ? `— ${STATUS.cashflow.title}` : "";
     renderSettings();
+    renderKasUploads(STATUS.uploads);
   } catch (e) {
     $("#status-line").textContent = "Gagal memuat status: " + e.message;
   }
@@ -473,6 +474,7 @@ function initKasCard(card) {
   const jenis = card.dataset.jenis;
   const body = document.createElement("div");
   body.innerHTML = `
+    <div class="kas-last" data-key="${jenis}"></div>
     <div class="upload-row">
       <div class="dropzone kas-dz">
         <div class="dz-text">📎 <b>Tarik &amp; lepas</b>, <b>tempel (Ctrl/Cmd+V)</b>, atau pilih file:</div>
@@ -556,6 +558,7 @@ function initKasCard(card) {
         body: JSON.stringify({ jenis, items: items.map(({ key, nominal }) => ({ key, nominal })) }),
       });
       showLog(resultEl, ["✔ Tersimpan (" + r.tanggal + "):", ...r.written.map((w) => `  • ${w.label}: ${fmtRp(w.nominal)} → ${w.cell}`)].join("\n"));
+      setKasLast(jenis, r.lastUpload);
       preview.classList.add("hidden");
       clearFileInput(fileInput);
       loadDashboard();
@@ -563,6 +566,21 @@ function initKasCard(card) {
       showLog(resultEl, "✘ " + e.message, true);
     }
   });
+}
+
+// Info "upload data terakhir" per bagian di tab Input Kas.
+function setKasLast(key, info) {
+  const el = document.querySelector(`.kas-last[data-key="${key}"]`);
+  if (!el) return;
+  el.innerHTML =
+    info && info.display
+      ? `🕒 Upload data terakhir: <b>${escapeHtml(info.display)}</b>`
+      : `🕒 Upload data terakhir: <i>belum pernah</i>`;
+}
+function renderKasUploads(map) {
+  ["bank", "aplikasi-outlet", "bank-aplikasi", "belum-settlement", "qris", "qrisbank"].forEach((k) =>
+    setKasLast(k, map ? map[k] : null)
+  );
 }
 
 $$(".kas-card").forEach(initKasCard);
@@ -639,6 +657,7 @@ $("#btn-qris-submit").addEventListener("click", async () => {
       body: JSON.stringify({ rows }),
     });
     showLog(out, `✔ ${r.jumlah} baris tersimpan di ${r.sheet} (baris ${r.barisAwal}–${r.barisAkhir}).`);
+    setKasLast("qris", r.lastUpload);
     $("#qris-table tbody").innerHTML = "";
     clearFileInput($("#qris-files"));
     $("#qris-preview").classList.add("hidden");
@@ -752,6 +771,7 @@ $("#btn-qbank-submit").addEventListener("click", async () => {
     const lines = ["✔ Tersimpan ke " + r.sheet + ":", ...r.written.map((w) => `  • ${w.tanggal} → ${w.sheet || "B" + w.row} = ${escapeHtml(w.formula)} (${fmtRp(w.total)})`)];
     if (r.skipped && r.skipped.length) lines.push(`⚠ Dilewati (tanggal tak ditemukan): ${r.skipped.map((s) => s.tanggal).join(", ")}`);
     showLog(out, lines.join("\n"));
+    setKasLast("qrisbank", r.lastUpload);
     $("#qbank-table tbody").innerHTML = "";
     $("#qbank-summary").innerHTML = "";
     clearFileInput($("#qbank-files"));

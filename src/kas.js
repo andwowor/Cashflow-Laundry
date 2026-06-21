@@ -99,7 +99,8 @@ async function submit(jenis, items) {
   }
 
   await batchWrite(spreadsheetId, data);
-  return { ok: true, jenis, tanggal, written };
+  cfg.recordUpload(jenis);
+  return { ok: true, jenis, tanggal, written, lastUpload: cfg.getUpload(jenis) };
 }
 
 module.exports = { analyze, submit, TARGETS };

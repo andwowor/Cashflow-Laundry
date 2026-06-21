@@ -57,7 +57,8 @@ async function submit(rows) {
   const endRow = appendRow + rows.length - 1;
   await batchWrite(cashflow.id, [{ range: `'${SHEET}'!A${appendRow}:C${endRow}`, values }]);
 
-  return { ok: true, sheet: SHEET, barisAwal: appendRow, barisAkhir: endRow, jumlah: rows.length };
+  cfg.recordUpload("qris");
+  return { ok: true, sheet: SHEET, barisAwal: appendRow, barisAkhir: endRow, jumlah: rows.length, lastUpload: cfg.getUpload("qris") };
 }
 
 module.exports = { analyze, submit, OUTLETS };

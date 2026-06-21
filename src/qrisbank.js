@@ -107,7 +107,8 @@ async function submit(entries) {
   }
 
   await batchWrite(cashflowId, data);
-  return { ok: true, sheet: SHEET, written, skipped };
+  cfg.recordUpload("qrisbank");
+  return { ok: true, sheet: SHEET, written, skipped, lastUpload: cfg.getUpload("qrisbank") };
 }
 
 module.exports = { analyze, submit };

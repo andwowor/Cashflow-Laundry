@@ -121,6 +121,7 @@ app.get("/api/status", wrap(async (req, res) => {
     biayaKasSpreadsheetId: cfg.BIAYA_KAS_SPREADSHEET_ID,
     cashflow,
     cashflowError,
+    uploads: cfg.getUploads(),
   });
 }));
 
