@@ -296,18 +296,20 @@ input[type="file"] { font-family: var(--font); font-size: 13.5px; }
 #sl-count { font-weight: 700; color: var(--teal-dark); }
 
 /* ===================== Aliran Kas per Outlet ===================== */
-#al-grid { font-size: 12.5px; width: auto; min-width: 100%; }
+#al-grid { font-size: 12.5px; width: auto; }
 #al-grid th, #al-grid td { white-space: nowrap; }
 #al-grid td.al-metric, #al-grid th.al-metric {
   position: sticky; left: 0; background: #fff; text-align: left; font-weight: 600;
-  box-shadow: 1px 0 0 var(--line); min-width: 250px;
+  box-shadow: 1px 0 0 var(--line);
+  white-space: normal; min-width: 160px; max-width: 230px;
 }
+#al-grid td.num, #al-grid th.num { min-width: 64px; }
 #al-grid thead th { z-index: 1; }
 #al-grid thead th.al-metric { z-index: 2; background: var(--teal-soft); }
 #al-grid tr.al-bold td { font-weight: 800; }
 #al-grid tr.al-noterow td.al-metric { background: var(--gold-soft); }
 #al-grid textarea.al-note {
-  width: 220px; box-sizing: border-box; min-height: 34px;
+  width: 180px; box-sizing: border-box; min-height: 34px;
   padding: 6px 8px; font-size: 12.5px; font-family: var(--font); line-height: 1.4;
   border: 1.5px solid var(--line); border-radius: 8px; vertical-align: top;
   resize: none; overflow: hidden; white-space: pre-wrap; word-break: break-word;
