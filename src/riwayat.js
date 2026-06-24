@@ -33,6 +33,26 @@ function norm(v) {
   return String(v == null ? "" : v).trim();
 }
 
+/**
+ * Kunci urut tanggal (makin besar = makin baru). raw = nilai mentah (serial bila
+ * sel tanggal), fmt = tampilan "dd/mm/yyyy" sebagai cadangan. -1 bila tak terbaca.
+ */
+function dateSortKey(raw, fmt) {
+  // Selalu kembalikan format yyyymmdd agar serial & teks bisa dibandingkan setara.
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    const ms = Math.floor(raw + 1e-9) * 86400000 + Date.UTC(1899, 11, 30); // serial → tanggal
+    const d = new Date(ms);
+    return Number(
+      `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`
+    );
+  }
+  const m = String(fmt == null ? "" : fmt).trim().match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})$/);
+  if (!m) return -1;
+  let [, d, mo, y] = m;
+  if (y.length === 2) y = "20" + y;
+  return Number(`${y}${String(mo).padStart(2, "0")}${String(d).padStart(2, "0")}`);
+}
+
 /** Tentukan spreadsheet untuk (tahun, bulan): daftar dikenal → bulan berjalan → cari Drive. */
 async function resolveMonthSpreadsheet(year, month) {
   const key = `${year}-${String(month).padStart(2, "0")}`;
@@ -97,11 +117,20 @@ async function list(year, month) {
       subjek,
       keterangan,
       nominal,
+      tglKey: dateSortKey(rr[COL.tanggal], fr[COL.tanggal]), // untuk urut terbaru→terlama
+      idx: i,
     });
     if (subjek) subjekSet.add(subjek);
     ketSet.add(keterangan);
     total += nominal;
   }
+
+  // Urut dari tanggal terbaru ke terlama; bila tanggal sama, entri terbawah (lebih baru) di atas.
+  rows.sort((a, b) => b.tglKey - a.tglKey || b.idx - a.idx);
+  rows.forEach((r) => {
+    delete r.tglKey;
+    delete r.idx;
+  });
 
   const collator = new Intl.Collator("id");
   return {
