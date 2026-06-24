@@ -243,12 +243,12 @@ async function runDailySync(opts = {}) {
   steps.push(`Sheet KAS: B2=Rp${maumbi.laporNominal.toLocaleString("id-ID")}, B3=Rp${perkamil.laporNominal.toLocaleString("id-ID")}, C2:C3 & C6:C9 = ${tanggal}.`);
   steps.push(`Kas bank: ${bankLabels.map((b, i) => `${b}=Rp${bankNominals[i].toLocaleString("id-ID")}`).join(", ")}.`);
 
-  // 3b) Tulis baris "KAS TUNAI APLIKASI" di REKAP (kolom hari ini) =
-  //     kas aplikasi (KAS!B4/B5) + SISA SALDO DEPOSIT per outlet. Sel DITIMPA
-  //     (bukan ditambah ke isi sel) sehingga aman bila tombol ditekan berkali-kali.
-  //     Ditulis TERPISAH & toleran: bila sel REKAP diproteksi, sinkronisasi inti tetap berhasil.
-  const rekapMaumbiVal = apliMaumbi !== null ? apliMaumbi + effDep.MAUMBI : null;
-  const rekapPerkamilVal = apliPerkamil !== null ? apliPerkamil + effDep.PERKAMIL : null;
+  // 3b) Salin kas aplikasi (KAS!B4/B5) ke baris "KAS TUNAI APLIKASI" di REKAP pada
+  //     kolom hari ini, APA ADANYA. Catatan: nilai KAS!B4/B5 di sheet KAS sudah
+  //     termasuk sisa saldo deposit, jadi deposit TIDAK ditambahkan lagi di sini
+  //     (kalau ditambah lagi → dobel). Sel DITIMPA & toleran terhadap proteksi.
+  const rekapMaumbiVal = apliMaumbi;
+  const rekapPerkamilVal = apliPerkamil;
   const rekapWrites = [];
   if (rekapMaumbiVal !== null) rekapWrites.push({ range: `'${rekapMaumbi}'!${maumbi.apliCell}`, values: [[rekapMaumbiVal]] });
   else steps.push("KAS!B4 (kas aplikasi MAUMBI) kosong/tidak valid — penulisan ke REKAP MAUMBI dilewati.");
@@ -258,8 +258,8 @@ async function runDailySync(opts = {}) {
   if (rekapWrites.length) {
     try {
       await batchWrite(biayaKasId, rekapWrites);
-      if (rekapMaumbiVal !== null) steps.push(`KAS TUNAI APLIKASI MAUMBI → REKAP ${maumbi.apliCell} = Rp${rekapMaumbiVal.toLocaleString("id-ID")} (kas aplikasi ${apliMaumbi.toLocaleString("id-ID")} + deposit ${effDep.MAUMBI.toLocaleString("id-ID")}).`);
-      if (rekapPerkamilVal !== null) steps.push(`KAS TUNAI APLIKASI PERKAMIL → REKAP ${perkamil.apliCell} = Rp${rekapPerkamilVal.toLocaleString("id-ID")} (kas aplikasi ${apliPerkamil.toLocaleString("id-ID")} + deposit ${effDep.PERKAMIL.toLocaleString("id-ID")}).`);
+      if (rekapMaumbiVal !== null) steps.push(`KAS APLIKASI MAUMBI (KAS!B4=Rp${apliMaumbi.toLocaleString("id-ID")}) → REKAP MAUMBI ${maumbi.apliCell} (apa adanya, sudah termasuk deposit).`);
+      if (rekapPerkamilVal !== null) steps.push(`KAS APLIKASI PERKAMIL (KAS!B5=Rp${apliPerkamil.toLocaleString("id-ID")}) → REKAP PERKAMIL ${perkamil.apliCell} (apa adanya, sudah termasuk deposit).`);
     } catch (err) {
       const isProtected = /protected/i.test(err.message || "");
       steps.push(
