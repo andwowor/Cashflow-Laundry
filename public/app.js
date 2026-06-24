@@ -284,13 +284,17 @@ async function loadDashboard() {
 
 $("#btn-refresh").addEventListener("click", loadDashboard);
 
-$("#btn-sync").addEventListener("click", async () => {
+async function runSync(flags) {
   const btn = $("#btn-sync");
   const out = $("#sync-result");
   btn.disabled = true;
   btn.textContent = "⏳ Menjalankan…";
   try {
-    const r = await api("/api/sync", { method: "POST" });
+    const r = await api("/api/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(flags || {}),
+    });
     showLog(out, ["✔ UPDATE HARIAN SELESAI — " + r.tanggal, ...r.steps.map((s) => "  • " + s)].join("\n"));
     await loadDashboard();
   } catch (e) {
@@ -299,6 +303,45 @@ $("#btn-sync").addEventListener("click", async () => {
     btn.disabled = false;
     btn.textContent = "▶ UPDATE";
   }
+}
+
+function closeSetorModal() {
+  $("#setor-modal").classList.add("hidden");
+}
+
+async function openSetorModal() {
+  const list = $("#setor-list");
+  list.innerHTML = `<p class="loading">Membaca sisa saldo deposit…</p>`;
+  $("#setor-modal").classList.remove("hidden");
+  let totals = { MAUMBI: 0, PERKAMIL: 0 };
+  try {
+    const r = await api("/api/deposit/outlet-totals");
+    totals = r.totals || totals;
+  } catch (e) {
+    /* tetap tampilkan pertanyaan walau total gagal dibaca */
+  }
+  const row = (key, label) => `
+    <div class="setor-row">
+      <div><b>${label}</b><div class="hint">Sisa saldo deposit: ${fmtRp(totals[key] || 0)}</div></div>
+      <div class="setor-opts">
+        <label><input type="radio" name="setor-${key}" value="ya"> Sudah disetor</label>
+        <label><input type="radio" name="setor-${key}" value="belum" checked> Belum</label>
+      </div>
+    </div>`;
+  list.innerHTML = row("MAUMBI", "Outlet MAUMBI") + row("PERKAMIL", "Outlet PERKAMIL");
+}
+
+$("#btn-sync").addEventListener("click", openSetorModal);
+$("#btn-setor-cancel").addEventListener("click", closeSetorModal);
+$("#setor-modal .img-modal-backdrop").addEventListener("click", closeSetorModal);
+$("#btn-setor-go").addEventListener("click", () => {
+  const confirmed = (key) => {
+    const el = document.querySelector(`input[name="setor-${key}"]:checked`);
+    return !!(el && el.value === "ya");
+  };
+  const flags = { depositMaumbi: confirmed("MAUMBI"), depositPerkamil: confirmed("PERKAMIL") };
+  closeSetorModal();
+  runSync(flags);
 });
 
 // ================= Pratinjau gambar (modal) =================

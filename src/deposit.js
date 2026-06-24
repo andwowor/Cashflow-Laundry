@@ -165,4 +165,24 @@ async function submit(payload) {
   return { ok: true, sheet, row: newRow, nama, tanggal, outlet, jenis, nominal: signed, saldo };
 }
 
-module.exports = { summary, submit };
+/** Total sisa saldo deposit per outlet (jumlah kolom JUMLAH DEPOSIT, baris 3+). */
+async function outletTotals() {
+  const id = cfg.BIAYA_KAS_SPREADSHEET_ID;
+  const sheet = await resolveSheetTitle();
+  const [fmt, raw] = await Promise.all([
+    readRange(id, `'${sheet}'!A1:Z`, "FORMATTED_VALUE"),
+    readRange(id, `'${sheet}'!A1:Z`, "UNFORMATTED_VALUE"),
+  ]);
+  const cols = detectColumns(fmt[0] || []);
+  const totals = { MAUMBI: 0, PERKAMIL: 0 };
+  for (let i = DATA_START_ROW - 1; i < fmt.length; i++) {
+    const fr = fmt[i] || [];
+    const outlet = norm(fr[cols.outlet]).toUpperCase();
+    const key = outlet.includes("MAUMBI") ? "MAUMBI" : outlet.includes("PERKAMIL") ? "PERKAMIL" : null;
+    if (!key) continue;
+    totals[key] += numAt(raw[i] || [], cols.jumlah);
+  }
+  return totals;
+}
+
+module.exports = { summary, submit, outletTotals };

@@ -160,12 +160,16 @@ function saveDepositState(s) {
 /**
  * Eksekusi tombol "Update Harian" — seluruh rangkaian perintah dalam satu klik.
  */
-async function runDailySync() {
+async function runDailySync(opts = {}) {
   const steps = [];
   const { day, month, year } = cfg.nowInBusinessTz();
   const monthName = cfg.MONTH_NAMES_ID[month - 1];
   const tanggal = cfg.todaySheetDate();
   const biayaKasId = cfg.BIAYA_KAS_SPREADSHEET_ID;
+  // Deposit per outlet hanya ditambahkan bila user mengonfirmasi sudah disetor ke
+  // kas bank (lihat tombol Update di tab Monitoring). Default: TIDAK ditambahkan.
+  const addDepMaumbi = !!opts.depositMaumbi;
+  const addDepPerkamil = !!opts.depositPerkamil;
 
   const cashflow = await resolveCashflowSpreadsheetId();
   steps.push(`Spreadsheet CASHFLOW bulan ini: ${cashflow.title || cashflow.id} (sumber: ${cashflow.source}).`);
@@ -219,6 +223,17 @@ async function runDailySync() {
     }
   }
 
+  // Deposit efektif yang ditambahkan = hanya bila user konfirmasi "sudah disetor
+  // ke kas bank" untuk outlet tsb. Bila belum dikonfirmasi → 0 (deposit tidak ditambah).
+  const effDep = {
+    MAUMBI: addDepMaumbi ? depositTotals.MAUMBI : 0,
+    PERKAMIL: addDepPerkamil ? depositTotals.PERKAMIL : 0,
+  };
+  if (depositOk) {
+    if (!addDepMaumbi) steps.push("Deposit MAUMBI TIDAK ditambahkan (belum dikonfirmasi setor ke kas bank).");
+    if (!addDepPerkamil) steps.push("Deposit PERKAMIL TIDAK ditambahkan (belum dikonfirmasi setor ke kas bank).");
+  }
+
   // 3) Tulis ke sheet KAS (inti): nominal kas tunai outlet (B2/B3) + tanggal
   //    (C2/C3) + tanggal kas bank (C6:C9).
   await batchWrite(biayaKasId, [
@@ -232,8 +247,8 @@ async function runDailySync() {
   //     kas aplikasi (KAS!B4/B5) + SISA SALDO DEPOSIT per outlet. Sel DITIMPA
   //     (bukan ditambah ke isi sel) sehingga aman bila tombol ditekan berkali-kali.
   //     Ditulis TERPISAH & toleran: bila sel REKAP diproteksi, sinkronisasi inti tetap berhasil.
-  const rekapMaumbiVal = apliMaumbi !== null ? apliMaumbi + depositTotals.MAUMBI : null;
-  const rekapPerkamilVal = apliPerkamil !== null ? apliPerkamil + depositTotals.PERKAMIL : null;
+  const rekapMaumbiVal = apliMaumbi !== null ? apliMaumbi + effDep.MAUMBI : null;
+  const rekapPerkamilVal = apliPerkamil !== null ? apliPerkamil + effDep.PERKAMIL : null;
   const rekapWrites = [];
   if (rekapMaumbiVal !== null) rekapWrites.push({ range: `'${rekapMaumbi}'!${maumbi.apliCell}`, values: [[rekapMaumbiVal]] });
   else steps.push("KAS!B4 (kas aplikasi MAUMBI) kosong/tidak valid — penulisan ke REKAP MAUMBI dilewati.");
@@ -243,8 +258,8 @@ async function runDailySync() {
   if (rekapWrites.length) {
     try {
       await batchWrite(biayaKasId, rekapWrites);
-      if (rekapMaumbiVal !== null) steps.push(`KAS TUNAI APLIKASI MAUMBI → REKAP ${maumbi.apliCell} = Rp${rekapMaumbiVal.toLocaleString("id-ID")} (kas aplikasi ${apliMaumbi.toLocaleString("id-ID")} + deposit ${depositTotals.MAUMBI.toLocaleString("id-ID")}).`);
-      if (rekapPerkamilVal !== null) steps.push(`KAS TUNAI APLIKASI PERKAMIL → REKAP ${perkamil.apliCell} = Rp${rekapPerkamilVal.toLocaleString("id-ID")} (kas aplikasi ${apliPerkamil.toLocaleString("id-ID")} + deposit ${depositTotals.PERKAMIL.toLocaleString("id-ID")}).`);
+      if (rekapMaumbiVal !== null) steps.push(`KAS TUNAI APLIKASI MAUMBI → REKAP ${maumbi.apliCell} = Rp${rekapMaumbiVal.toLocaleString("id-ID")} (kas aplikasi ${apliMaumbi.toLocaleString("id-ID")} + deposit ${effDep.MAUMBI.toLocaleString("id-ID")}).`);
+      if (rekapPerkamilVal !== null) steps.push(`KAS TUNAI APLIKASI PERKAMIL → REKAP ${perkamil.apliCell} = Rp${rekapPerkamilVal.toLocaleString("id-ID")} (kas aplikasi ${apliPerkamil.toLocaleString("id-ID")} + deposit ${effDep.PERKAMIL.toLocaleString("id-ID")}).`);
     } catch (err) {
       const isProtected = /protected/i.test(err.message || "");
       steps.push(
@@ -294,13 +309,13 @@ async function runDailySync() {
     const baseB4 = baseOf(curB4, "MAUMBI");
     const baseB5 = baseOf(curB5, "PERKAMIL");
     if (baseB4 !== null) {
-      b4Final = baseB4 + depositTotals.MAUMBI;
+      b4Final = baseB4 + effDep.MAUMBI;
       ilhWrites.push({ range: `'${ILH_SHEET}'!B4`, values: [[b4Final]] });
     } else {
       steps.push("B4 INPUT LAPORAN HARIAN kosong — upload Kas Aplikasi Outlet MAUMBI dulu (deposit belum ditambahkan).");
     }
     if (baseB5 !== null) {
-      b5Final = baseB5 + depositTotals.PERKAMIL;
+      b5Final = baseB5 + effDep.PERKAMIL;
       ilhWrites.push({ range: `'${ILH_SHEET}'!B5`, values: [[b5Final]] });
     } else {
       steps.push("B5 INPUT LAPORAN HARIAN kosong — upload Kas Aplikasi Outlet PERKAMIL dulu (deposit belum ditambahkan).");
@@ -312,8 +327,8 @@ async function runDailySync() {
         PERKAMIL: b5Final !== null ? b5Final : sameDay ? st.written.PERKAMIL : null,
       },
       deposit: {
-        MAUMBI: b4Final !== null ? depositTotals.MAUMBI : sameDay ? st.deposit.MAUMBI : 0,
-        PERKAMIL: b5Final !== null ? depositTotals.PERKAMIL : sameDay ? st.deposit.PERKAMIL : 0,
+        MAUMBI: b4Final !== null ? effDep.MAUMBI : sameDay ? st.deposit.MAUMBI : 0,
+        PERKAMIL: b5Final !== null ? effDep.PERKAMIL : sameDay ? st.deposit.PERKAMIL : 0,
       },
     });
   }
@@ -321,8 +336,8 @@ async function runDailySync() {
   await batchWrite(cashflow.id, ilhWrites);
   steps.push(
     `CASHFLOW ${ILH_SHEET}: B2:B3 & B6:B9 nominal, C2:C25 = ${tanggal}.` +
-      (b4Final !== null ? ` B4=Rp${b4Final.toLocaleString("id-ID")} (upload+deposit ${depositTotals.MAUMBI.toLocaleString("id-ID")}).` : "") +
-      (b5Final !== null ? ` B5=Rp${b5Final.toLocaleString("id-ID")} (upload+deposit ${depositTotals.PERKAMIL.toLocaleString("id-ID")}).` : "")
+      (b4Final !== null ? ` B4=Rp${b4Final.toLocaleString("id-ID")} (upload+deposit ${effDep.MAUMBI.toLocaleString("id-ID")}).` : "") +
+      (b5Final !== null ? ` B5=Rp${b5Final.toLocaleString("id-ID")} (upload+deposit ${effDep.PERKAMIL.toLocaleString("id-ID")}).` : "")
   );
 
   cfg.recordLastSync(); // catat waktu update harian terakhir (sinkronisasi inti sukses)

@@ -164,8 +164,17 @@ app.get("/api/dashboard", wrap(async (req, res) => {
 // ---------- Tombol update harian ----------
 
 app.post("/api/sync", wrap(async (req, res) => {
-  const result = await runDailySync();
+  const body = req.body || {};
+  const result = await runDailySync({
+    depositMaumbi: !!body.depositMaumbi,
+    depositPerkamil: !!body.depositPerkamil,
+  });
   res.json(result);
+}));
+
+// Total sisa saldo deposit per outlet (untuk dialog konfirmasi setor ke bank).
+app.get("/api/deposit/outlet-totals", wrap(async (req, res) => {
+  res.json({ ok: true, totals: await deposit.outletTotals() });
 }));
 
 // ---------- Diagnostik baris blok bulan pada sheet REKAP ----------
