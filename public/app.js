@@ -148,6 +148,7 @@ $$(".tab").forEach((btn) => {
     if (btn.dataset.tab === "daftarbiaya" && !DB_LOADED) loadDaftarBiaya();
     if (btn.dataset.tab === "deposit" && !DEP_LOADED) loadDeposit();
     if (btn.dataset.tab === "aliran" && !AL_LOADED) alOpen();
+    if (btn.dataset.tab === "biaya") ensureManualBiaya();
   });
 });
 
@@ -466,6 +467,66 @@ $("#btn-biaya-submit").addEventListener("click", async () => {
     showLog(out, "✘ " + e.message, true);
   } finally {
     $("#btn-biaya-submit").disabled = false;
+  }
+});
+
+// ===== Input Biaya Manual (langsung ke INPUT PENGGUNAAN BIAYA) =====
+let BM_FILLED = false;
+async function ensureManualBiaya() {
+  await loadOptions();
+  if (!BM_FILLED) {
+    const o = OPTIONS;
+    $("#bm-keterangan").innerHTML =
+      '<option value="">— pilih —</option>' +
+      o.daftarBiaya.map((d) => `<option value="${escapeHtml(d.keterangan)}">${escapeHtml(d.keterangan)}</option>`).join("");
+    $("#bm-outlet").innerHTML = '<option value="">— pilih —</option>' + o.outlets.map((s) => `<option>${escapeHtml(s)}</option>`).join("");
+    $("#bm-status").innerHTML = o.status.map((s) => `<option${s === "BELUM INPUT" ? " selected" : ""}>${escapeHtml(s)}</option>`).join("");
+    $("#bm-sumber").innerHTML = '<option value="">— pilih —</option>' + o.sumberDana.map((s) => `<option>${escapeHtml(s)}</option>`).join("");
+    BM_FILLED = true;
+  }
+  const dt = $("#bm-tanggal");
+  if (dt && !dt.value) dt.value = new Date().toISOString().slice(0, 10);
+}
+
+$("#bm-keterangan").addEventListener("change", (e) => {
+  const o = OPTIONS || {};
+  const found = (o.daftarBiaya || []).find((d) => d.keterangan === e.target.value);
+  $("#bm-subjek-note").innerHTML = found && found.subjek ? `Subjek Biaya (otomatis): <b>${escapeHtml(found.subjek)}</b>` : "";
+  const rec = (o.outletRecommendations || {})[String(e.target.value).trim().toLowerCase()];
+  if (rec && !$("#bm-outlet").value) $("#bm-outlet").value = rec;
+});
+
+$("#btn-bm-submit").addEventListener("click", async () => {
+  const out = $("#bm-result");
+  const row = {
+    keterangan: $("#bm-keterangan").value,
+    nominal: $("#bm-nominal").value,
+    tanggal: $("#bm-tanggal").value,
+    outlet: $("#bm-outlet").value,
+    status: $("#bm-status").value,
+    sumberDana: $("#bm-sumber").value,
+  };
+  if (!row.keterangan) return showLog(out, "✘ Pilih Keterangan.", true);
+  if (!row.nominal || Number(row.nominal) <= 0) return showLog(out, "✘ Nominal tidak valid.", true);
+  if (!row.tanggal) return showLog(out, "✘ Pilih tanggal.", true);
+  if (!row.outlet) return showLog(out, "✘ Pilih outlet.", true);
+  const btn = $("#btn-bm-submit");
+  btn.disabled = true;
+  try {
+    const r = await api("/api/biaya/submit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows: [row] }),
+    });
+    showLog(out, `✔ Tersimpan di ${r.sheet} baris ${r.barisAwal}. ${escapeHtml(row.keterangan)} · ${fmtRp(row.nominal)} · ${escapeHtml(row.outlet)}.`);
+    $("#bm-keterangan").value = "";
+    $("#bm-nominal").value = "";
+    $("#bm-subjek-note").innerHTML = "";
+    loadSmart(); // perbarui daftar & notifikasi Lapor Smartlink (biaya baru bisa BELUM INPUT)
+  } catch (e) {
+    showLog(out, "✘ " + e.message, true);
+  } finally {
+    btn.disabled = false;
   }
 });
 

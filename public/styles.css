@@ -335,6 +335,13 @@ input[type="file"] { font-family: var(--font); font-size: 13.5px; }
 #rb-grid th, #rb-grid td { white-space: nowrap; }
 #rb-total b { color: var(--teal-dark); font-size: 15px; }
 
+/* ===================== Input Biaya Manual ===================== */
+.bm-grid { display: grid; grid-template-columns: repeat(3, minmax(170px, 1fr)); gap: 12px 16px; margin-top: 8px; }
+.bm-field label { display: block; font-size: 13px; font-weight: 700; color: var(--ink); margin-bottom: 5px; }
+#bm-subjek-note { margin-top: 10px; }
+@media (max-width: 760px) { .bm-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 480px) { .bm-grid { grid-template-columns: 1fr; } }
+
 /* ===================== Pratinjau input biaya ===================== */
 #biaya-table { width: auto; min-width: 100%; font-size: 13.5px; }
 #biaya-table th, #biaya-table td { white-space: nowrap; vertical-align: middle; padding: 9px 11px; }

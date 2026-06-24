@@ -200,6 +200,44 @@
         <div id="biaya-error" class="error hidden"></div>
       </div>
 
+      <div class="card">
+        <h3>Input Biaya Manual</h3>
+        <p class="hint">Isi satu biaya secara manual lalu simpan langsung ke sheet <b>INPUT PENGGUNAAN BIAYA</b>
+          (di baris kosong terbawah). <b>Subjek Biaya</b> &amp; <b>Kode Transaksi</b> terisi otomatis oleh
+          spreadsheet (hanya tampilan).</p>
+        <div class="bm-grid">
+          <div class="bm-field">
+            <label>Keterangan</label>
+            <select id="bm-keterangan"><option value="">— pilih —</option></select>
+          </div>
+          <div class="bm-field">
+            <label>Nominal (Rp)</label>
+            <input type="number" id="bm-nominal" min="1" placeholder="mis. 50000" />
+          </div>
+          <div class="bm-field">
+            <label>Tanggal</label>
+            <input type="date" id="bm-tanggal" />
+          </div>
+          <div class="bm-field">
+            <label>Outlet</label>
+            <select id="bm-outlet"><option value="">— pilih —</option></select>
+          </div>
+          <div class="bm-field">
+            <label>Status Lapor Smartlink</label>
+            <select id="bm-status"></select>
+          </div>
+          <div class="bm-field">
+            <label>Sumber Dana</label>
+            <select id="bm-sumber"><option value="">— pilih —</option></select>
+          </div>
+        </div>
+        <div class="hint" id="bm-subjek-note"></div>
+        <div class="actions">
+          <button id="btn-bm-submit" class="btn-primary">💾 Simpan Biaya Manual</button>
+        </div>
+        <div id="bm-result" class="result-log hidden"></div>
+      </div>
+
       <div id="biaya-preview" class="card hidden">
         <h3>Pratinjau — periksa sebelum submit</h3>
         <p class="hint">Subjek Biaya &amp; Kode Transaksi terisi otomatis oleh spreadsheet (hanya tampilan).
