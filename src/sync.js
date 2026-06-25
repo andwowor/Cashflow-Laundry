@@ -234,6 +234,44 @@ async function runDailySync(opts = {}) {
     if (!addDepPerkamil) steps.push("Deposit PERKAMIL TIDAK ditambahkan (belum dikonfirmasi setor ke kas bank).");
   }
 
+  // 2c) Hitung nilai Kas Aplikasi Outlet + deposit. Nilai ini dipakai untuk DUA
+  //     tujuan agar konsisten: (a) B4/B5 INPUT LAPORAN HARIAN, dan (b) baris
+  //     "KAS TUNAI APLIKASI" di REKAP. Dasar = nilai hasil upload di B4/B5;
+  //     dipulihkan dari state lokal supaya tombol bisa ditekan berulang tanpa
+  //     menambah deposit dua kali, dan nilai hasil upload tidak pernah dihapus.
+  let b4Final = null;
+  let b5Final = null;
+  if (depositOk) {
+    const cur = await readRange(cashflow.id, `'${ILH_SHEET}'!B4:B5`, "UNFORMATTED_VALUE");
+    const curB4 = numOrNull(cur, 0);
+    const curB5 = numOrNull(cur, 1);
+    const st = loadDepositState();
+    const sameDay = st.date === tanggal;
+    const baseOf = (curVal, outlet) => {
+      if (curVal === null) return null;
+      const wrote = sameDay ? st.written[outlet] : null;
+      if (wrote !== null && Math.abs(curVal - wrote) < 0.5) return curVal - (st.deposit[outlet] || 0);
+      return curVal; // nilai baru (hasil upload terbaru / hari baru)
+    };
+    const baseB4 = baseOf(curB4, "MAUMBI");
+    const baseB5 = baseOf(curB5, "PERKAMIL");
+    if (baseB4 !== null) b4Final = baseB4 + effDep.MAUMBI;
+    else steps.push("B4 INPUT LAPORAN HARIAN kosong — upload Kas Aplikasi Outlet MAUMBI dulu (deposit belum ditambahkan).");
+    if (baseB5 !== null) b5Final = baseB5 + effDep.PERKAMIL;
+    else steps.push("B5 INPUT LAPORAN HARIAN kosong — upload Kas Aplikasi Outlet PERKAMIL dulu (deposit belum ditambahkan).");
+    saveDepositState({
+      date: tanggal,
+      written: {
+        MAUMBI: b4Final !== null ? b4Final : sameDay ? st.written.MAUMBI : null,
+        PERKAMIL: b5Final !== null ? b5Final : sameDay ? st.written.PERKAMIL : null,
+      },
+      deposit: {
+        MAUMBI: b4Final !== null ? effDep.MAUMBI : sameDay ? st.deposit.MAUMBI : 0,
+        PERKAMIL: b5Final !== null ? effDep.PERKAMIL : sameDay ? st.deposit.PERKAMIL : 0,
+      },
+    });
+  }
+
   // 3) Tulis ke sheet KAS (inti): nominal kas tunai outlet (B2/B3) + tanggal
   //    (C2/C3) + tanggal kas bank (C6:C9).
   await batchWrite(biayaKasId, [
@@ -243,23 +281,23 @@ async function runDailySync(opts = {}) {
   steps.push(`Sheet KAS: B2=Rp${maumbi.laporNominal.toLocaleString("id-ID")}, B3=Rp${perkamil.laporNominal.toLocaleString("id-ID")}, C2:C3 & C6:C9 = ${tanggal}.`);
   steps.push(`Kas bank: ${bankLabels.map((b, i) => `${b}=Rp${bankNominals[i].toLocaleString("id-ID")}`).join(", ")}.`);
 
-  // 3b) Salin kas aplikasi (KAS!B4/B5) ke baris "KAS TUNAI APLIKASI" di REKAP pada
-  //     kolom hari ini, APA ADANYA. Catatan: nilai KAS!B4/B5 di sheet KAS sudah
-  //     termasuk sisa saldo deposit, jadi deposit TIDAK ditambahkan lagi di sini
-  //     (kalau ditambah lagi → dobel). Sel DITIMPA & toleran terhadap proteksi.
-  const rekapMaumbiVal = apliMaumbi;
-  const rekapPerkamilVal = apliPerkamil;
+  // 3b) Baris "KAS TUNAI APLIKASI" di REKAP (kolom hari ini) = nilai yang SAMA
+  //     dengan B4/B5 INPUT LAPORAN HARIAN (kas aplikasi + deposit), dihitung di
+  //     2c. Ini menghindari ketergantungan pada KAS!B4/B5 (yang formulanya telat
+  //     ter-update). Bila B4/B5 belum diisi, pakai KAS!B4/B5 apa adanya.
+  const rekapMaumbiVal = b4Final !== null ? b4Final : apliMaumbi;
+  const rekapPerkamilVal = b5Final !== null ? b5Final : apliPerkamil;
   const rekapWrites = [];
   if (rekapMaumbiVal !== null) rekapWrites.push({ range: `'${rekapMaumbi}'!${maumbi.apliCell}`, values: [[rekapMaumbiVal]] });
-  else steps.push("KAS!B4 (kas aplikasi MAUMBI) kosong/tidak valid — penulisan ke REKAP MAUMBI dilewati.");
+  else steps.push("Kas aplikasi MAUMBI kosong/tidak valid — penulisan ke REKAP MAUMBI dilewati.");
   if (rekapPerkamilVal !== null) rekapWrites.push({ range: `'${rekapPerkamil}'!${perkamil.apliCell}`, values: [[rekapPerkamilVal]] });
-  else steps.push("KAS!B5 (kas aplikasi PERKAMIL) kosong/tidak valid — penulisan ke REKAP PERKAMIL dilewati.");
+  else steps.push("Kas aplikasi PERKAMIL kosong/tidak valid — penulisan ke REKAP PERKAMIL dilewati.");
 
   if (rekapWrites.length) {
     try {
       await batchWrite(biayaKasId, rekapWrites);
-      if (rekapMaumbiVal !== null) steps.push(`KAS APLIKASI MAUMBI (KAS!B4=Rp${apliMaumbi.toLocaleString("id-ID")}) → REKAP MAUMBI ${maumbi.apliCell} (apa adanya, sudah termasuk deposit).`);
-      if (rekapPerkamilVal !== null) steps.push(`KAS APLIKASI PERKAMIL (KAS!B5=Rp${apliPerkamil.toLocaleString("id-ID")}) → REKAP PERKAMIL ${perkamil.apliCell} (apa adanya, sudah termasuk deposit).`);
+      if (rekapMaumbiVal !== null) steps.push(`KAS TUNAI APLIKASI MAUMBI → REKAP ${maumbi.apliCell} = Rp${rekapMaumbiVal.toLocaleString("id-ID")} (kas aplikasi + deposit, sama dgn B4 INPUT LAPORAN HARIAN).`);
+      if (rekapPerkamilVal !== null) steps.push(`KAS TUNAI APLIKASI PERKAMIL → REKAP ${perkamil.apliCell} = Rp${rekapPerkamilVal.toLocaleString("id-ID")} (kas aplikasi + deposit, sama dgn B5 INPUT LAPORAN HARIAN).`);
     } catch (err) {
       const isProtected = /protected/i.test(err.message || "");
       steps.push(
@@ -286,52 +324,10 @@ async function runDailySync(opts = {}) {
     { range: `'${ILH_SHEET}'!C16:C25`, values: colC(10) },
   ];
 
-  // 4b) B4/B5 = nilai hasil upload (Input Kas → Kas Aplikasi Outlet) + sisa saldo
-  //     deposit per outlet. Nilai dasar (tanpa deposit) dipulihkan dari state lokal
-  //     supaya tombol bisa ditekan berulang tanpa menambah deposit dua kali, dan
-  //     nilai hasil upload tidak pernah dihapus. Hanya jika deposit berhasil dibaca.
-  let b4Final = null;
-  let b5Final = null;
-  if (depositOk) {
-    const cur = await readRange(cashflow.id, `'${ILH_SHEET}'!B4:B5`, "UNFORMATTED_VALUE");
-    const curB4 = numOrNull(cur, 0);
-    const curB5 = numOrNull(cur, 1);
-    const st = loadDepositState();
-    const sameDay = st.date === tanggal;
-    // Pulihkan nilai dasar: bila sel masih sama persis dengan yang terakhir kita
-    // tulis (hari yang sama), berarti sudah memuat deposit → kurangi lagi.
-    const baseOf = (curVal, outlet) => {
-      if (curVal === null) return null;
-      const wrote = sameDay ? st.written[outlet] : null;
-      if (wrote !== null && Math.abs(curVal - wrote) < 0.5) return curVal - (st.deposit[outlet] || 0);
-      return curVal; // nilai baru (hasil upload terbaru / hari baru)
-    };
-    const baseB4 = baseOf(curB4, "MAUMBI");
-    const baseB5 = baseOf(curB5, "PERKAMIL");
-    if (baseB4 !== null) {
-      b4Final = baseB4 + effDep.MAUMBI;
-      ilhWrites.push({ range: `'${ILH_SHEET}'!B4`, values: [[b4Final]] });
-    } else {
-      steps.push("B4 INPUT LAPORAN HARIAN kosong — upload Kas Aplikasi Outlet MAUMBI dulu (deposit belum ditambahkan).");
-    }
-    if (baseB5 !== null) {
-      b5Final = baseB5 + effDep.PERKAMIL;
-      ilhWrites.push({ range: `'${ILH_SHEET}'!B5`, values: [[b5Final]] });
-    } else {
-      steps.push("B5 INPUT LAPORAN HARIAN kosong — upload Kas Aplikasi Outlet PERKAMIL dulu (deposit belum ditambahkan).");
-    }
-    saveDepositState({
-      date: tanggal,
-      written: {
-        MAUMBI: b4Final !== null ? b4Final : sameDay ? st.written.MAUMBI : null,
-        PERKAMIL: b5Final !== null ? b5Final : sameDay ? st.written.PERKAMIL : null,
-      },
-      deposit: {
-        MAUMBI: b4Final !== null ? effDep.MAUMBI : sameDay ? st.deposit.MAUMBI : 0,
-        PERKAMIL: b5Final !== null ? effDep.PERKAMIL : sameDay ? st.deposit.PERKAMIL : 0,
-      },
-    });
-  }
+  // 4b) B4/B5 INPUT LAPORAN HARIAN = kas aplikasi upload + deposit (b4Final/b5Final
+  //     dihitung di 2c). Nilai yang sama juga ditulis ke baris KAS TUNAI APLIKASI REKAP.
+  if (b4Final !== null) ilhWrites.push({ range: `'${ILH_SHEET}'!B4`, values: [[b4Final]] });
+  if (b5Final !== null) ilhWrites.push({ range: `'${ILH_SHEET}'!B5`, values: [[b5Final]] });
 
   await batchWrite(cashflow.id, ilhWrites);
   steps.push(
