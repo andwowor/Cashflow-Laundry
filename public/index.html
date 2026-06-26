@@ -207,8 +207,9 @@
           spreadsheet (hanya tampilan).</p>
         <div class="bm-grid">
           <div class="bm-field">
-            <label>Keterangan</label>
-            <select id="bm-keterangan"><option value="">— pilih —</option></select>
+            <label>Keterangan <small>(ketik untuk cari)</small></label>
+            <input type="text" id="bm-keterangan" list="dl-bm-keterangan" autocomplete="off" placeholder="ketik untuk mencari…" />
+            <datalist id="dl-bm-keterangan"></datalist>
           </div>
           <div class="bm-field">
             <label>Nominal (Rp)</label>

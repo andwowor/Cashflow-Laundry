@@ -519,9 +519,9 @@ async function ensureManualBiaya() {
   await loadOptions();
   if (!BM_FILLED) {
     const o = OPTIONS;
-    $("#bm-keterangan").innerHTML =
-      '<option value="">— pilih —</option>' +
-      o.daftarBiaya.map((d) => `<option value="${escapeHtml(d.keterangan)}">${escapeHtml(d.keterangan)}</option>`).join("");
+    $("#dl-bm-keterangan").innerHTML = o.daftarBiaya
+      .map((d) => `<option value="${escapeHtml(d.keterangan)}"></option>`)
+      .join("");
     $("#bm-outlet").innerHTML = '<option value="">— pilih —</option>' + o.outlets.map((s) => `<option>${escapeHtml(s)}</option>`).join("");
     $("#bm-status").innerHTML = o.status.map((s) => `<option${s === "BELUM INPUT" ? " selected" : ""}>${escapeHtml(s)}</option>`).join("");
     $("#bm-sumber").innerHTML = '<option value="">— pilih —</option>' + o.sumberDana.map((s) => `<option>${escapeHtml(s)}</option>`).join("");
@@ -531,25 +531,36 @@ async function ensureManualBiaya() {
   if (dt && !dt.value) dt.value = new Date().toISOString().slice(0, 10);
 }
 
-$("#bm-keterangan").addEventListener("change", (e) => {
-  const o = OPTIONS || {};
-  const found = (o.daftarBiaya || []).find((d) => d.keterangan === e.target.value);
+// Cari entri DAFTAR BIAYA yang cocok dengan teks (samakan tanpa peduli besar/kecil & spasi).
+function bmFindKeterangan(text) {
+  const t = String(text || "").trim().toLowerCase();
+  if (!t) return null;
+  return (OPTIONS && OPTIONS.daftarBiaya ? OPTIONS.daftarBiaya : []).find((d) => d.keterangan.trim().toLowerCase() === t) || null;
+}
+function bmUpdateKeterangan() {
+  const found = bmFindKeterangan($("#bm-keterangan").value);
   $("#bm-subjek-note").innerHTML = found && found.subjek ? `Subjek Biaya (otomatis): <b>${escapeHtml(found.subjek)}</b>` : "";
-  const rec = (o.outletRecommendations || {})[String(e.target.value).trim().toLowerCase()];
-  if (rec && !$("#bm-outlet").value) $("#bm-outlet").value = rec;
-});
+  if (found) {
+    const rec = (OPTIONS.outletRecommendations || {})[found.keterangan.trim().toLowerCase()];
+    if (rec && !$("#bm-outlet").value) $("#bm-outlet").value = rec;
+  }
+}
+$("#bm-keterangan").addEventListener("input", bmUpdateKeterangan);
+$("#bm-keterangan").addEventListener("change", bmUpdateKeterangan);
 
 $("#btn-bm-submit").addEventListener("click", async () => {
   const out = $("#bm-result");
+  const ket = bmFindKeterangan($("#bm-keterangan").value);
+  if (!$("#bm-keterangan").value.trim()) return showLog(out, "✘ Ketik Keterangan lalu pilih dari daftar.", true);
+  if (!ket) return showLog(out, "✘ Keterangan tidak ada di daftar. Ketik untuk mencari lalu pilih dari daftar yang muncul.", true);
   const row = {
-    keterangan: $("#bm-keterangan").value,
+    keterangan: ket.keterangan, // pakai teks persis dari daftar
     nominal: $("#bm-nominal").value,
     tanggal: $("#bm-tanggal").value,
     outlet: $("#bm-outlet").value,
     status: $("#bm-status").value,
     sumberDana: $("#bm-sumber").value,
   };
-  if (!row.keterangan) return showLog(out, "✘ Pilih Keterangan.", true);
   if (!row.nominal || Number(row.nominal) <= 0) return showLog(out, "✘ Nominal tidak valid.", true);
   if (!row.tanggal) return showLog(out, "✘ Pilih tanggal.", true);
   if (!row.outlet) return showLog(out, "✘ Pilih outlet.", true);
