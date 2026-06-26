@@ -281,6 +281,32 @@ async function runDailySync(opts = {}) {
   steps.push(`Sheet KAS: B2=Rp${maumbi.laporNominal.toLocaleString("id-ID")}, B3=Rp${perkamil.laporNominal.toLocaleString("id-ID")}, C2:C3 & C6:C9 = ${tanggal}.`);
   steps.push(`Kas bank: ${bankLabels.map((b, i) => `${b}=Rp${bankNominals[i].toLocaleString("id-ID")}`).join(", ")}.`);
 
+  // 3a) Tulis nilai kas aplikasi + deposit LANGSUNG ke KAS!B4/B5 (sheet KAS) supaya
+  //     langsung terupdate tanpa menunggu IMPORTRANGE. Ini mengganti formula
+  //     IMPORTRANGE di KAS!B4/B5 dengan angka. Ditulis TERPISAH & toleran: bila
+  //     gagal (mis. diproteksi), sinkronisasi lain tetap berhasil.
+  const kasAplWrites = [];
+  if (b4Final !== null) kasAplWrites.push({ range: `'${KAS_SHEET}'!B4`, values: [[b4Final]] });
+  if (b5Final !== null) kasAplWrites.push({ range: `'${KAS_SHEET}'!B5`, values: [[b5Final]] });
+  if (kasAplWrites.length) {
+    try {
+      await batchWrite(biayaKasId, kasAplWrites);
+      steps.push(
+        "Sheet KAS B4/B5 (kas aplikasi + deposit) ditulis langsung: " +
+          [b4Final !== null ? `B4=Rp${b4Final.toLocaleString("id-ID")}` : "", b5Final !== null ? `B5=Rp${b5Final.toLocaleString("id-ID")}` : ""]
+            .filter(Boolean)
+            .join(", ") +
+          "."
+      );
+    } catch (err) {
+      const isProtected = /protected/i.test(err.message || "");
+      steps.push(
+        "⚠ Gagal menulis KAS!B4/B5" +
+          (isProtected ? " — sel DIPROTEKSI di sheet KAS. Izinkan service account mengeditnya, lalu jalankan lagi." : `: ${err.message}`)
+      );
+    }
+  }
+
   // 3b) Baris "KAS TUNAI APLIKASI" di REKAP (kolom hari ini) = nilai yang SAMA
   //     dengan B4/B5 INPUT LAPORAN HARIAN (kas aplikasi + deposit), dihitung di
   //     2c. Ini menghindari ketergantungan pada KAS!B4/B5 (yang formulanya telat
