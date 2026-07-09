@@ -273,12 +273,13 @@ async function runDailySync(opts = {}) {
   }
 
   // 3) Tulis ke sheet KAS (inti): nominal kas tunai outlet (B2/B3) + tanggal
-  //    (C2/C3) + tanggal kas bank (C6:C9).
+  //    (C2/C3) + tanggal kas aplikasi (C4/C5) + tanggal kas bank (C6:C9).
   await batchWrite(biayaKasId, [
     { range: `'${KAS_SHEET}'!B2:C3`, values: [[maumbi.laporNominal, tanggal], [perkamil.laporNominal, tanggal]] },
+    { range: `'${KAS_SHEET}'!C4:C5`, values: [[tanggal], [tanggal]] },
     { range: `'${KAS_SHEET}'!C6:C9`, values: [[tanggal], [tanggal], [tanggal], [tanggal]] },
   ]);
-  steps.push(`Sheet KAS: B2=Rp${maumbi.laporNominal.toLocaleString("id-ID")}, B3=Rp${perkamil.laporNominal.toLocaleString("id-ID")}, C2:C3 & C6:C9 = ${tanggal}.`);
+  steps.push(`Sheet KAS: B2=Rp${maumbi.laporNominal.toLocaleString("id-ID")}, B3=Rp${perkamil.laporNominal.toLocaleString("id-ID")}, C2:C9 = ${tanggal}.`);
   steps.push(`Kas bank: ${bankLabels.map((b, i) => `${b}=Rp${bankNominals[i].toLocaleString("id-ID")}`).join(", ")}.`);
 
   // 3a) Tulis nilai kas aplikasi + deposit LANGSUNG ke KAS!B4/B5 (sheet KAS) supaya
