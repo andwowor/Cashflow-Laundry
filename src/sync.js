@@ -280,22 +280,9 @@ async function runDailySync(opts = {}) {
   ]);
   steps.push(`Sheet KAS: B2=Rp${maumbi.laporNominal.toLocaleString("id-ID")}, B3=Rp${perkamil.laporNominal.toLocaleString("id-ID")}, C2:C3 & C6:C9 = ${tanggal}.`);
   steps.push(`Kas bank: ${bankLabels.map((b, i) => `${b}=Rp${bankNominals[i].toLocaleString("id-ID")}`).join(", ")}.`);
-
-  // 3.1) Tanggal kas aplikasi (C4/C5) ditulis TERPISAH & toleran. Baris kas
-  //      aplikasi kadang diproteksi/berisi formula, jadi bila gagal jangan sampai
-  //      menggagalkan seluruh update — sinkronisasi lain tetap jalan.
-  try {
-    await batchWrite(biayaKasId, [{ range: `'${KAS_SHEET}'!C4:C5`, values: [[tanggal], [tanggal]] }]);
-    steps.push(`Sheet KAS: C4:C5 (tanggal kas aplikasi) = ${tanggal}.`);
-  } catch (err) {
-    const isProtected = /protected/i.test(err.message || "");
-    steps.push(
-      "⚠ Gagal menulis tanggal KAS!C4:C5" +
-        (isProtected
-          ? " — sel DIPROTEKSI di sheet KAS. Hapus proteksi pada C4:C5 (atau izinkan service account mengeditnya), lalu jalankan lagi. Sinkronisasi lain tetap berhasil."
-          : `: ${err.message}`)
-    );
-  }
+  // Catatan: KAS!C4:C5 (tanggal kas aplikasi) TIDAK ditulis program — sel itu
+  // memakai formula IMPORTRANGE dari INPUT LAPORAN HARIAN C4:C5 (yang sudah diisi
+  // tanggal hari ini di langkah 4). Menulis ke C4:C5 akan menimpa formula tsb.
 
   // 3a) Tulis nilai kas aplikasi + deposit LANGSUNG ke KAS!B4/B5 (sheet KAS) supaya
   //     langsung terupdate tanpa menunggu IMPORTRANGE. Ini mengganti formula
