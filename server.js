@@ -22,6 +22,7 @@ const deposit = require("./src/deposit");
 const aliran = require("./src/aliran");
 const setoran = require("./src/setoran");
 const transaksi = require("./src/transaksi");
+const tunnel = require("./src/tunnel");
 const { MODEL } = require("./src/claude");
 const auth = require("./src/auth");
 
@@ -368,6 +369,23 @@ app.post("/api/monbiaya/koreksi", wrap(async (req, res) => {
 
 app.post("/api/monbiaya/export-setoran", wrap(async (req, res) => {
   res.json(await monbiaya.exportSetoranOwner((req.body || {}).rows || []));
+}));
+
+// ---------- Link online (Cloudflare Tunnel) ----------
+
+// Baca URL tunnel yang sedang aktif dari log pm2 (tanpa efek samping).
+app.get("/api/tunnel", wrap(async (req, res) => {
+  res.json({ ok: true, ...(await tunnel.readStatus()) });
+}));
+
+// Pastikan tunnel menyala lalu kembalikan URL-nya (menyalakan bila perlu).
+// Selalu ok:true agar frontend bisa membaca url/code walau gagal menyalakan.
+app.post("/api/tunnel/start", wrap(async (req, res) => {
+  try {
+    res.json({ ok: true, ...(await tunnel.ensureTunnel()) });
+  } catch (err) {
+    res.json({ ok: true, url: null, running: false, error: err.message, code: err.code || null });
+  }
 }));
 
 // ---------- Start ----------

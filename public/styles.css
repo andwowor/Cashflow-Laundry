@@ -390,3 +390,54 @@ input[type="file"] { font-family: var(--font); font-size: 13.5px; }
   .actions .btn-primary, .actions .btn-ghost { flex: 1 1 auto; }
   th, td { padding: 9px 10px; }
 }
+
+/* ===== Link Online (Cloudflare Tunnel) ===== */
+.tunnel-box {
+  border: 1px solid var(--teal-soft);
+  border-radius: var(--radius-sm);
+  background: var(--teal-soft);
+  padding: 12px 14px;
+}
+.tunnel-url-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 6px 0;
+}
+.tunnel-url {
+  flex: 1 1 260px;
+  min-width: 0;
+  word-break: break-all;
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--teal-dark);
+  background: var(--bg);
+  border: 1px dashed var(--teal-bright);
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s, border-color 0.15s;
+}
+.tunnel-url:hover { background: #fff; border-color: var(--teal); }
+.tunnel-url.copied {
+  color: #14663a;
+  border-style: solid;
+  border-color: #35a06a;
+  background: #e6f6ec;
+  text-align: center;
+}
+.tunnel-open { flex: 0 0 auto; text-decoration: none; }
+.code-block {
+  background: var(--teal-deep);
+  color: #eaf6f8;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-top: 8px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  overflow-x: auto;
+  white-space: pre;
+}
+details.hint summary { cursor: pointer; font-weight: 700; color: var(--teal-dark); }

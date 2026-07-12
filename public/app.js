@@ -1958,6 +1958,79 @@ $("#btn-rekap-blocks").addEventListener("click", async () => {
   }
 });
 
+// ================= Link Online (Cloudflare Tunnel) =================
+function tunnelManualHint() {
+  return (
+    `<details class="hint" style="margin-top:10px">` +
+    `<summary>Cara menyalakan manual lewat terminal</summary>` +
+    `<pre class="code-block">cd ~/Cashflow-Laundry\n` +
+    `pm2 start server.js --name laundry\n` +
+    `pm2 start cloudflared --name tunnel -- tunnel --url http://localhost:3000\n` +
+    `pm2 save\n` +
+    `pm2 logs tunnel --nostream --lines 100 | grep trycloudflare</pre></details>`
+  );
+}
+
+async function tunnelCopy(link, url) {
+  try {
+    await copyTextToClipboard(url);
+    link.classList.add("copied");
+    link.textContent = "✓ Tersalin!";
+    setTimeout(() => {
+      link.classList.remove("copied");
+      link.textContent = url;
+    }, 1400);
+  } catch (e) {
+    link.textContent = "Gagal menyalin — salin manual";
+    setTimeout(() => (link.textContent = url), 1600);
+  }
+}
+
+function renderTunnelUrl(out, url, started) {
+  out.innerHTML =
+    `<div class="tunnel-box">` +
+    `<p class="hint">${started ? "✔ Tunnel dinyalakan." : "✔ Tunnel sedang online."} ` +
+    `Klik alamat di bawah untuk menyalin.</p>` +
+    `<div class="tunnel-url-row">` +
+    `<a class="tunnel-url" href="#" title="Klik untuk menyalin">${escapeHtml(url)}</a>` +
+    `<a class="btn-ghost tunnel-open" href="${escapeHtml(url)}" target="_blank" rel="noopener">Buka ↗</a>` +
+    `</div>` +
+    `<p class="hint">Alamat ini berubah tiap kali tunnel dinyalakan ulang — selalu pakai yang terbaru.</p>` +
+    `</div>`;
+  const link = out.querySelector(".tunnel-url");
+  link.addEventListener("click", (e) => {
+    e.preventDefault();
+    tunnelCopy(link, url);
+  });
+}
+
+$("#btn-tunnel").addEventListener("click", async () => {
+  const out = $("#tunnel-result");
+  const btn = $("#btn-tunnel");
+  btn.disabled = true;
+  out.innerHTML = `<p class="loading">Mengecek tunnel…</p>`;
+  try {
+    let r = await api("/api/tunnel");
+    if (!(r.running && r.url)) {
+      out.innerHTML = `<p class="loading">Tunnel belum aktif — menyalakan… (±10–25 detik, mohon tunggu)</p>`;
+      r = await api("/api/tunnel/start", { method: "POST" });
+    }
+    if (r.url) {
+      renderTunnelUrl(out, r.url, !!r.started);
+    } else if (r.code === "NO_PM2") {
+      out.innerHTML = `<p class="error">${escapeHtml(r.error || "pm2 tidak ditemukan.")}</p>` + tunnelManualHint();
+    } else {
+      out.innerHTML =
+        `<p class="error">${escapeHtml(r.error || "Tunnel belum menghasilkan URL. Coba lagi sebentar.")}</p>` +
+        tunnelManualHint();
+    }
+  } catch (e) {
+    out.innerHTML = `<p class="error">${escapeHtml(e.message)}</p>` + tunnelManualHint();
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 // ================= Aliran Kas per Outlet =================
 let AL = null;
 let AL_LOADED = false;
