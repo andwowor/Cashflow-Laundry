@@ -128,8 +128,14 @@ async function list() {
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i] || [];
     if (!norm(r[COL.keterangan])) continue; // baris kosong
+    // Baris hanya boleh disembunyikan bila SUDAH "hijau penuh" (SUDAH INPUT DAN
+    // SUDAH VERIFIKASI OWNER). Baris yang belum input / belum verifikasi SELALU
+    // tampil — walau NOMOR-nya kebetulan sama dengan baris lama yang historis/
+    // ter-export (NOMOR kolom A tidak unik & bisa berulang antar bulan).
+    const hijauPenuh =
+      norm(r[COL.status]) === "SUDAH INPUT" && norm(r[COL.verifikasi]) === "SUDAH VERIFIKASI OWNER";
     const k = rowKey(r);
-    if (k && state.keys.has(k)) continue; // sudah di-export / historis -> sembunyikan
+    if (hijauPenuh && k && state.keys.has(k)) continue; // sudah di-export / historis -> sembunyikan
     out.push({
       row: i + 1, // nomor baris di sheet
       cells: HEADERS.map((_, c) => (r[c] == null ? "" : String(r[c]))),
