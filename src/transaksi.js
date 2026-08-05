@@ -26,6 +26,26 @@ const START_ROW = 28; // data file ekspor mulai baris 28
 const TARGET_START = 4; // tulis ke sheet tujuan mulai baris 4
 const NCOL = 18; // kolom A..R
 
+/**
+ * Formula kolom S per baris (mengikuti formula yang diterapkan user pada sheet
+ * DAFTAR PELUNASAN). Mengubah isi kolom Q menjadi tanggal "d mmmm":
+ *  - Q kosong  -> ""
+ *  - Q angka (tanggal serial) -> TEXT(Q;"d mmmm"), mis. "16 Agustus"
+ *  - Q teks (mis. "16 Ags 2026") -> angka + nama bulan lengkap via REGEXEXTRACT + SWITCH.
+ * Pemisah argumen ";" & referensi baris (Q<r>) menyesuaikan tiap baris.
+ * Backslash regex ditulis ganda (\\s, \\d, \\S) agar sampai ke sheet sebagai \s \d \S.
+ */
+function sFormulaFor(r) {
+  return (
+    `=IF(Q${r}="";"";IF(ISNUMBER(Q${r});TEXT(Q${r};"d mmmm");` +
+    `IFERROR(REGEXEXTRACT(Q${r};"^\\s*(\\d+)")&" "&` +
+    `SWITCH(REGEXEXTRACT(Q${r};"^\\s*\\d+\\s+(\\S{3})");` +
+    `"Jan";"Januari";"Feb";"Februari";"Mar";"Maret";"Apr";"April";"Mei";"Mei";` +
+    `"Jun";"Juni";"Jul";"Juli";"Ags";"Agustus";"Agu";"Agustus";"Sep";"September";` +
+    `"Okt";"Oktober";"Nov";"November";"Des";"Desember");"")))`
+  );
+}
+
 /** Sheet DAFTAR PELUNASAN bulan berjalan + daftar semua sheet pelunasan. */
 async function resolveSheet() {
   const meta = await getSheetTitles(cfg.BIAYA_KAS_SPREADSHEET_ID);
@@ -119,8 +139,9 @@ async function analyze(buffer) {
 
 /**
  * Tulis data ke sheet DAFTAR PELUNASAN (kolom A:R mulai baris 4, USER_ENTERED agar
- * tanggal/persen/angka diparse seperti tempel manual), isi kolom S=LEFT(Q,6) tiap baris,
- * dan bersihkan sisa baris lama bila data baru lebih pendek.
+ * tanggal/persen/angka diparse seperti tempel manual), isi kolom S (tanggal "d mmmm"
+ * dari kolom Q — lihat sFormulaFor) tiap baris, dan bersihkan sisa baris lama bila
+ * data baru lebih pendek.
  */
 async function submit(buffer, sheetName) {
   const rows = parseBuffer(buffer);
@@ -140,9 +161,10 @@ async function submit(buffer, sheetName) {
   const oldB = await readRange(id, `'${target}'!B${TARGET_START}:B`);
   const oldLast = TARGET_START + oldB.length - 1;
 
-  // Pemisah argumen ";" sesuai locale Indonesia pada spreadsheet (bukan ",").
+  // Formula kolom S per baris (tanggal "d mmmm" dari kolom Q). Pemisah argumen ";"
+  // sesuai locale Indonesia pada spreadsheet (bukan ",").
   const sFormulas = [];
-  for (let r = TARGET_START; r <= endRow; r++) sFormulas.push([`=LEFT(Q${r};6)`]);
+  for (let r = TARGET_START; r <= endRow; r++) sFormulas.push([sFormulaFor(r)]);
 
   await batchWrite(id, [
     { range: `'${target}'!A${TARGET_START}:R${endRow}`, values: rows },
