@@ -381,11 +381,23 @@ async function loadOptions() {
   return OPTIONS;
 }
 
+// Datalist bersama untuk field KETERANGAN di pratinjau (ketik untuk mencari).
+function ensureBiayaKetDatalist() {
+  let dl = document.getElementById("dl-biaya-ket");
+  if (!dl) {
+    dl = document.createElement("datalist");
+    dl.id = "dl-biaya-ket";
+    document.body.appendChild(dl);
+  }
+  const opts = (OPTIONS && OPTIONS.daftarBiaya ? OPTIONS.daftarBiaya : [])
+    .map((d) => `<option value="${escapeHtml(d.keterangan)}"></option>`)
+    .join("");
+  if (dl.innerHTML !== opts) dl.innerHTML = opts;
+  return dl;
+}
+
 function biayaRowHtml(entry) {
   const o = OPTIONS;
-  const ketOpts = o.daftarBiaya
-    .map((d) => `<option value="${d.keterangan}"${d.keterangan === entry.keterangan ? " selected" : ""}>${d.keterangan}</option>`)
-    .join("");
   const sdOpts = ['<option value="">— pilih —</option>']
     .concat(o.sumberDana.map((s) => `<option${s === entry.sumberDana ? " selected" : ""}>${s}</option>`))
     .join("");
@@ -404,7 +416,7 @@ function biayaRowHtml(entry) {
       : "";
   return `
     <td class="subjek">${entry.subjek || ""}</td>
-    <td><select class="f-keterangan"><option value="">— pilih —</option>${ketOpts}</select></td>
+    <td><input type="text" class="f-keterangan" list="dl-biaya-ket" value="${escapeHtml(entry.keterangan || "")}" placeholder="ketik untuk cari…" autocomplete="off"></td>
     <td><input type="number" class="f-nominal" value="${entry.nominal ?? ""}" min="1"></td>
     <td><input type="date" class="f-tanggal" value="${entry.tanggal || ""}"></td>
     <td><select class="f-outlet">${outletOpts}</select></td>
@@ -416,18 +428,23 @@ function biayaRowHtml(entry) {
 }
 
 function addBiayaRow(entry) {
+  ensureBiayaKetDatalist(); // pastikan daftar pilihan KETERANGAN siap sebelum input dirender
   const tbody = $("#biaya-table tbody");
   const tr = document.createElement("tr");
   tr.innerHTML = biayaRowHtml(entry);
   tr.querySelector(".btn-mini").addEventListener("click", () => tr.remove());
-  tr.querySelector(".f-keterangan").addEventListener("change", (ev) => {
-    const found = OPTIONS.daftarBiaya.find((d) => d.keterangan === ev.target.value);
-    tr.querySelector(".subjek").textContent = found ? found.subjek : "";
+  const ketInput = tr.querySelector(".f-keterangan");
+  const syncKet = () => {
+    // Cocokkan teks yang diketik/dipilih dgn daftar (tanpa peduli besar/kecil & spasi).
+    const found = bmFindKeterangan(ketInput.value);
+    tr.querySelector(".subjek").textContent = found && found.subjek ? found.subjek : "";
     // Rekomendasi outlet otomatis (hanya bila outlet masih kosong); aturan dari server.
     const outletSel = tr.querySelector(".f-outlet");
-    const rec = (OPTIONS.outletRecommendations || {})[ev.target.value.trim().toLowerCase()];
+    const rec = found ? (OPTIONS.outletRecommendations || {})[found.keterangan.trim().toLowerCase()] : null;
     if (rec && !outletSel.value) outletSel.value = rec;
-  });
+  };
+  ketInput.addEventListener("input", syncKet);
+  ketInput.addEventListener("change", syncKet);
   const viewLink = tr.querySelector(".view-bukti");
   if (viewLink) {
     viewLink.addEventListener("click", (ev) => {
