@@ -905,6 +905,7 @@ $("#btn-qbank-submit").addEventListener("click", async () => {
 let MONBIAYA = null;
 let MONBIAYA_LOADED = false;
 const MB_SUBJEK_COL = 1; // SUBJEK BIAYA
+const MB_KETERANGAN_COL = 2; // KETERANGAN
 const MB_TANGGAL_COL = 4; // TANGGAL
 const MB_STATUS_COL = 10; // STATUS LAPOR APLIKASI
 const MB_KODE_COL = 11; // KODE TRANSAKSI
@@ -954,7 +955,13 @@ function renderMonBiaya() {
           if (MB_HIDDEN.has(col)) return ""; // kolom disembunyikan
           if (col === MB_SUBJEK_COL) {
             const yellow = c.trim().toLowerCase() === "setoran owner" ? " mb-subjek-yellow" : "";
-            return `<td class="mb-subjek${yellow}">${escapeHtml(c)}</td>`;
+            const copy = c ? " mb-copy" : "";
+            const attr = c ? ` data-copy="${escapeHtml(c)}" title="Klik untuk menyalin"` : "";
+            return `<td class="mb-subjek${yellow}${copy}"${attr}>${escapeHtml(c)}</td>`;
+          }
+          if (col === MB_KETERANGAN_COL) {
+            if (!c) return `<td></td>`;
+            return `<td class="mb-copy" data-copy="${escapeHtml(c)}" title="Klik untuk menyalin">${escapeHtml(c)}</td>`;
           }
           if (col === MB_TANGGAL_COL) {
             return `<td class="mb-tgl${ready ? "" : " mb-tgl-red"}">${escapeHtml(c)}</td>`;
@@ -1048,14 +1055,17 @@ async function mbCycleStatus(btn, field) {
 }
 
 async function mbCopy(el) {
-  const text = el.dataset.kode || "";
+  // Sel KODE memakai data-kode; sel SUBJEK/KETERANGAN memakai data-copy.
+  const isKode = el.dataset.kode != null;
+  const text = el.dataset.copy != null ? el.dataset.copy : el.dataset.kode || "";
+  const label = isKode ? "Kode" : "Teks";
   try {
     await copyTextToClipboard(text);
     el.classList.add("copied");
     setTimeout(() => el.classList.remove("copied"), 900);
-    showLog($("#monbiaya-result"), `✔ Kode disalin: "${text}"`);
+    showLog($("#monbiaya-result"), `✔ ${label} disalin: "${text}"`);
   } catch {
-    showLog($("#monbiaya-result"), "✘ Gagal menyalin kode.", true);
+    showLog($("#monbiaya-result"), `✘ Gagal menyalin ${label.toLowerCase()}.`, true);
   }
 }
 
@@ -1093,7 +1103,7 @@ $("#monbiaya-table").addEventListener("click", (e) => {
   const t = e.target;
   if (t.classList.contains("mb-status")) mbCycleStatus(t, "status");
   else if (t.classList.contains("mb-verif")) mbCycleStatus(t, "verifikasi");
-  else if (t.classList.contains("mb-kode")) mbCopy(t);
+  else if (t.classList.contains("mb-kode") || t.classList.contains("mb-copy")) mbCopy(t);
   else if (t.classList.contains("mb-koreksi-save")) {
     const tr = t.closest("tr");
     const inp = tr && tr.querySelector(".mb-koreksi");

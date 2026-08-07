@@ -277,6 +277,10 @@ input[type="file"] { font-family: var(--font); font-size: 13.5px; }
 #monbiaya-grid td.mb-kode { cursor: pointer; color: var(--teal-dark); text-decoration: underline dotted; }
 #monbiaya-grid td.mb-kode:hover { color: var(--teal-bright); }
 #monbiaya-grid td.mb-kode.copied { background: var(--teal-soft); }
+/* Sel SUBJEK & KETERANGAN: klik untuk menyalin teks. */
+#monbiaya-grid td.mb-copy { cursor: pointer; text-decoration: underline dotted; text-decoration-color: var(--teal-bright); text-underline-offset: 2px; }
+#monbiaya-grid td.mb-copy:hover { color: var(--teal-dark); background: var(--teal-soft); }
+#monbiaya-grid td.mb-copy.copied { background: var(--teal-soft); }
 
 /* ===================== Lapor Smartlink ===================== */
 #sl-grid { font-size: 13px; width: auto; min-width: 100%; }
