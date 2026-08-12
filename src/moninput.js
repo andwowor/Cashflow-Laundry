@@ -22,24 +22,40 @@ const HEADERS = [
 ];
 const STATUS_OPTIONS = ["BELUM INPUT", "SUDAH INPUT"]; // kolom F
 
-// State lokal (data/moninput_state.json). Kunci = nomor baris di sheet (sheet
-// ini append-only sehingga nomor baris stabil sebagai identitas).
+// State lokal (data/moninput_state.json), DIPISAH PER SPREADSHEET CASHFLOW.
+// Kunci luar = spreadsheetId, kunci dalam = nomor baris di sheet.
 //  - hidden:      baris yang disembunyikan permanen (lewat centang + konfirmasi).
 //  - keepVisible: baris yang statusnya sudah diubah ke SUDAH INPUT tapi sengaja
 //                 tetap ditampilkan sampai user menyembunyikannya manual.
+//
+// PENTING: spreadsheet CASHFLOW berganti tiap bulan dan penomoran barisnya
+// dimulai ulang. Bila state hanya menyimpan nomor baris (format lama), baris
+// yang disembunyikan bulan lalu akan ikut menyembunyikan baris bernomor sama di
+// bulan baru — mis. baris 101 BELUM INPUT tidak muncul. Karena itu state kini
+// dipisah per spreadsheet, dan state format lama DIABAIKAN (tidak bisa
+// dipastikan miliknya bulan yang mana).
 const STATE_FILE = path.join(cfg.DATA_DIR, "moninput_state.json");
-function loadState() {
-  const d = cfg.readJsonFile(STATE_FILE, { hidden: [], keepVisible: [] });
+const STATE_VERSION = 2;
+
+function loadBooks() {
+  const d = cfg.readJsonFile(STATE_FILE, {});
+  const ok = d && Number(d.version) >= STATE_VERSION && d.books && typeof d.books === "object";
+  return ok ? d.books : {};
+}
+function loadState(bookId) {
+  const b = loadBooks()[bookId] || {};
   return {
-    hidden: new Set((d.hidden || []).map(Number)),
-    keepVisible: new Set((d.keepVisible || []).map(Number)),
+    hidden: new Set((b.hidden || []).map(Number)),
+    keepVisible: new Set((b.keepVisible || []).map(Number)),
   };
 }
-function saveState(s) {
-  cfg.writeJsonFile(STATE_FILE, {
+function saveState(bookId, s) {
+  const books = loadBooks();
+  books[bookId] = {
     hidden: Array.from(s.hidden),
     keepVisible: Array.from(s.keepVisible),
-  });
+  };
+  cfg.writeJsonFile(STATE_FILE, { version: STATE_VERSION, books });
 }
 
 function norm(v) {
@@ -81,7 +97,7 @@ async function list() {
     readRange(id, `'${SHEET}'!A1:H`, "FORMATTED_VALUE"),
     readRange(id, `'${SHEET}'!A1:H`, "UNFORMATTED_VALUE"),
   ]);
-  const state = loadState();
+  const state = loadState(id);
 
   const out = [];
   for (let i = 1; i < fmt.length; i++) {
@@ -129,10 +145,10 @@ async function setStatus(row, value) {
   await batchWrite(cashflow.id, [{ range: `'${SHEET}'!F${row}`, values: [[value]] }]);
 
   // Baris yang diubah ke SUDAH INPUT tetap ditampilkan sampai disembunyikan manual.
-  const state = loadState();
+  const state = loadState(cashflow.id);
   if (value === "SUDAH INPUT") state.keepVisible.add(row);
   else state.keepVisible.delete(row);
-  saveState(state);
+  saveState(cashflow.id, state);
   return { ok: true, row, value };
 }
 
@@ -167,8 +183,9 @@ async function saveEdit(row, fields) {
 }
 
 /** Sembunyikan baris dari daftar (centang + konfirmasi). */
-function hide(rows) {
-  const state = loadState();
+async function hide(rows) {
+  const cashflow = await resolveCashflowSpreadsheetId();
+  const state = loadState(cashflow.id);
   const want = (rows || []).map(Number).filter((n) => Number.isInteger(n) && n >= 2);
   let added = 0;
   for (const n of want) {
@@ -176,13 +193,14 @@ function hide(rows) {
     state.hidden.add(n);
     state.keepVisible.delete(n);
   }
-  saveState(state);
+  saveState(cashflow.id, state);
   return { ok: true, hidden: added, rows: want };
 }
 
 /** Munculkan kembali baris yang sebelumnya disembunyikan. */
-function restore(rows) {
-  const state = loadState();
+async function restore(rows) {
+  const cashflow = await resolveCashflowSpreadsheetId();
+  const state = loadState(cashflow.id);
   const want = new Set((rows || []).map(Number));
   let removed = 0;
   for (const n of Array.from(state.hidden)) {
@@ -191,7 +209,7 @@ function restore(rows) {
       removed++;
     }
   }
-  saveState(state);
+  saveState(cashflow.id, state);
   return { ok: true, removed, rows: Array.from(want) };
 }
 

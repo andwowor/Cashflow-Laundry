@@ -289,11 +289,11 @@ app.post("/api/moninput/edit", wrap(async (req, res) => {
 }));
 
 app.post("/api/moninput/hide", wrap(async (req, res) => {
-  res.json(moninput.hide((req.body || {}).rows || []));
+  res.json(await moninput.hide((req.body || {}).rows || []));
 }));
 
 app.post("/api/moninput/unhide", wrap(async (req, res) => {
-  res.json(moninput.restore((req.body || {}).rows || []));
+  res.json(await moninput.restore((req.body || {}).rows || []));
 }));
 
 // ---------- Riwayat biaya per bulan (sheet INPUT PENGGUNAAN BIAYA) ----------
