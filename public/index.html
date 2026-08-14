@@ -131,8 +131,9 @@
       <div class="card">
         <h2>Riwayat Biaya per Bulan</h2>
         <p class="hint">Pilih <b>bulan &amp; tahun</b> untuk melihat seluruh biaya pada sheet
-          <b>INPUT PENGGUNAAN BIAYA</b> bulan tersebut. Saring dengan <b>Subjek Biaya</b> dan/atau
-          <b>Keterangan</b>; <b>total biaya</b> mengikuti hasil saringan.</p>
+          <b>INPUT PENGGUNAAN BIAYA</b> bulan tersebut. Saring dengan <b>Subjek Biaya</b>,
+          <b>Keterangan</b>, <b>Tanggal</b> (satu hari) atau <b>rentang tanggal</b> (Dari–Sampai);
+          <b>total biaya</b> mengikuti hasil saringan.</p>
         <div class="upload-row">
           <label class="hint" style="margin:0">Bulan</label>
           <select id="rb-month" style="max-width:160px"></select>
@@ -145,6 +146,15 @@
           <select id="rb-subjek" style="max-width:260px"></select>
           <label class="hint" style="margin:0">Keterangan</label>
           <select id="rb-ket" style="max-width:260px"></select>
+        </div>
+        <div class="upload-row" id="rb-filters-tgl" style="display:none">
+          <label class="hint" style="margin:0">Tanggal</label>
+          <select id="rb-tanggal" style="max-width:200px"></select>
+          <span class="hint" style="margin:0">atau rentang</span>
+          <label class="hint" style="margin:0">Dari</label>
+          <input type="date" id="rb-dari" style="max-width:170px" />
+          <label class="hint" style="margin:0">Sampai</label>
+          <input type="date" id="rb-sampai" style="max-width:170px" />
           <button id="btn-rb-reset" class="btn-ghost">↺ Reset filter</button>
         </div>
         <div id="rb-total" class="last-sync hidden"></div>

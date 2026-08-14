@@ -1566,16 +1566,55 @@ function rbInitSelectors() {
   }
 }
 
+// Kunci tanggal = angka yyyymmdd (dipakai backend untuk urut & filter).
+function rbIsoToKey(iso) {
+  const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? Number(`${m[1]}${m[2]}${m[3]}`) : 0;
+}
+function rbKeyToIso(key) {
+  const s = String(key);
+  return s.length === 8 ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}` : "";
+}
+function rbKeyLabel(key) {
+  const s = String(key);
+  if (s.length !== 8) return "";
+  const mo = Number(s.slice(4, 6));
+  return `${Number(s.slice(6, 8))} ${RB_MONTHS[mo - 1] || mo} ${s.slice(0, 4)}`;
+}
+
 function rbRender() {
   if (!RB) return;
   const fs = $("#rb-subjek").value;
   const fk = $("#rb-ket").value;
-  const rows = RB.rows.filter((r) => (!fs || r.subjek === fs) && (!fk || r.keterangan === fk));
+  const satu = Number($("#rb-tanggal").value) || 0; // filter 1 tanggal
+  let lo = rbIsoToKey($("#rb-dari").value);
+  let hi = rbIsoToKey($("#rb-sampai").value);
+  if (lo && hi && lo > hi) [lo, hi] = [hi, lo]; // toleran bila Dari/Sampai terbalik
+
+  const rows = RB.rows.filter((r) => {
+    if (fs && r.subjek !== fs) return false;
+    if (fk && r.keterangan !== fk) return false;
+    // k = 0 berarti tanggal tak terbaca → baris itu dikecualikan bila filter tanggal aktif.
+    const k = Number(r.tglKey) > 0 ? Number(r.tglKey) : 0;
+    if (satu) return k === satu;
+    if (lo && (!k || k < lo)) return false;
+    if (hi && (!k || k > hi)) return false;
+    return true;
+  });
   const total = rows.reduce((s, r) => s + (Number(r.nominal) || 0), 0);
+
+  let tglDesc = "";
+  if (satu) tglDesc = ` &nbsp;·&nbsp; tanggal: <b>${escapeHtml(rbKeyLabel(satu))}</b>`;
+  else if (lo || hi) {
+    tglDesc =
+      ` &nbsp;·&nbsp; rentang: <b>${escapeHtml(lo ? rbKeyLabel(lo) : "awal bulan")} – ` +
+      `${escapeHtml(hi ? rbKeyLabel(hi) : "akhir bulan")}</b>`;
+  }
 
   $("#rb-total").classList.remove("hidden");
   $("#rb-total").innerHTML =
     `Total biaya (${rows.length} baris): <b>${fmtRp(total)}</b>` +
+    tglDesc +
     (RB.spreadsheetTitle ? ` &nbsp;·&nbsp; sumber: ${escapeHtml(RB.spreadsheetTitle)}` : "");
 
   const el = $("#rb-table");
@@ -1609,10 +1648,27 @@ async function rbLoad() {
       .join("");
     $("#rb-subjek").innerHTML = subjOpts;
     $("#rb-ket").innerHTML = ketOpts;
+
+    // Filter tanggal: dropdown 1 tanggal + batas rentang, dari tanggal yang ada di data.
+    const dk = RB.dateKeys || [];
+    $("#rb-tanggal").innerHTML = ['<option value="">— semua tanggal —</option>']
+      .concat(dk.map((k) => `<option value="${k}">${escapeHtml(rbKeyLabel(k))}</option>`))
+      .join("");
+    const dari = $("#rb-dari");
+    const sampai = $("#rb-sampai");
+    dari.value = "";
+    sampai.value = "";
+    const minIso = dk.length ? rbKeyToIso(dk[0]) : "";
+    const maxIso = dk.length ? rbKeyToIso(dk[dk.length - 1]) : "";
+    dari.min = sampai.min = minIso;
+    dari.max = sampai.max = maxIso;
+
     $("#rb-filters").style.display = "flex";
+    $("#rb-filters-tgl").style.display = "flex";
     rbRender();
   } catch (e) {
     $("#rb-filters").style.display = "none";
+    $("#rb-filters-tgl").style.display = "none";
     $("#rb-total").classList.add("hidden");
     el.innerHTML = "";
     showLog($("#rb-result"), "✘ " + e.message, true);
@@ -1633,9 +1689,29 @@ function rbOpen() {
 $("#btn-rb-load").addEventListener("click", rbLoad);
 $("#rb-subjek").addEventListener("change", rbRender);
 $("#rb-ket").addEventListener("change", rbRender);
+
+// Filter tanggal & rentang saling meniadakan agar tidak membingungkan:
+// memilih 1 tanggal mengosongkan rentang, dan sebaliknya.
+$("#rb-tanggal").addEventListener("change", () => {
+  if ($("#rb-tanggal").value) {
+    $("#rb-dari").value = "";
+    $("#rb-sampai").value = "";
+  }
+  rbRender();
+});
+const rbRangeChanged = () => {
+  if ($("#rb-dari").value || $("#rb-sampai").value) $("#rb-tanggal").value = "";
+  rbRender();
+};
+$("#rb-dari").addEventListener("change", rbRangeChanged);
+$("#rb-sampai").addEventListener("change", rbRangeChanged);
+
 $("#btn-rb-reset").addEventListener("click", () => {
   $("#rb-subjek").value = "";
   $("#rb-ket").value = "";
+  $("#rb-tanggal").value = "";
+  $("#rb-dari").value = "";
+  $("#rb-sampai").value = "";
   rbRender();
 });
 

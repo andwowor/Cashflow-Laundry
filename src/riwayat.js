@@ -102,6 +102,7 @@ async function list(year, month) {
   const rows = [];
   const subjekSet = new Set();
   const ketSet = new Set();
+  const dateSet = new Set(); // kunci tanggal (yyyymmdd) yang benar-benar ada di data
   let total = 0;
   for (let i = 1; i < fmt.length; i++) {
     const fr = fmt[i] || [];
@@ -112,24 +113,26 @@ async function list(year, month) {
     const rawNom = rr[COL.nominal];
     const nominal =
       typeof rawNom === "number" ? rawNom : Number(String(rawNom).replace(/[^\d.-]/g, "")) || 0;
+    // tglKey (yyyymmdd) dipakai untuk mengurutkan DAN menyaring per tanggal/rentang.
+    const tglKey = dateSortKey(rr[COL.tanggal], fr[COL.tanggal]);
     rows.push({
       cells: HEADERS.map((_, c) => (fr[c] == null ? "" : String(fr[c]))),
       subjek,
       keterangan,
       nominal,
-      tglKey: dateSortKey(rr[COL.tanggal], fr[COL.tanggal]), // untuk urut terbaru→terlama
+      tglKey,
       idx: i,
     });
     if (subjek) subjekSet.add(subjek);
     ketSet.add(keterangan);
+    if (tglKey > 0) dateSet.add(tglKey);
     total += nominal;
   }
 
   // Urut dari tanggal terbaru ke terlama; bila tanggal sama, entri terbawah (lebih baru) di atas.
   rows.sort((a, b) => b.tglKey - a.tglKey || b.idx - a.idx);
   rows.forEach((r) => {
-    delete r.tglKey;
-    delete r.idx;
+    delete r.idx; // tglKey DIPERTAHANKAN untuk filter tanggal/rentang di tampilan
   });
 
   const collator = new Intl.Collator("id");
@@ -138,6 +141,8 @@ async function list(year, month) {
     headers: HEADERS,
     subjekOptions: Array.from(subjekSet).sort((a, b) => collator.compare(a, b)),
     keteranganOptions: Array.from(ketSet).sort((a, b) => collator.compare(a, b)),
+    // Tanggal yang tersedia (yyyymmdd), urut menaik — untuk dropdown & batas rentang.
+    dateKeys: Array.from(dateSet).sort((a, b) => a - b),
     total,
     monthLabel: `${cfg.MONTH_NAMES_ID[month - 1]} ${year}`,
     spreadsheetTitle: title,
