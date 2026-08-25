@@ -717,6 +717,50 @@ function renderKasUploads(map) {
   );
 }
 
+// Kumpulan elemen tampilan sementara di tab Input Kas (6 bagian: 4 kartu kas +
+// QRIS + transfer EDC). Dipakai tombol "Muat ulang" untuk mengembalikan tab ke
+// kondisi bersih seperti halaman baru dibuka.
+const kasPreviews = () => $$("#tab-kas .kas-preview, #qris-preview, #qbank-preview");
+const kasFileInputs = () => $$("#tab-kas input[type=file]");
+
+/** Ada pekerjaan yang belum disimpan (pratinjau terbuka / berkas sudah dipilih)? */
+function kasHasPending() {
+  return (
+    kasPreviews().some((el) => !el.classList.contains("hidden")) ||
+    kasFileInputs().some((inp) => inp.files && inp.files.length)
+  );
+}
+
+/**
+ * Muat ulang tab Input Kas: perbarui info "Upload data terakhir" (termasuk tanda
+ * merah bila bukan hari ini) dan bersihkan pratinjau/pesan/berkas di semua bagian
+ * — tanpa perlu me-refresh browser. Bila ada yang belum disimpan, minta konfirmasi.
+ */
+async function kasRefresh() {
+  const btn = $("#btn-kas-refresh");
+  if (kasHasPending() &&
+      !window.confirm("Muat ulang akan mengosongkan pratinjau dan berkas yang belum disimpan di tab Input Kas. Lanjutkan?")) {
+    return;
+  }
+  const prev = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "⟳ Memuat…";
+  try {
+    kasPreviews().forEach((el) => el.classList.add("hidden"));
+    $$("#tab-kas .kas-error, #qris-error, #qbank-error").forEach((el) => el.classList.add("hidden"));
+    $$("#tab-kas .kas-loading, #qris-loading, #qbank-loading").forEach((el) => el.classList.add("hidden"));
+    $$("#tab-kas .kas-result, #qris-result, #qbank-result").forEach((el) => el.classList.add("hidden"));
+    $$("#qris-table tbody, #qbank-table tbody").forEach((tb) => (tb.innerHTML = ""));
+    $("#qbank-summary").innerHTML = "";
+    kasFileInputs().forEach(clearFileInput);
+    await loadStatus(); // sumber info "Upload data terakhir" per bagian
+  } finally {
+    btn.disabled = false;
+    btn.textContent = prev;
+  }
+}
+$("#btn-kas-refresh").addEventListener("click", kasRefresh);
+
 $$(".kas-card").forEach(initKasCard);
 
 // ================= Pendapatan EDC Harian (INPUT QRIS) =================
