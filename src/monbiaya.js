@@ -3,6 +3,7 @@
 const path = require("path");
 const cfg = require("./config");
 const { readRange, batchWrite, resolveCashflowSpreadsheetId } = require("./sheets");
+const receipt = require("./receipt");
 
 const BIAYA_SHEET = "BIAYA";
 const INPUT_SHEET = "INPUT PENGGUNAAN BIAYA";
@@ -79,6 +80,28 @@ function isoToDDMMYYYY(iso) {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
 }
 
+/**
+ * Tanggal sel BIAYA -> "yyyy-mm-dd" (dipakai mencocokkan nama file receipt).
+ * raw = nilai mentah (serial bila sel tanggal), fmt = tampilan ("18 Februari 2026"
+ * atau "18/02/2026"). "" bila tak terbaca.
+ */
+function rowDateISO(raw, fmt) {
+  if (typeof raw === "number" && Number.isFinite(raw)) return serialToISO(raw);
+  const t = norm(fmt);
+  const dmy = t.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})$/);
+  if (dmy) {
+    let [, d, mo, y] = dmy;
+    if (y.length === 2) y = "20" + y;
+    return `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  }
+  const teks = t.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/);
+  if (teks) {
+    const idx = cfg.MONTH_NAMES_ID.indexOf(teks[2].toUpperCase());
+    if (idx >= 0) return `${teks[3]}-${String(idx + 1).padStart(2, "0")}-${String(teks[1]).padStart(2, "0")}`;
+  }
+  return "";
+}
+
 /** Pastikan semua baris sudah "centang hijau" di STATUS LAPOR APLIKASI & VERIFIKASI OWNER. */
 function assertGreenReady(rowsArr) {
   const notReady = [];
@@ -105,7 +128,14 @@ function assertGreenReady(rowsArr) {
  */
 async function list() {
   const id = cfg.BIAYA_KAS_SPREADSHEET_ID;
-  const rows = await readRange(id, `'${BIAYA_SHEET}'!A1:N`, "FORMATTED_VALUE");
+  // Nilai terformat dipakai untuk tampilan; nilai mentah (tanggal serial &
+  // nominal numerik) dipakai agar pencocokan receipt akurat. Indeks receipt
+  // Drive dimuat paralel & toleran — bila gagal, daftar tetap tampil tanpa foto.
+  const [rows, raws, rcIndex] = await Promise.all([
+    readRange(id, `'${BIAYA_SHEET}'!A1:N`, "FORMATTED_VALUE"),
+    readRange(id, `'${BIAYA_SHEET}'!A1:N`, "UNFORMATTED_VALUE"),
+    receipt.loadIndex(),
+  ]);
   const state = loadExported();
 
   // Baseline historis (sekali per versi): baris yang SUDAH VERIFIKASI OWNER dianggap
@@ -136,15 +166,36 @@ async function list() {
       norm(r[COL.status]) === "SUDAH INPUT" && norm(r[COL.verifikasi]) === "SUDAH VERIFIKASI OWNER";
     const k = rowKey(r);
     if (hijauPenuh && k && state.keys.has(k)) continue; // sudah di-export / historis -> sembunyikan
+
+    // Receipt (foto bukti) di Drive: dicocokkan lewat OUTLET + TANGGAL + KETERANGAN + NOMINAL.
+    const rr = raws[i] || [];
+    const rawNom = rr[COL.nominal];
+    const nominal = typeof rawNom === "number" ? rawNom : receipt.parseNominal(r[COL.nominal]);
+    const rc = receipt.findIn(rcIndex, {
+      outlet: norm(r[COL.outlet]),
+      iso: rowDateISO(rr[COL.tanggal], r[COL.tanggal]),
+      keterangan: norm(r[COL.keterangan]),
+      nominal,
+    });
+
     out.push({
       row: i + 1, // nomor baris di sheet
       cells: HEADERS.map((_, c) => (r[c] == null ? "" : String(r[c]))),
       status: norm(r[COL.status]),
       verifikasi: norm(r[COL.verifikasi]),
       kode: norm(r[COL.kode]),
+      receipt: rc ? { id: rc.id, name: rc.name } : null,
     });
   }
-  return { rows: out, headers: HEADERS, statusOptions: STATUS_OPTIONS, verifOptions: VERIF_OPTIONS };
+  return {
+    rows: out,
+    headers: HEADERS,
+    statusOptions: STATUS_OPTIONS,
+    verifOptions: VERIF_OPTIONS,
+    receiptCount: out.filter((r) => r.receipt).length,
+    receiptTotal: rcIndex.count,
+    receiptError: rcIndex.error,
+  };
 }
 
 /** Ubah status (kolom K) atau verifikasi owner (kolom M) langsung di sheet BIAYA. */

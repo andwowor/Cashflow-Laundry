@@ -23,6 +23,7 @@ const aliran = require("./src/aliran");
 const setoran = require("./src/setoran");
 const transaksi = require("./src/transaksi");
 const tunnel = require("./src/tunnel");
+const receipt = require("./src/receipt");
 const { MODEL } = require("./src/claude");
 const auth = require("./src/auth");
 
@@ -252,7 +253,25 @@ app.post("/api/qrisbank/submit", wrap(async (req, res) => {
 // ---------- Monitoring biaya (sheet BIAYA) ----------
 
 app.get("/api/monbiaya/list", wrap(async (req, res) => {
+  // ?refresh=1 -> paksa baca ulang daftar foto receipt dari Drive (lewati cache).
+  if (req.query.refresh) await receipt.loadIndex(true);
   res.json({ ok: true, ...(await monbiaya.list()) });
+}));
+
+// Gambar receipt (foto bukti) dari Drive. HANYA file yang terdaftar di indeks
+// receipt yang boleh dibuka — supaya endpoint ini tidak bisa dipakai mengambil
+// file Drive sembarangan milik service account.
+app.get("/api/receipt/:fileId", wrap(async (req, res) => {
+  const meta = await receipt.getById(req.params.fileId);
+  if (!meta) return res.status(404).json({ ok: false, error: "Receipt tidak ditemukan." });
+  const stream = await receipt.openStream(meta.id);
+  res.setHeader("Content-Type", meta.mimeType || "image/jpeg");
+  res.setHeader("Cache-Control", "private, max-age=300");
+  stream.on("error", () => {
+    if (res.headersSent) res.end();
+    else res.status(502).json({ ok: false, error: "Gagal mengambil foto dari Drive." });
+  });
+  stream.pipe(res);
 }));
 
 app.post("/api/monbiaya/status", wrap(async (req, res) => {

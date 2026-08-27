@@ -274,6 +274,12 @@ input[type="file"] { font-family: var(--font); font-size: 13.5px; }
 .mb-koreksi-save:hover { border-color: var(--teal); }
 #monbiaya-grid td.mb-tgl-red { background: var(--err-soft); color: var(--err); font-weight: 700; }
 #monbiaya-grid td.mb-subjek-yellow { background: var(--gold-soft); font-weight: 700; }
+/* Kolom NOMOR: bisa diklik bila baris punya foto receipt di Drive. */
+#monbiaya-grid td.mb-has-receipt {
+  cursor: pointer; white-space: nowrap; font-weight: 700; color: var(--teal-dark);
+  text-decoration: underline dotted; text-underline-offset: 2px;
+}
+#monbiaya-grid td.mb-has-receipt:hover { color: var(--teal-bright); background: var(--teal-soft); }
 #monbiaya-grid td.mb-kode { cursor: pointer; color: var(--teal-dark); text-decoration: underline dotted; }
 #monbiaya-grid td.mb-kode:hover { color: var(--teal-bright); }
 #monbiaya-grid td.mb-kode.copied { background: var(--teal-soft); }

@@ -355,15 +355,27 @@ function openImageModal(file) {
   $("#img-modal-name").textContent = file.name || "bukti";
   modal.classList.remove("hidden");
 }
+/** Tampilkan gambar dari URL (mis. receipt dari Drive lewat /api/receipt/<id>). */
+function openImageUrlModal(url, name) {
+  const modal = $("#img-modal");
+  const img = $("#img-modal-img");
+  if (img.dataset.url) {
+    URL.revokeObjectURL(img.dataset.url);
+    delete img.dataset.url;
+  }
+  img.src = url;
+  $("#img-modal-name").textContent = name || "receipt";
+  modal.classList.remove("hidden");
+}
 function closeImageModal() {
   const modal = $("#img-modal");
   const img = $("#img-modal-img");
   modal.classList.add("hidden");
   if (img.dataset.url) {
     URL.revokeObjectURL(img.dataset.url);
-    img.removeAttribute("src");
     delete img.dataset.url;
   }
+  img.removeAttribute("src"); // selalu bersihkan agar gambar lama tak sempat terlihat
 }
 $("#img-modal .img-modal-backdrop").addEventListener("click", closeImageModal);
 $("#img-modal .img-modal-close").addEventListener("click", closeImageModal);
@@ -965,6 +977,7 @@ $("#btn-qbank-submit").addEventListener("click", async () => {
 // ================= Monitoring Biaya =================
 let MONBIAYA = null;
 let MONBIAYA_LOADED = false;
+const MB_NOMOR_COL = 0; // NOMOR (bisa diklik bila ada receipt)
 const MB_SUBJEK_COL = 1; // SUBJEK BIAYA
 const MB_KETERANGAN_COL = 2; // KETERANGAN
 const MB_TANGGAL_COL = 4; // TANGGAL
@@ -1014,6 +1027,15 @@ function renderMonBiaya() {
       const tds = r.cells
         .map((c, col) => {
           if (MB_HIDDEN.has(col)) return ""; // kolom disembunyikan
+          if (col === MB_NOMOR_COL) {
+            // Ada foto receipt di Drive -> nomor jadi bisa diklik untuk melihatnya.
+            if (!r.receipt) return `<td class="mb-nomor">${escapeHtml(c)}</td>`;
+            return (
+              `<td class="mb-nomor mb-has-receipt" data-receipt="${escapeHtml(r.receipt.id)}"` +
+              ` data-receipt-name="${escapeHtml(r.receipt.name)}"` +
+              ` title="Klik untuk melihat receipt: ${escapeHtml(r.receipt.name)}">📎 ${escapeHtml(c)}</td>`
+            );
+          }
           if (col === MB_SUBJEK_COL) {
             const yellow = c.trim().toLowerCase() === "setoran owner" ? " mb-subjek-yellow" : "";
             const copy = c ? " mb-copy" : "";
@@ -1066,14 +1088,24 @@ function updateTabBadge(tabName, count) {
   }
 }
 
-async function loadMonBiaya() {
+async function loadMonBiaya(refresh) {
   const el = $("#monbiaya-table");
   el.innerHTML = "Memuat…";
   try {
-    MONBIAYA = await api("/api/monbiaya/list");
+    MONBIAYA = await api("/api/monbiaya/list" + (refresh ? "?refresh=1" : ""));
     MONBIAYA_LOADED = true;
     renderMonBiaya();
     updateTabBadge("monbiaya", (MONBIAYA.rows || []).length);
+    // Folder receipt di Drive tak terbaca -> beri tahu (daftar tetap tampil).
+    if (MONBIAYA.receiptError) {
+      showLog(
+        $("#monbiaya-result"),
+        "⚠ Folder receipt di Google Drive tidak bisa dibaca, jadi nomor tidak bisa diklik: " +
+          MONBIAYA.receiptError +
+          "\nBagikan folder receipt ke email service account (lihat tab Pengaturan) sebagai Viewer.",
+        true
+      );
+    }
   } catch (e) {
     el.innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
   }
@@ -1164,6 +1196,7 @@ $("#monbiaya-table").addEventListener("click", (e) => {
   const t = e.target;
   if (t.classList.contains("mb-status")) mbCycleStatus(t, "status");
   else if (t.classList.contains("mb-verif")) mbCycleStatus(t, "verifikasi");
+  else if (t.classList.contains("mb-has-receipt")) openImageUrlModal(`/api/receipt/${encodeURIComponent(t.dataset.receipt)}`, t.dataset.receiptName);
   else if (t.classList.contains("mb-kode") || t.classList.contains("mb-copy")) mbCopy(t);
   else if (t.classList.contains("mb-koreksi-save")) {
     const tr = t.closest("tr");
@@ -1186,7 +1219,7 @@ $("#monbiaya-table").addEventListener("change", (e) => {
   if (e.target.classList.contains("mb-check") || e.target.id === "mb-checkall") mbUpdateCount();
 });
 
-$("#btn-monbiaya-refresh").addEventListener("click", loadMonBiaya);
+$("#btn-monbiaya-refresh").addEventListener("click", () => loadMonBiaya(true));
 
 // Parse daftar NOMOR: dukung satuan ("35, 802") dan rentang ("769-804"), boleh dicampur.
 function parseNomorList(input) {
