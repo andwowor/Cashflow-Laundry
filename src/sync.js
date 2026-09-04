@@ -273,16 +273,34 @@ async function runDailySync(opts = {}) {
   }
 
   // 3) Tulis ke sheet KAS (inti): nominal kas tunai outlet (B2/B3) + tanggal
-  //    (C2/C3) + tanggal kas bank (C6:C9).
+  //    (C2/C3) + tanggal kas bank (C6:C9). Tanggal kas aplikasi (C4/C5) ditulis
+  //    terpisah di 3.1.
   await batchWrite(biayaKasId, [
     { range: `'${KAS_SHEET}'!B2:C3`, values: [[maumbi.laporNominal, tanggal], [perkamil.laporNominal, tanggal]] },
     { range: `'${KAS_SHEET}'!C6:C9`, values: [[tanggal], [tanggal], [tanggal], [tanggal]] },
   ]);
   steps.push(`Sheet KAS: B2=Rp${maumbi.laporNominal.toLocaleString("id-ID")}, B3=Rp${perkamil.laporNominal.toLocaleString("id-ID")}, C2:C3 & C6:C9 = ${tanggal}.`);
   steps.push(`Kas bank: ${bankLabels.map((b, i) => `${b}=Rp${bankNominals[i].toLocaleString("id-ID")}`).join(", ")}.`);
-  // Catatan: KAS!C4:C5 (tanggal kas aplikasi) TIDAK ditulis program — sel itu
-  // memakai formula IMPORTRANGE dari INPUT LAPORAN HARIAN C4:C5 (yang sudah diisi
-  // tanggal hari ini di langkah 4). Menulis ke C4:C5 akan menimpa formula tsb.
+  // 3.1) Tanggal kas aplikasi (KAS!C4:C5) ditulis LANGSUNG oleh program, sama
+  //      seperti C2/C3 & C6:C9. Sebelumnya sel ini memakai IMPORTRANGE ke
+  //      INPUT LAPORAN HARIAN, tetapi formula itu menunjuk spreadsheet CASHFLOW
+  //      bulan TERTENTU — begitu ganti bulan, tanggalnya membeku di bulan lama
+  //      (mis. tetap "31 Agustus" padahal sudah September). Ditulis langsung =
+  //      selalu ikut bulan berjalan, tanpa jeda IMPORTRANGE.
+  //      Blok TERPISAH & toleran: bila gagal (mis. sel diproteksi), sinkronisasi
+  //      lain tetap berhasil.
+  try {
+    await batchWrite(biayaKasId, [{ range: `'${KAS_SHEET}'!C4:C5`, values: [[tanggal], [tanggal]] }]);
+    steps.push(`Sheet KAS: C4:C5 (tanggal kas aplikasi) = ${tanggal}.`);
+  } catch (err) {
+    const isProtected = /protected/i.test(err.message || "");
+    steps.push(
+      "⚠ Gagal menulis tanggal KAS!C4:C5" +
+        (isProtected
+          ? " — sel DIPROTEKSI di sheet KAS. Hapus proteksi pada C4:C5 (atau izinkan service account mengeditnya), lalu jalankan lagi. Sinkronisasi lain tetap berhasil."
+          : `: ${err.message}`)
+    );
+  }
 
   // 3a) Tulis nilai kas aplikasi + deposit LANGSUNG ke KAS!B4/B5 (sheet KAS) supaya
   //     langsung terupdate tanpa menunggu IMPORTRANGE. Ini mengganti formula
