@@ -67,6 +67,94 @@ const METRICS = [
 ];
 
 const OUTLETS = ["MAUMBI", "PERKAMIL"];
+
+// Sheet isian harian (respons Google Form) — sumber "Nama Bank Transfer Biaya
+// Antar Jemput" yang ditampilkan saat nilai Pendapatan Antar Jemput Transfer
+// diklik. Kolom dicari lewat NAMA HEADER (tahan bila urutan kolom bergeser),
+// dengan cadangan ke posisi kolom yang diketahui (P/C/B).
+const LKH_FALLBACK = { bank: 15, tanggal: 2, outlet: 1 }; // P, C, B (0-based)
+
+/** Indeks kolom pertama yang header-nya memuat SEMUA kata kunci. -1 bila tak ada. */
+function findCol(header, ...needles) {
+  for (let c = 0; c < header.length; c++) {
+    const h = up(header[c]).replace(/\s+/g, " ");
+    if (h && needles.every((n) => h.includes(n))) return c;
+  }
+  return -1;
+}
+
+/** Nilai tanggal (serial / teks beragam format) -> {y, m, d}. null bila tak terbaca. */
+function parseDateParts(raw) {
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    const ms = Math.floor(raw + 1e-9) * 86400000 + Date.UTC(1899, 11, 30);
+    const dt = new Date(ms);
+    return { y: dt.getUTCFullYear(), m: dt.getUTCMonth() + 1, d: dt.getUTCDate() };
+  }
+  const t = norm(raw);
+  let m = t.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})(?:[\s,].*)?$/); // 15/06/2026
+  if (m) {
+    let y = m[3];
+    if (y.length === 2) y = "20" + y;
+    return { y: Number(y), m: Number(m[2]), d: Number(m[1]) };
+  }
+  m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[\sT].*)?$/); // 2026-06-15
+  if (m) return { y: Number(m[1]), m: Number(m[2]), d: Number(m[3]) };
+  m = t.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})(?:[\s,].*)?$/); // 15 Juni 2026
+  if (m) {
+    const idx = cfg.MONTH_NAMES_ID.indexOf(m[2].toUpperCase());
+    if (idx >= 0) return { y: Number(m[3]), m: idx + 1, d: Number(m[1]) };
+  }
+  return null;
+}
+
+/** Judul sheet LAPORAN KAS HARIAN (toleran variasi penamaan). null bila tak ada. */
+async function resolveLkhSheet() {
+  const meta = await getSheetTitles(cfg.BIAYA_KAS_SPREADSHEET_ID);
+  return (
+    meta.sheets.find((t) => up(t).replace(/\s+/g, " ") === "LAPORAN KAS HARIAN") ||
+    meta.sheets.find((t) => /LAPORAN\s+KAS\s+HARIAN/i.test(t)) ||
+    null
+  );
+}
+
+/**
+ * Peta tanggal -> nama bank transfer antar jemput untuk satu outlet & bulan.
+ * TOLERAN: bila sheet/kolomnya tak ada atau gagal dibaca, kembalikan peta kosong
+ * + pesan error — menu Aliran Kas tetap tampil seperti biasa.
+ */
+async function loadAjTrfBanks(outlet, year, month) {
+  try {
+    const sheet = await resolveLkhSheet();
+    if (!sheet) return { banks: {}, error: 'Sheet "LAPORAN KAS HARIAN" tidak ditemukan di BIAYA & KAS LAUNDRY.' };
+    const rows = await readRange(cfg.BIAYA_KAS_SPREADSHEET_ID, `'${sheet}'!A1:Z`, "UNFORMATTED_VALUE");
+    const header = rows[0] || [];
+
+    let cBank = findCol(header, "NAMA BANK");
+    if (cBank < 0) cBank = findCol(header, "BANK", "ANTAR JEMPUT");
+    if (cBank < 0) cBank = LKH_FALLBACK.bank;
+    let cTgl = findCol(header, "TANGGAL");
+    if (cTgl < 0) cTgl = LKH_FALLBACK.tanggal;
+    let cOut = findCol(header, "OUTLET");
+    if (cOut < 0) cOut = LKH_FALLBACK.outlet;
+
+    const want = up(outlet);
+    const banks = {};
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i] || [];
+      const bank = norm(r[cBank]);
+      if (!bank || bank === "-") continue;
+      if (up(r[cOut]) !== want) continue;
+      const p = parseDateParts(r[cTgl]);
+      if (!p || p.y !== year || p.m !== month) continue;
+      const cur = banks[p.d];
+      if (!cur) banks[p.d] = bank;
+      else if (!cur.split(", ").includes(bank)) banks[p.d] = `${cur}, ${bank}`; // >1 setoran sehari
+    }
+    return { banks, sheet };
+  } catch (err) {
+    return { banks: {}, error: err.message || String(err) };
+  }
+}
 const MIN_YEAR = 2026;
 const MIN_MONTH = 3; // Maret 2026
 
@@ -130,7 +218,11 @@ function realizedDays(dayCol, year, month) {
 
 /** Aliran kas satu outlet untuk (tahun, bulan) + catatan "Penyebab Selisih & Konklusi". */
 async function list(outlet, year, month) {
-  const blk = await loadBlock(outlet, year, month);
+  // Nama bank antar jemput dimuat paralel & toleran (tak menggagalkan menu).
+  const [blk, aj] = await Promise.all([
+    loadBlock(outlet, year, month),
+    loadAjTrfBanks(outlet, year, month),
+  ]);
   const { rows, headerIdx, blockEnd, dayCol } = blk;
 
   // Cocokkan metrik secara berurutan (forward pass) di dalam blok.
@@ -171,6 +263,9 @@ async function list(outlet, year, month) {
     days,
     metrics: outMetrics,
     notes,
+    // tanggal -> nama bank (untuk baris Pendapatan Antar Jemput Transfer)
+    ajTrfBanks: aj.banks,
+    ajTrfError: aj.error || null,
   };
 }
 

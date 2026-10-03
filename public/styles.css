@@ -451,3 +451,23 @@ input[type="file"] { font-family: var(--font); font-size: 13.5px; }
   white-space: pre;
 }
 details.hint summary { cursor: pointer; font-weight: 700; color: var(--teal-dark); }
+
+/* Aliran Kas — nilai "Pendapatan Antar Jemput Transfer" bisa diklik
+   untuk memunculkan nama bank (sumber: sheet LAPORAN KAS HARIAN). */
+#al-grid td.al-ajtrf {
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-decoration-color: var(--teal-bright);
+  text-underline-offset: 2px;
+}
+#al-grid td.al-ajtrf:hover { background: var(--teal-soft); }
+#al-grid td.al-ajtrf .al-bank {
+  display: block;
+  margin-top: 3px;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--teal-dark);
+  text-decoration: none;
+  white-space: normal;
+}

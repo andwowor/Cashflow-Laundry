@@ -2255,12 +2255,24 @@ function alRenderTable() {
 
   const head =
     `<th class="al-metric">TANGGAL</th>` + days.map((d) => `<th class="num">${d}</th>`).join("");
+  const banks = AL.ajTrfBanks || {};
   const body = AL.metrics
     .map((m) => {
       const cls = m.highlight ? ' class="al-bold"' : "";
       const tds = dayIdx
-        .map((i) => {
+        .map((i, j) => {
           const v = m.values[i];
+          // Pendapatan Antar Jemput Transfer: bila ada nama bank untuk tanggal
+          // itu, nilainya bisa diklik untuk menampilkan/menyembunyikan banknya.
+          if (m.key === "aj_trf") {
+            const bank = banks[days[j]];
+            if (bank) {
+              return (
+                `<td class="num al-ajtrf" title="Klik untuk melihat nama bank">` +
+                `${alFmt(v)}<span class="al-bank hidden">${escapeHtml(bank)}</span></td>`
+              );
+            }
+          }
           if (m.highlight) {
             const n = Number(v);
             let style = "";
@@ -2331,6 +2343,13 @@ function alOpen() {
 
 $("#btn-al-load").addEventListener("click", alLoad);
 $("#al-day").addEventListener("change", alRenderTable);
+// Klik nilai Pendapatan Antar Jemput Transfer -> tampilkan/sembunyikan nama bank.
+$("#al-table").addEventListener("click", (e) => {
+  const td = e.target.closest && e.target.closest("td.al-ajtrf");
+  if (!td) return;
+  const span = td.querySelector(".al-bank");
+  if (span) span.classList.toggle("hidden");
+});
 $("#al-table").addEventListener("input", (e) => {
   if (e.target.classList.contains("al-note")) alAutoGrow(e.target);
 });
