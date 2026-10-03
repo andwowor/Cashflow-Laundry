@@ -143,7 +143,9 @@ async function loadAjTrfBanks(outlet, year, month) {
       const r = rows[i] || [];
       const bank = norm(r[cBank]);
       if (!bank || bank === "-") continue;
-      if (up(r[cOut]) !== want) continue;
+      // Kolom Outlet di sheet ini berisi nama panjang ("Co Clean Laundry Maumbi"),
+      // bukan kode pendek "MAUMBI" — cocokkan sebagai bagian teks, bukan sama persis.
+      if (!up(r[cOut]).includes(want)) continue;
       const p = parseDateParts(r[cTgl]);
       if (!p || p.y !== year || p.m !== month) continue;
       const cur = banks[p.d];
