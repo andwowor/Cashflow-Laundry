@@ -8,7 +8,7 @@ const path = require("path");
 const { sh, shSafe, shq, runEnv } = require("./shell");
 const { spawn } = require("child_process");
 
-const REPO_DIR = path.join(__dirname, ".."); // folder proyek
+const REPO_DIR = process.env.APP_REPO_DIR || path.join(__dirname, ".."); // folder proyek
 const PM2_NAME = process.env.APP_PM2_NAME || "laundry";
 
 const git = (args, timeout) => shSafe(`git ${args}`, { cwd: REPO_DIR, timeout: timeout || 20000 });
