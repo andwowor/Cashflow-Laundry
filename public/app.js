@@ -170,6 +170,7 @@ async function loadStatus() {
     $("#bulan-label").textContent = STATUS.cashflow ? `— ${STATUS.cashflow.title}` : "";
     renderSettings();
     renderKasUploads(STATUS.uploads);
+    appCheckVersion(true); // beri tahu sendiri bila ada pembaruan (tanpa menunggu diminta)
   } catch (e) {
     $("#status-line").textContent = "Gagal memuat status: " + e.message;
   }
@@ -2134,6 +2135,106 @@ $("#btn-rekap-blocks").addEventListener("click", async () => {
   } catch (e) {
     out.innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
   } finally {
+    btn.disabled = false;
+  }
+});
+
+// ================= Versi & Pembaruan Aplikasi =================
+let APPVER = null;
+
+function renderAppVersion() {
+  const el = $("#app-version");
+  const btn = $("#btn-app-update");
+  if (!APPVER) {
+    el.textContent = "Versi aplikasi tidak terbaca.";
+    btn.classList.add("hidden");
+    return;
+  }
+  if (!APPVER.ok) {
+    el.innerHTML = `<span style="color:#b3402f">${escapeHtml(APPVER.error || "Versi tidak terbaca.")}</span>`;
+    btn.classList.add("hidden");
+    return;
+  }
+  const tgl = APPVER.date ? new Date(APPVER.date).toLocaleString("id-ID") : "-";
+  let html =
+    `Versi terpasang: <b>${escapeHtml(APPVER.commit)}</b> · ${escapeHtml(tgl)}` +
+    `<br><small>${escapeHtml(APPVER.subject || "")}</small>`;
+  if (APPVER.dirty) html += `<br><small style="color:#b3402f">Ada perubahan lokal di folder aplikasi — pembaruan otomatis ditahan.</small>`;
+  if (APPVER.error) html += `<br><small style="color:#b3402f">${escapeHtml(APPVER.error)}</small>`;
+  if (APPVER.updateAvailable) {
+    html += `<br><b style="color:#b3402f">Tersedia pembaruan: ${APPVER.behind} perubahan baru.</b>`;
+  } else if (APPVER.checked) {
+    html += `<br><small>Sudah versi terbaru.</small>`;
+  }
+  el.innerHTML = html;
+  btn.classList.toggle("hidden", !(APPVER.updateAvailable && !APPVER.dirty));
+  updateTabBadge("pengaturan", APPVER.updateAvailable ? 1 : 0);
+}
+
+async function appCheckVersion(check) {
+  try {
+    APPVER = await api("/api/app/version" + (check ? "?check=1" : ""));
+  } catch (e) {
+    APPVER = { ok: false, error: e.message };
+  }
+  renderAppVersion();
+}
+
+/** Tunggu server hidup kembali setelah restart, lalu muat ulang halaman. */
+async function appWaitAndReload(out) {
+  const deadline = Date.now() + 90000;
+  await new Promise((r) => setTimeout(r, 3000));
+  while (Date.now() < deadline) {
+    try {
+      const r = await fetch("/api/app/version", { cache: "no-store" });
+      if (r.ok) {
+        showLog(out, "✔ Aplikasi sudah berjalan kembali. Memuat ulang halaman…");
+        setTimeout(() => window.location.reload(), 900);
+        return;
+      }
+    } catch {
+      /* server sedang restart — coba lagi */
+    }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  showLog(out, "⚠ Aplikasi belum merespons. Muat ulang halaman ini secara manual sebentar lagi.", true);
+}
+
+$("#btn-app-check").addEventListener("click", async () => {
+  const btn = $("#btn-app-check");
+  btn.disabled = true;
+  $("#app-version").textContent = "Memeriksa pembaruan…";
+  try {
+    await appCheckVersion(true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$("#btn-app-update").addEventListener("click", async () => {
+  const out = $("#app-update-result");
+  const btn = $("#btn-app-update");
+  btn.disabled = true;
+  showLog(out, "Mengambil pembaruan…");
+  try {
+    const r = await api("/api/app/update", { method: "POST" });
+    if (r.error) {
+      showLog(out, "✘ " + r.error, true);
+      btn.disabled = false;
+      return;
+    }
+    const log = (r.steps || []).map((s) => "• " + s).join("\n");
+    if (!r.changed) {
+      showLog(out, (log ? log + "\n" : "") + "✔ " + (r.message || "Sudah versi terbaru."));
+      btn.disabled = false;
+      await appCheckVersion(true);
+      return;
+    }
+    showLog(out, `${log}\n✔ Diperbarui ke ${r.commit || ""} ${r.subject || ""}`.trim());
+    if (r.restarted) await appWaitAndReload(out);
+    else btn.disabled = false;
+  } catch (e) {
+    showLog(out, "✘ " + e.message, true);
     btn.disabled = false;
   }
 });

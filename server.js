@@ -3,6 +3,7 @@
 require("dotenv").config();
 
 const express = require("express");
+const fs = require("fs");
 const multer = require("multer");
 const path = require("path");
 
@@ -24,6 +25,7 @@ const setoran = require("./src/setoran");
 const transaksi = require("./src/transaksi");
 const tunnel = require("./src/tunnel");
 const receipt = require("./src/receipt");
+const appupdate = require("./src/appupdate");
 const { MODEL } = require("./src/claude");
 const auth = require("./src/auth");
 
@@ -77,6 +79,30 @@ app.get("/icon-maskable.svg", sendPublic("icon-maskable.svg", "image/svg+xml"));
 
 // Semua route di bawah ini wajib login.
 app.use(auth.requireAuth);
+
+// Sajikan index.html dengan penanda versi pada app.js & styles.css. Begitu
+// aplikasi diperbarui, alamat berkasnya ikut berubah sehingga browser otomatis
+// memuat versi terbaru — tidak perlu lagi "hard refresh" manual.
+// Didaftarkan SEBELUM express.static agar tidak keduluan melayani "/".
+const INDEX_FILE = path.join(__dirname, "public", "index.html");
+app.get(["/", "/index.html"], (req, res) => {
+  appupdate
+    .assetVersion()
+    .then((v) =>
+      fs.promises.readFile(INDEX_FILE, "utf8").then((html) => {
+        res
+          .type("html")
+          .set("Cache-Control", "no-store")
+          .send(
+            html
+              .replace('href="styles.css"', `href="styles.css?v=${v}"`)
+              .replace('src="app.js"', `src="app.js?v=${v}"`)
+          );
+      })
+    )
+    .catch(() => res.sendFile(INDEX_FILE)); // cadangan: sajikan apa adanya
+});
+
 app.use(express.static(path.join(__dirname, "public")));
 
 const upload = multer({
@@ -404,6 +430,23 @@ app.post("/api/tunnel/start", wrap(async (req, res) => {
     res.json({ ok: true, ...(await tunnel.ensureTunnel()) });
   } catch (err) {
     res.json({ ok: true, url: null, running: false, error: err.message, code: err.code || null });
+  }
+}));
+
+// ---------- Versi aplikasi & pembaruan mandiri ----------
+
+// ?check=1 juga menanyakan ke GitHub apakah ada versi lebih baru (butuh jaringan).
+app.get("/api/app/version", wrap(async (req, res) => {
+  res.json({ ok: true, ...(await appupdate.version({ check: !!req.query.check })) });
+}));
+
+// Tarik kode terbaru lalu jalankan ulang aplikasi. Selalu ok:true agar frontend
+// bisa membaca langkah/pesan errornya dan menampilkannya apa adanya.
+app.post("/api/app/update", wrap(async (req, res) => {
+  try {
+    res.json({ ok: true, ...(await appupdate.update()) });
+  } catch (err) {
+    res.json({ ok: true, steps: [], error: err.message || String(err) });
   }
 }));
 
