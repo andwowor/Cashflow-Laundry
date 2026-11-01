@@ -1,7 +1,7 @@
 # Dashboard Kas Laundry
 
 Dashboard untuk memantau kas bisnis laundry (outlet **MAUMBI** & **PERKAMIL**) dengan
-**Claude Sonnet 4.6** sebagai otaknya. Terhubung langsung ke dua Google Spreadsheet:
+**Claude Sonnet 5.5** sebagai otaknya. Terhubung langsung ke dua Google Spreadsheet:
 
 | Spreadsheet | Sifat |
 |---|---|
@@ -33,7 +33,7 @@ berdampingan (baris yang sudah ter-update hari ini di-highlight).
 
 ### 2. Input Biaya (tab Input Biaya)
 
-Upload screenshot / bukti transfer pengeluaran → Claude Sonnet 4.6 membaca bukti dan
+Upload screenshot / bukti transfer pengeluaran → Claude Sonnet 5.5 membaca bukti dan
 mengusulkan isian untuk sheet `INPUT PENGGUNAAN BIAYA`:
 
 - **Subjek Biaya** & **Kode Transaksi**: otomatis oleh spreadsheet (hanya ditampilkan, tidak ditulis).

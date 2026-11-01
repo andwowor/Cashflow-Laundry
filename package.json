@@ -1,7 +1,7 @@
 {
   "name": "cashflow-laundry-dashboard",
   "version": "1.0.0",
-  "description": "Dashboard monitoring kas bisnis laundry — sinkronisasi harian, input biaya, dan input kas berbasis Claude Sonnet 4.6",
+  "description": "Dashboard monitoring kas bisnis laundry — sinkronisasi harian, input biaya, dan input kas berbasis Claude Sonnet 5.5",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

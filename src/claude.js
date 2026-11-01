@@ -2,8 +2,18 @@
 
 const Anthropic = require("@anthropic-ai/sdk");
 
-// Sesuai permintaan: otak dashboard menggunakan Claude Sonnet 4.6.
-const MODEL = "claude-sonnet-4-6";
+// Sesuai permintaan: otak dashboard menggunakan Claude Sonnet 5.5.
+const MODEL = "claude-sonnet-5-5";
+
+// Seberapa dalam model berpikir. Sonnet 5.5 berpikir secara adaptif: pada "low"
+// ia melewati proses berpikir untuk bukti yang sederhana (mis. satu saldo) dan
+// tetap berpikir bila buktinya rumit — titik awal yang dianjurkan untuk tugas
+// ekstraksi. Naikkan ke "medium" bila hasil baca sering meleset.
+const EFFORT = "low";
+
+// Bila Sonnet 5.5 menolak sebuah permintaan, API mengulangnya otomatis di model
+// cadangan (fallback sisi server, khusus Claude API).
+const FALLBACK_BETA = "server-side-fallback-2026-07-01";
 
 let _client = null;
 function client() {
@@ -22,6 +32,34 @@ function firstText(response) {
   const block = response.content.find((b) => b.type === "text");
   if (!block) throw new Error("Claude tidak mengembalikan teks.");
   return block.text;
+}
+
+/**
+ * Kirim satu permintaan berjawaban JSON terstruktur dan kembalikan objek hasilnya.
+ * Respons Sonnet 5.5 bisa diawali blok "thinking" (dan blok "fallback" bila model
+ * cadangan ikut menjawab), jadi teks jawaban diambil berdasarkan tipenya.
+ */
+async function askJson({ maxTokens, system, content, schema }) {
+  const response = await client().beta.messages.create({
+    model: MODEL,
+    max_tokens: maxTokens,
+    system,
+    messages: [{ role: "user", content }],
+    output_config: { format: { type: "json_schema", schema }, effort: EFFORT },
+    betas: [FALLBACK_BETA],
+    fallbacks: "default",
+  });
+  if (response.stop_reason === "refusal") {
+    const cat = response.stop_details && response.stop_details.category;
+    throw new Error(
+      "Claude menolak memproses bukti ini" + (cat ? ` (kategori: ${cat})` : "") +
+        ". Coba ulangi, atau gunakan screenshot lain."
+    );
+  }
+  if (response.stop_reason === "max_tokens") {
+    throw new Error("Jawaban Claude terpotong karena terlalu panjang. Coba upload lebih sedikit gambar sekaligus.");
+  }
+  return JSON.parse(firstText(response));
 }
 
 /**
@@ -109,15 +147,7 @@ async function extractBiaya({ images, keteranganList, sumberDanaList, historyTex
 
   const content = [...images.map((img) => imageBlock(img.base64, img.mediaType)), { type: "text", text: promptParts.join("\n") }];
 
-  const response = await client().messages.create({
-    model: MODEL,
-    max_tokens: 16000,
-    system,
-    messages: [{ role: "user", content }],
-    output_config: { format: { type: "json_schema", schema } },
-  });
-
-  return JSON.parse(firstText(response)).entries;
+  return (await askJson({ maxTokens: 16000, system, content, schema })).entries;
 }
 
 /**
@@ -183,15 +213,7 @@ async function extractKas({ images, jenis, todayIso }) {
     },
   ];
 
-  const response = await client().messages.create({
-    model: MODEL,
-    max_tokens: 8000,
-    system,
-    messages: [{ role: "user", content }],
-    output_config: { format: { type: "json_schema", schema } },
-  });
-
-  return JSON.parse(firstText(response)).items;
+  return (await askJson({ maxTokens: 8000, system, content, schema })).items;
 }
 
 /**
@@ -240,15 +262,7 @@ async function extractQris({ images, todayIso }) {
     { type: "text", text: `Hari ini: ${todayIso}.\nKeluarkan entries sesuai skema.` },
   ];
 
-  const response = await client().messages.create({
-    model: MODEL,
-    max_tokens: 8000,
-    system,
-    messages: [{ role: "user", content }],
-    output_config: { format: { type: "json_schema", schema } },
-  });
-
-  return JSON.parse(firstText(response)).entries;
+  return (await askJson({ maxTokens: 8000, system, content, schema })).entries;
 }
 
 /**
@@ -301,15 +315,7 @@ async function extractQrisBank({ images, todayIso }) {
     { type: "text", text: `Hari ini: ${todayIso}.\nKeluarkan entries sesuai skema.` },
   ];
 
-  const response = await client().messages.create({
-    model: MODEL,
-    max_tokens: 12000,
-    system,
-    messages: [{ role: "user", content }],
-    output_config: { format: { type: "json_schema", schema } },
-  });
-
-  return JSON.parse(firstText(response)).entries;
+  return (await askJson({ maxTokens: 12000, system, content, schema })).entries;
 }
 
 module.exports = { extractBiaya, extractKas, extractQris, extractQrisBank, MODEL };
