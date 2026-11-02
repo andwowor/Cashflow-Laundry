@@ -3,3 +3,6 @@ node_modules/
 data/
 credentials/
 *.log
+
+# Logo milik user (disalin lokal, tidak disimpan di repo)
+public/logo.jpeg

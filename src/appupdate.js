@@ -40,7 +40,9 @@ async function version(opts = {}) {
   info.subject = subject || "";
   info.branch = await currentBranch();
 
-  const st = await git("status --porcelain");
+  // Hanya berkas yang DILACAK git yang dihitung. Berkas lokal milik user yang
+  // tidak dilacak (mis. public/logo.jpeg) tidak pernah menghalangi pembaruan.
+  const st = await git("status --porcelain --untracked-files=no");
   info.dirty = st.ok && st.out.length > 0;
 
   // Cek remote hanya bila diminta (operasi jaringan, beberapa detik).
@@ -108,15 +110,18 @@ async function update() {
   const branch = await currentBranch();
   if (!branch) return { ok: false, steps, error: "Cabang git tidak terbaca di folder aplikasi." };
 
-  const st = await git("status --porcelain");
-  if (st.ok && st.out) {
-    return {
-      ok: false,
-      steps,
-      error:
-        "Ada perubahan lokal yang belum disimpan di folder aplikasi, jadi pembaruan dihentikan " +
-        "supaya tidak menimpa apa pun. File yang berubah:\n" + st.out,
-    };
+  // Berkas lokal yang tidak dilacak git (logo, data/, .env) tidak pernah
+  // menghalangi. package-lock.json sering berubah sendiri karena `npm install`
+  // di mesin ini — kembalikan ke versi git (npm akan menyesuaikannya lagi).
+  // Perubahan lain pada berkas yang dilacak dibiarkan: bila pembaruan akan
+  // menimpanya, `git pull --ff-only` menolak dengan aman dan pesannya dilaporkan.
+  // `git diff --name-only HEAD` = berkas dilacak yang berubah (staged/unstaged),
+  // satu nama per baris — tanpa kolom status yang rawan salah urai.
+  const st = await git("diff --name-only HEAD");
+  const modified = st.ok ? st.out.split("\n").map((l) => l.trim()).filter(Boolean) : [];
+  if (modified.includes("package-lock.json")) {
+    const r = await git("checkout -- package-lock.json");
+    if (r.ok) steps.push("package-lock.json lokal dikembalikan ke versi resmi.");
   }
 
   const before = await git("rev-parse HEAD");

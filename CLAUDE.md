@@ -32,6 +32,17 @@ pembaruannya tinggal diklik di tab Pengaturan (atau akan muncul sendiri).
 Berkas `app.js`/`styles.css` disajikan dengan penanda versi, jadi hard refresh
 tidak diperlukan lagi.
 
+Pengecualian sah: bila updater di Mac **tidak bisa** menerapkan pembaruan (versi
+updater-nya sendiri lama/rusak), satu kali `git pull` + `pm2 restart` manual memang
+diperlukan — sebutkan alasannya dalam satu kalimat.
+
+Pelajaran updater (jangan diulang): berkas yang **tidak dilacak git** di mesin user
+(mis. `public/logo.jpeg`, `data/`, `.env`) tidak boleh pernah menghalangi pembaruan;
+`package-lock.json` yang berubah karena `npm install` lokal dipulihkan otomatis; untuk
+perubahan lain biarkan `git pull --ff-only` yang menilai (ia menolak dengan aman).
+Setiap perubahan pada `src/appupdate.js` wajib diuji terhadap repo git terisolasi
+yang meniru kondisi Mac (logo lokal + lock berubah), pakai `APP_REPO_DIR`.
+
 ## Konteks proyek
 
 - Bahasa jawaban: **Indonesia**, sederhana dan ringkas.

@@ -2159,7 +2159,7 @@ function renderAppVersion() {
   let html =
     `Versi terpasang: <b>${escapeHtml(APPVER.commit)}</b> · ${escapeHtml(tgl)}` +
     `<br><small>${escapeHtml(APPVER.subject || "")}</small>`;
-  if (APPVER.dirty) html += `<br><small style="color:#b3402f">Ada perubahan lokal di folder aplikasi — pembaruan otomatis ditahan.</small>`;
+  if (APPVER.dirty) html += `<br><small>Ada berkas aplikasi yang diubah di komputer ini — tetap aman diperbarui; bila bertabrakan, pembaruan ditolak dengan pesan jelas.</small>`;
   if (APPVER.error) html += `<br><small style="color:#b3402f">${escapeHtml(APPVER.error)}</small>`;
   if (APPVER.updateAvailable) {
     html += `<br><b style="color:#b3402f">Tersedia pembaruan: ${APPVER.behind} perubahan baru.</b>`;
@@ -2167,7 +2167,7 @@ function renderAppVersion() {
     html += `<br><small>Sudah versi terbaru.</small>`;
   }
   el.innerHTML = html;
-  btn.classList.toggle("hidden", !(APPVER.updateAvailable && !APPVER.dirty));
+  btn.classList.toggle("hidden", !APPVER.updateAvailable);
   updateTabBadge("pengaturan", APPVER.updateAvailable ? 1 : 0);
 }
 
