@@ -471,3 +471,16 @@ details.hint summary { cursor: pointer; font-weight: 700; color: var(--teal-dark
   text-decoration: none;
   white-space: normal;
 }
+
+/* Jendela pilih KATEGORI BIAYA saat export Setoran Owner */
+.kat-modal-body { width: min(980px, 95vw); }
+.kat-list { overflow: auto; min-height: 0; flex: 1 1 auto; }
+.kat-list td { vertical-align: top; }
+.kat-cell { min-width: 260px; }
+.kat-cell .kat-sel { width: 100%; }
+.kat-hint { margin-top: 4px; font-size: 12px; line-height: 1.35; color: var(--ink-soft); white-space: normal; }
+.kat-saran {
+  display: inline-block; margin-top: 4px; padding: 1px 8px; border-radius: 999px;
+  background: var(--gold-soft); color: #9a6a16; font-size: 11px; font-weight: 700;
+}
+

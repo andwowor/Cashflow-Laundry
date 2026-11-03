@@ -575,6 +575,26 @@
     </div>
   </div>
 
+  <div id="kat-modal" class="img-modal hidden">
+    <div class="img-modal-backdrop"></div>
+    <div class="img-modal-body kat-modal-body">
+      <div class="img-modal-bar">
+        <span><b>Export Setoran Owner → ANALISA KEUANGAN</b></span>
+        <button class="btn-ghost" id="btn-kat-close">✕ Tutup</button>
+      </div>
+      <p class="hint" style="margin:0">Pilih <b>KATEGORI BIAYA</b> untuk tiap biaya. Pilihan diambil dari dropdown
+        kolom KATEGORI BIAYA sheet TRANSAKSI. Yang bertanda <i>saran</i> dipilihkan dari riwayat keterangan yang sama —
+        tetap bisa diganti. Boleh dikosongkan.</p>
+      <div id="kat-list" class="kat-list"></div>
+      <div id="kat-skip" class="hint"></div>
+      <div id="kat-error" class="error hidden"></div>
+      <div class="actions">
+        <button class="btn-ghost" id="btn-kat-cancel">Batal</button>
+        <button class="btn-primary" id="btn-kat-go">⤓ Export ke TRANSAKSI</button>
+      </div>
+    </div>
+  </div>
+
   <div id="setor-modal" class="img-modal hidden">
     <div class="img-modal-backdrop"></div>
     <div class="img-modal-body" style="max-width: 480px">

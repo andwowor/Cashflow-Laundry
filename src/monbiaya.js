@@ -2,7 +2,10 @@
 
 const path = require("path");
 const cfg = require("./config");
-const { readRange, batchWrite, resolveCashflowSpreadsheetId } = require("./sheets");
+const {
+  readRange, batchWrite, resolveCashflowSpreadsheetId,
+  getDataValidation, getSheetId, batchUpdateRequests,
+} = require("./sheets");
 const receipt = require("./receipt");
 
 const BIAYA_SHEET = "BIAYA";
@@ -294,20 +297,136 @@ async function setKoreksi(row, text) {
   return { ok: true, row, text: teks, verifikasi };
 }
 
+// ===================== KATEGORI BIAYA (sheet TRANSAKSI, ANALISA KEUANGAN) =====================
+// Kolom K sheet TRANSAKSI berisi dropdown KATEGORI BIAYA. Pilihan dropdown dibaca
+// LANGSUNG dari aturan validasi kolom itu (bukan disalin ke kode), sehingga bila
+// user menambah/mengubah kategori di sheet, dashboard otomatis ikut.
+const KATEGORI_COL = "K";
+const KATEGORI_RULE_CELL = `'${ANALISA_SHEET}'!${KATEGORI_COL}2`; // sel pemilik aturan dropdown
+
+function colToIndex(col) {
+  let n = 0;
+  for (const ch of String(col).toUpperCase()) n = n * 26 + (ch.charCodeAt(0) - 64);
+  return n - 1; // 0-based
+}
+function indexToCol(i) {
+  let n = i + 1;
+  let s = "";
+  while (n > 0) {
+    const r = (n - 1) % 26;
+    s = String.fromCharCode(65 + r) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+}
+/** "='KATEGORI BIAYA'!$A$2:$A" -> { sheet, col, row }. null bila tak dikenali. */
+function parseRangeRef(ref) {
+  const m = String(ref || "")
+    .trim()
+    .replace(/^=/, "")
+    .replace(/\$/g, "")
+    .match(/^(?:'((?:[^']|'')+)'|([^!']+))!([A-Z]+)(\d+)?(?::[A-Z]+\d*)?$/i);
+  if (!m) return null;
+  return { sheet: (m[1] || m[2]).replace(/''/g, "'"), col: m[3].toUpperCase(), row: Number(m[4] || 1) };
+}
+/** Kunci pencocokan keterangan: huruf kecil, spasi dirapatkan. */
+function ketKey(s) {
+  return norm(s).toLowerCase().replace(/\s+/g, " ");
+}
+
 /**
- * Export baris "Setoran Owner" terpilih ke sheet TRANSAKSI (ANALISA KEUANGAN).
- * Pemetaan: POS BIAYA="DAILY DRIVER", KETERANGAN PENGGUNAAN(H)→KETERANGAN(B),
- *   NOMINAL(D)→NOMINAL(C), TANGGAL(E)→TANGGAL(D), SUMBER DANA="PENDAPATAN USAHA";
- *   BIAYA BULAN/BUDGET BULAN=nama bulan saat export, TAHUN BIAYA/TAHUN BUDGET=tahun saat export.
- * Baris yang diexport disembunyikan (sama seperti export ke INPUT PENGGUNAAN BIAYA).
+ * Pilihan dropdown KATEGORI BIAYA + aturan validasinya (untuk dipasang ke sel baru).
+ * Mendukung dropdown dari rentang (ONE_OF_RANGE, mis. sheet KATEGORI BIAYA) maupun
+ * daftar tetap (ONE_OF_LIST). Untuk rentang, kolom di sebelahnya (CAKUPAN) ikut
+ * dibaca sebagai petunjuk.
  */
-async function exportSetoranOwner(rowNumbers) {
+async function loadKategori() {
+  const id = cfg.ANALISA_SPREADSHEET_ID;
+  const rule = await getDataValidation(id, KATEGORI_RULE_CELL);
+  if (!rule || !rule.condition) {
+    throw new Error(`Kolom KATEGORI BIAYA (${KATEGORI_COL}) di sheet ${ANALISA_SHEET} belum memiliki dropdown.`);
+  }
+  const cond = rule.condition;
+  let options = [];
+  if (cond.type === "ONE_OF_LIST") {
+    options = (cond.values || []).map((v) => ({ value: norm(v.userEnteredValue), hint: "" }));
+  } else if (cond.type === "ONE_OF_RANGE") {
+    const ref = parseRangeRef(cond.values && cond.values[0] && cond.values[0].userEnteredValue);
+    if (!ref) throw new Error("Sumber dropdown KATEGORI BIAYA tidak dikenali.");
+    const hintCol = indexToCol(colToIndex(ref.col) + 1);
+    const rows = await readRange(id, `'${ref.sheet}'!${ref.col}${ref.row}:${hintCol}`);
+    options = rows.map((r) => ({ value: norm(r && r[0]), hint: norm(r && r[1]) }));
+  } else {
+    throw new Error(`Jenis dropdown KATEGORI BIAYA (${cond.type}) belum didukung.`);
+  }
+  const seen = new Set();
+  options = options.filter((o) => {
+    if (!o.value || seen.has(o.value)) return false;
+    seen.add(o.value);
+    return true;
+  });
+  if (!options.length) throw new Error("Dropdown KATEGORI BIAYA tidak berisi pilihan.");
+  return { options, rule };
+}
+
+/**
+ * Saran kategori dari riwayat sheet TRANSAKSI: kategori yang paling sering dipakai
+ * untuk KETERANGAN (kolom B) yang sama persis. Toleran: bila gagal, tanpa saran.
+ */
+async function kategoriSuggester(validValues) {
+  const freq = new Map(); // ketKey -> Map(kategori -> jumlah)
+  try {
+    const kIdx = colToIndex(KATEGORI_COL) - 1; // rentang mulai kolom B
+    const rows = await readRange(cfg.ANALISA_SPREADSHEET_ID, `'${ANALISA_SHEET}'!B2:${KATEGORI_COL}`);
+    for (const r of rows) {
+      const k = ketKey(r && r[0]);
+      const kat = norm(r && r[kIdx]);
+      if (!k || !kat || !validValues.has(kat)) continue;
+      if (!freq.has(k)) freq.set(k, new Map());
+      const m = freq.get(k);
+      m.set(kat, (m.get(kat) || 0) + 1);
+    }
+  } catch {
+    /* riwayat tak terbaca -> tanpa saran */
+  }
+  return (keterangan) => {
+    const m = freq.get(ketKey(keterangan));
+    if (!m) return "";
+    return [...m.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  };
+}
+
+/**
+ * Pastikan sel KATEGORI BIAYA pada baris tujuan memakai dropdown yang sama dengan
+ * aturan aslinya. Bila sudah ada (umumnya), tidak mengubah apa pun. Bila belum
+ * (mis. sheet diperpanjang), aturan asli disalin ke sel tersebut.
+ */
+async function ensureKategoriDropdown(id, startRow, endRow, rule) {
+  const cell = (r) => `'${ANALISA_SHEET}'!${KATEGORI_COL}${r}`;
+  const sama = (x) => !!(x && x.condition && JSON.stringify(x.condition) === JSON.stringify(rule.condition));
+  const awal = await getDataValidation(id, cell(startRow));
+  const akhir = endRow === startRow ? awal : await getDataValidation(id, cell(endRow));
+  if (sama(awal) && sama(akhir)) return false;
+
+  const sheetId = await getSheetId(id, ANALISA_SHEET);
+  const c = colToIndex(KATEGORI_COL);
+  const range = { sheetId, startRowIndex: startRow - 1, endRowIndex: endRow, startColumnIndex: c, endColumnIndex: c + 1 };
+  try {
+    await batchUpdateRequests(id, [{ setDataValidation: { range, rule } }]);
+  } catch {
+    // Cadangan: setelan tampilan tertentu (mis. customUiMode) bisa ditolak saat
+    // ditulis — pasang ulang dengan isi pokok aturannya saja.
+    const { condition, inputMessage, strict, showCustomUi } = rule;
+    await batchUpdateRequests(id, [{ setDataValidation: { range, rule: { condition, inputMessage, strict, showCustomUi } } }]);
+  }
+  return true;
+}
+
+/** Baris Setoran Owner terpilih (tervalidasi & hijau penuh) + jumlah baris non-Setoran yang dilewati. */
+async function pickSetoranRows(rowNumbers) {
   if (!Array.isArray(rowNumbers) || rowNumbers.length === 0) throw new Error("Centang minimal satu baris untuk diexport.");
   const raw = await readRange(cfg.BIAYA_KAS_SPREADSHEET_ID, `'${BIAYA_SHEET}'!A1:N`, "UNFORMATTED_VALUE");
-  const { year, month } = cfg.nowInBusinessTz();
-  const monthName = cfg.MONTH_NAMES_ID[month - 1];
-
-  const setoran = [];
+  const picked = [];
   let skipped = 0;
   for (const rn of rowNumbers) {
     const r = raw[Number(rn) - 1];
@@ -316,31 +435,94 @@ async function exportSetoranOwner(rowNumbers) {
       skipped++;
       continue;
     }
-    setoran.push(r);
+    picked.push({ rowNum: Number(rn), r });
   }
-  if (setoran.length === 0) {
+  if (picked.length === 0) {
     throw new Error(
       "Tidak ada baris 'Setoran Owner' yang dicentang." + (skipped ? ` (${skipped} baris non-Setoran Owner dilewati)` : "")
     );
   }
-  assertGreenReady(setoran); // hanya baris bercentang hijau dua-duanya yang boleh diexport
+  assertGreenReady(picked.map((p) => p.r)); // hanya baris bercentang hijau dua-duanya yang boleh diexport
+  return { picked, skipped };
+}
 
-  const values = setoran.map((r) => {
-    const tgl = r[COL.tanggal];
-    const tglStr = typeof tgl === "number" ? isoToDDMMYYYY(serialToISO(tgl)) : norm(tgl);
-    const nominal = r[COL.nominal];
-    return [
-      "DAILY DRIVER", // A POS BIAYA
-      tidyKeterangan(r[COL.ketPenggunaan]), // B KETERANGAN (dari KETERANGAN PENGGUNAAN, dirapikan)
-      typeof nominal === "number" ? nominal : Number(nominal) || norm(nominal), // C NOMINAL
-      tglStr, // D TANGGAL
-      monthName, // E BIAYA BULAN
-      year, // F TAHUN BIAYA
-      "PENDAPATAN USAHA", // G SUMBER DANA
-      monthName, // H BUDGET BULAN
-      year, // I TAHUN BUDGET
-    ];
-  });
+function setoranTanggal(r) {
+  const tgl = r[COL.tanggal];
+  return typeof tgl === "number" ? isoToDDMMYYYY(serialToISO(tgl)) : norm(tgl);
+}
+function setoranNominal(r) {
+  const nominal = r[COL.nominal];
+  return typeof nominal === "number" ? nominal : Number(nominal) || norm(nominal);
+}
+
+/**
+ * Pratinjau export Setoran Owner: baris yang akan diexport + pilihan dropdown
+ * KATEGORI BIAYA + saran kategori per baris (dari riwayat TRANSAKSI).
+ */
+async function setoranPreview(rowNumbers) {
+  const { picked, skipped } = await pickSetoranRows(rowNumbers);
+  const { options } = await loadKategori();
+  const suggest = await kategoriSuggester(new Set(options.map((o) => o.value)));
+  return {
+    ok: true,
+    options,
+    skipped,
+    rows: picked.map(({ rowNum, r }) => {
+      const keterangan = tidyKeterangan(r[COL.ketPenggunaan]);
+      return {
+        row: rowNum,
+        nomor: norm(r[COL.nomor]),
+        keterangan,
+        nominal: setoranNominal(r),
+        tanggal: setoranTanggal(r),
+        saran: suggest(keterangan),
+      };
+    }),
+  };
+}
+
+/**
+ * Export baris "Setoran Owner" terpilih ke sheet TRANSAKSI (ANALISA KEUANGAN).
+ * Pemetaan: POS BIAYA="DAILY DRIVER", KETERANGAN PENGGUNAAN(H)→KETERANGAN(B),
+ *   NOMINAL(D)→NOMINAL(C), TANGGAL(E)→TANGGAL(D), SUMBER DANA="PENDAPATAN USAHA";
+ *   BIAYA BULAN/BUDGET BULAN=nama bulan saat export, TAHUN BIAYA/TAHUN BUDGET=tahun saat export.
+ * Kolom J (Rekening) tidak disentuh. kategoriByRow = { <baris sheet BIAYA>: <KATEGORI BIAYA> }
+ * (opsional per baris) ditulis ke kolom K sebagai PILIHAN DROPDOWN: nilainya wajib persis
+ * salah satu pilihan dropdown, dan aturan dropdown dipasang ke sel tujuan.
+ */
+async function exportSetoranOwner(rowNumbers, kategoriByRow) {
+  const { picked, skipped } = await pickSetoranRows(rowNumbers);
+  const { year, month } = cfg.nowInBusinessTz();
+  const monthName = cfg.MONTH_NAMES_ID[month - 1];
+
+  // Kategori dipilih per baris; diperiksa SEBELUM menulis apa pun.
+  const pilihan = kategoriByRow && typeof kategoriByRow === "object" ? kategoriByRow : {};
+  const kategori = picked.map(({ rowNum }) => norm(pilihan[rowNum]));
+  const adaKategori = kategori.some(Boolean);
+  let kat = null;
+  if (adaKategori) {
+    kat = await loadKategori();
+    const valid = new Set(kat.options.map((o) => o.value));
+    const salah = kategori.filter((k) => k && !valid.has(k));
+    if (salah.length) {
+      throw new Error(
+        `Kategori tidak ada di dropdown KATEGORI BIAYA: ${[...new Set(salah)].join(", ")}. ` +
+          "Pilih ulang dari daftar (mungkin dropdown di sheet baru saja diubah)."
+      );
+    }
+  }
+
+  const values = picked.map(({ r }) => [
+    "DAILY DRIVER", // A POS BIAYA
+    tidyKeterangan(r[COL.ketPenggunaan]), // B KETERANGAN (dari KETERANGAN PENGGUNAAN, dirapikan)
+    setoranNominal(r), // C NOMINAL
+    setoranTanggal(r), // D TANGGAL
+    monthName, // E BIAYA BULAN
+    year, // F TAHUN BIAYA
+    "PENDAPATAN USAHA", // G SUMBER DANA
+    monthName, // H BUDGET BULAN
+    year, // I TAHUN BUDGET
+  ]);
 
   const analisaId = cfg.ANALISA_SPREADSHEET_ID;
   const colA = await readRange(analisaId, `'${ANALISA_SHEET}'!A2:A`);
@@ -349,11 +531,31 @@ async function exportSetoranOwner(rowNumbers) {
     if (colA[i] && colA[i][0]) appendRow = i + 3;
   }
   const endRow = appendRow + values.length - 1;
-  await batchWrite(analisaId, [{ range: `'${ANALISA_SHEET}'!A${appendRow}:I${endRow}`, values }]);
+
+  // Kategori ditulis sebagai PILIHAN DROPDOWN: dropdown dipastikan ada di sel tujuan
+  // SEBELUM menulis apa pun (bila gagal, tidak ada yang tertulis), lalu nilainya —
+  // yang persis sama dengan salah satu pilihan — ikut ditulis.
+  let dropdownDipasang = false;
+  if (adaKategori) dropdownDipasang = await ensureKategoriDropdown(analisaId, appendRow, endRow, kat.rule);
+
+  // A:I dan K dalam SATU permintaan: masuk semua, atau tidak sama sekali.
+  // Kolom J (Rekening) tidak disentuh.
+  const data = [{ range: `'${ANALISA_SHEET}'!A${appendRow}:I${endRow}`, values }];
+  if (adaKategori) {
+    data.push({
+      range: `'${ANALISA_SHEET}'!${KATEGORI_COL}${appendRow}:${KATEGORI_COL}${endRow}`,
+      values: kategori.map((k) => [k]),
+    });
+  }
+  await batchWrite(analisaId, data);
+  const kategoriDiisi = kategori.filter(Boolean).length;
 
   // Catatan: baris TIDAK disembunyikan setelah export ini (berbeda dari export ke
   // INPUT PENGGUNAAN BIAYA) — sesuai permintaan, aturan sembunyi hanya untuk export tsb.
-  return { ok: true, sheet: ANALISA_SHEET, barisAwal: appendRow, barisAkhir: endRow, jumlah: values.length, skipped };
+  return {
+    ok: true, sheet: ANALISA_SHEET, barisAwal: appendRow, barisAkhir: endRow,
+    jumlah: values.length, skipped, kategoriDiisi, dropdownDipasang,
+  };
 }
 
 /** Sembunyikan baris (berdasarkan NOMOR) dengan menambahkannya ke daftar ter-export. */
@@ -385,4 +587,4 @@ function restore(nomors) {
   return { ok: true, removed, nomors: Array.from(want) };
 }
 
-module.exports = { list, setStatus, setKoreksi, exportRows, exportSetoranOwner, hide, restore };
+module.exports = { list, setStatus, setKoreksi, exportRows, exportSetoranOwner, setoranPreview, loadKategori, hide, restore };

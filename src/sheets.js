@@ -50,6 +50,20 @@ async function getSheetId(spreadsheetId, title) {
   return found ? found.properties.sheetId : null;
 }
 
+/** Aturan validasi data (dropdown) milik sel pertama pada rentang A1. null bila tak ada. */
+async function getDataValidation(spreadsheetId, a1) {
+  const sheets = sheetsClient();
+  const res = await sheets.spreadsheets.get({
+    spreadsheetId,
+    ranges: [a1],
+    fields: "sheets.data.rowData.values.dataValidation",
+  });
+  const sheet = (res.data.sheets || [])[0];
+  const row = sheet && sheet.data && sheet.data[0] && (sheet.data[0].rowData || [])[0];
+  const cell = row && (row.values || [])[0];
+  return (cell && cell.dataValidation) || null;
+}
+
 /** Jalankan permintaan batchUpdate (mis. copyPaste formula). */
 async function batchUpdateRequests(spreadsheetId, requests) {
   const sheets = sheetsClient();
@@ -112,6 +126,7 @@ function setCashflowOverride(spreadsheetId) {
 }
 
 module.exports = {
+  getDataValidation,
   readRange,
   batchWrite,
   getSheetTitles,

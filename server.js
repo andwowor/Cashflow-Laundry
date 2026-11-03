@@ -412,8 +412,14 @@ app.post("/api/monbiaya/koreksi", wrap(async (req, res) => {
   res.json(await monbiaya.setKoreksi(Number(row), text));
 }));
 
+// Pratinjau export Setoran Owner: baris + pilihan dropdown KATEGORI BIAYA + saran.
+app.post("/api/monbiaya/setoran-preview", wrap(async (req, res) => {
+  res.json(await monbiaya.setoranPreview((req.body || {}).rows || []));
+}));
+
 app.post("/api/monbiaya/export-setoran", wrap(async (req, res) => {
-  res.json(await monbiaya.exportSetoranOwner((req.body || {}).rows || []));
+  const body = req.body || {};
+  res.json(await monbiaya.exportSetoranOwner(body.rows || [], body.kategori || {}));
 }));
 
 // ---------- Link online (Cloudflare Tunnel) ----------

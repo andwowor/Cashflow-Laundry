@@ -1293,7 +1293,116 @@ async function mbExport(endpoint, btn) {
 }
 
 $("#btn-monbiaya-export").addEventListener("click", (e) => mbExport("/api/monbiaya/export", e.currentTarget));
-$("#btn-monbiaya-export-so").addEventListener("click", (e) => mbExport("/api/monbiaya/export-setoran", e.currentTarget));
+$("#btn-monbiaya-export-so").addEventListener("click", (e) => mbExportSetoran(e.currentTarget));
+
+// ===== Export Setoran Owner + KATEGORI BIAYA (dropdown kolom K sheet TRANSAKSI) =====
+let KAT_PREVIEW = null;
+
+function katCloseModal() {
+  $("#kat-modal").classList.add("hidden");
+}
+
+// Tampilkan CAKUPAN kategori terpilih di bawah dropdown-nya.
+function katShowHint(sel) {
+  const opt = sel.selectedOptions[0];
+  const el = sel.closest("td").querySelector(".kat-hint");
+  if (el) el.textContent = (opt && opt.dataset.hint) || "";
+}
+
+function katRenderModal(p) {
+  const opts = p.options || [];
+  const optionsHtml = (selected) =>
+    ['<option value="">— tanpa kategori —</option>']
+      .concat(
+        opts.map(
+          (o) =>
+            `<option value="${escapeHtml(o.value)}" data-hint="${escapeHtml(o.hint || "")}"` +
+            `${o.value === selected ? " selected" : ""}>${escapeHtml(o.value)}</option>`
+        )
+      )
+      .join("");
+  const body = (p.rows || [])
+    .map(
+      (r) =>
+        `<tr><td>${escapeHtml(r.nomor)}</td><td>${escapeHtml(r.tanggal)}</td>` +
+        `<td>${escapeHtml(r.keterangan || "—")}</td><td class="num">${fmtRp(r.nominal)}</td>` +
+        `<td class="kat-cell"><select class="kat-sel" data-row="${r.row}">${optionsHtml(r.saran)}</select>` +
+        `${r.saran ? '<span class="kat-saran">saran</span>' : ""}<div class="kat-hint"></div></td></tr>`
+    )
+    .join("");
+  $("#kat-list").innerHTML =
+    `<div class="table-wrap"><table><thead><tr><th>NOMOR</th><th>TANGGAL</th><th>KETERANGAN</th>` +
+    `<th>NOMINAL</th><th>KATEGORI BIAYA</th></tr></thead><tbody>${body}</tbody></table></div>`;
+  $$("#kat-list .kat-sel").forEach((sel) => {
+    katShowHint(sel);
+    sel.addEventListener("change", () => {
+      katShowHint(sel);
+      const tag = sel.closest("td").querySelector(".kat-saran");
+      if (tag) tag.remove(); // sudah dipilih sendiri, bukan saran lagi
+    });
+  });
+  $("#kat-skip").textContent = p.skipped ? `${p.skipped} baris non-Setoran Owner dilewati.` : "";
+  $("#kat-error").classList.add("hidden");
+  $("#kat-modal").classList.remove("hidden");
+}
+
+async function mbExportSetoran(btn) {
+  const out = $("#monbiaya-result");
+  const rows = $$("#monbiaya-table .mb-check:checked").map((c) => Number(c.dataset.row));
+  if (!rows.length) return showLog(out, "✘ Centang minimal satu baris untuk diexport.", true);
+  btn.disabled = true;
+  try {
+    KAT_PREVIEW = await api("/api/monbiaya/setoran-preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows }),
+    });
+    katRenderModal(KAT_PREVIEW);
+  } catch (e) {
+    showLog(out, "✘ " + e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+$("#btn-kat-go").addEventListener("click", async () => {
+  if (!KAT_PREVIEW) return;
+  const go = $("#btn-kat-go");
+  const err = $("#kat-error");
+  const kategori = {};
+  $$("#kat-list .kat-sel").forEach((sel) => {
+    if (sel.value) kategori[sel.dataset.row] = sel.value;
+  });
+  go.disabled = true;
+  err.classList.add("hidden");
+  try {
+    const r = await api("/api/monbiaya/export-setoran", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows: KAT_PREVIEW.rows.map((x) => x.row), kategori }),
+    });
+    katCloseModal();
+    let msg = `✔ ${r.jumlah} baris diexport ke ${r.sheet} (baris ${r.barisAwal}–${r.barisAkhir}).`;
+    msg += r.kategoriDiisi
+      ? ` KATEGORI BIAYA dipilih dari dropdown untuk ${r.kategoriDiisi} baris.`
+      : " KATEGORI BIAYA dikosongkan.";
+    if (KAT_PREVIEW.skipped) msg += ` ${KAT_PREVIEW.skipped} baris non-Setoran Owner dilewati.`;
+    showLog($("#monbiaya-result"), msg);
+    KAT_PREVIEW = null;
+    await loadMonBiaya();
+  } catch (e) {
+    err.textContent = "✘ " + e.message;
+    err.classList.remove("hidden");
+  } finally {
+    go.disabled = false;
+  }
+});
+$("#btn-kat-cancel").addEventListener("click", katCloseModal);
+$("#btn-kat-close").addEventListener("click", katCloseModal);
+$("#kat-modal .img-modal-backdrop").addEventListener("click", katCloseModal);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") katCloseModal();
+});
 
 // ================= Lapor Smartlink (sheet INPUT PENGGUNAAN BIAYA) =================
 let SMART = null;
