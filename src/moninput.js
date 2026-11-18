@@ -11,14 +11,15 @@ const biaya = require("./biaya");
 
 const SHEET = "INPUT PENGGUNAAN BIAYA";
 
-// Indeks 0-based kolom A..H pada sheet.
+// Indeks 0-based kolom A..J pada sheet.
 const COL = {
   subjek: 0, keterangan: 1, nominal: 2, tanggal: 3,
-  outlet: 4, status: 5, sumberDana: 6, kode: 7,
+  outlet: 4, status: 5, sumberDana: 6, kode: 7, item: 8, subItem: 9,
 };
 const HEADERS = [
   "SUBJEK BIAYA", "KETERANGAN", "NOMINAL", "TANGGAL",
   "OUTLET", "STATUS LAPOR APLIKASI SMARTLINK", "SUMBER DANA", "KODE TRANSAKSI",
+  "ITEM BIAYA", "SUB ITEM BIAYA",
 ];
 const STATUS_OPTIONS = ["BELUM INPUT", "SUDAH INPUT"]; // kolom F
 
@@ -94,8 +95,8 @@ async function list() {
   const opts = await biaya.getOptions();
   const id = opts.cashflow.id;
   const [fmt, raw] = await Promise.all([
-    readRange(id, `'${SHEET}'!A1:H`, "FORMATTED_VALUE"),
-    readRange(id, `'${SHEET}'!A1:H`, "UNFORMATTED_VALUE"),
+    readRange(id, `'${SHEET}'!A1:J`, "FORMATTED_VALUE"),
+    readRange(id, `'${SHEET}'!A1:J`, "UNFORMATTED_VALUE"),
   ]);
   const state = loadState(id);
 

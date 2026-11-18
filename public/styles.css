@@ -359,6 +359,7 @@ input[type="file"] { font-family: var(--font); font-size: 13.5px; }
 #biaya-table td.subjek { min-width: 150px; font-weight: 700; }
 #biaya-table .f-keterangan { min-width: 200px; }
 #biaya-table .f-sumber { min-width: 165px; }
+#biaya-table .f-item, #biaya-table .f-subitem { min-width: 200px; }
 #biaya-table .f-outlet, #biaya-table .f-status { min-width: 135px; }
 #biaya-table .f-nominal { min-width: 120px; text-align: right; }
 #biaya-table .f-tanggal { min-width: 155px; }
@@ -483,4 +484,12 @@ details.hint summary { cursor: pointer; font-weight: 700; color: var(--teal-dark
   display: inline-block; margin-top: 4px; padding: 1px 8px; border-radius: 999px;
   background: var(--gold-soft); color: #9a6a16; font-size: 11px; font-weight: 700;
 }
+
+/* Tanda "saran" (isian otomatis yang masih bisa diganti) */
+.saran-tag {
+  display: inline-block; margin-top: 4px; padding: 1px 8px; border-radius: 999px;
+  background: var(--gold-soft); color: #9a6a16; font-size: 11px; font-weight: 700;
+  vertical-align: middle;
+}
+.saran-tag.hidden { display: none; }
 

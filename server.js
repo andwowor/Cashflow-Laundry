@@ -12,6 +12,7 @@ const { readRange, resolveCashflowSpreadsheetId, setCashflowOverride, getSheetTi
 const { serviceAccountEmail } = require("./src/google");
 const { runDailySync, inspectRekapBlocks } = require("./src/sync");
 const biaya = require("./src/biaya");
+const itembiaya = require("./src/itembiaya");
 const kas = require("./src/kas");
 const qris = require("./src/qris");
 const qrisbank = require("./src/qrisbank");
@@ -215,6 +216,11 @@ app.get("/api/rekap/blocks", wrap(async (req, res) => {
 
 app.get("/api/biaya/options", wrap(async (req, res) => {
   res.json({ ok: true, ...(await biaya.getOptions()) });
+}));
+
+// Pilihan ITEM BIAYA & SUB ITEM BIAYA (dropdown kolom I/J) + saran per keterangan.
+app.get("/api/biaya/item-options", wrap(async (req, res) => {
+  res.json(await itembiaya.getItemOptions());
 }));
 
 app.get("/api/biaya/history", wrap(async (req, res) => {

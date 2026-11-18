@@ -390,8 +390,86 @@ let AI_SUGGESTIONS = null;
 let BIAYA_FILES = []; // File yang diupload (untuk "lihat bukti" di pratinjau)
 
 async function loadOptions() {
-  if (!OPTIONS) OPTIONS = await api("/api/biaya/options");
+  if (!OPTIONS) {
+    const [o] = await Promise.all([api("/api/biaya/options"), loadItemOpts()]);
+    OPTIONS = o;
+  }
   return OPTIONS;
+}
+
+// ===== ITEM BIAYA & SUB ITEM BIAYA (dropdown kolom I/J INPUT PENGGUNAAN BIAYA) =====
+// Pilihan dibaca dari spreadsheet bulan berjalan. Sub-item meniru dropdown kolom J:
+// hanya milik item yang dipilih; kosong bila item belum dipilih / tak punya sub-item.
+let ITEM_OPTS = null;
+async function loadItemOpts() {
+  if (!ITEM_OPTS) {
+    try {
+      ITEM_OPTS = await api("/api/biaya/item-options");
+    } catch (e) {
+      ITEM_OPTS = { items: [], subs: {}, saran: {}, error: e.message };
+    }
+  }
+  return ITEM_OPTS;
+}
+function itemSaran(keterangan) {
+  const k = String(keterangan || "").trim().toLowerCase();
+  return (ITEM_OPTS && ITEM_OPTS.saran && ITEM_OPTS.saran[k]) || null;
+}
+function fillItemSelect(sel, value) {
+  const items = (ITEM_OPTS && ITEM_OPTS.items) || [];
+  if (!items.length) {
+    sel.innerHTML = `<option value="">(daftar item tidak tersedia)</option>`;
+    sel.disabled = true;
+    sel.title = (ITEM_OPTS && ITEM_OPTS.error) || "";
+    return;
+  }
+  sel.disabled = false;
+  sel.innerHTML = ['<option value="">— pilih item —</option>']
+    .concat(items.map((it) => `<option value="${escapeHtml(it)}"${it === value ? " selected" : ""}>${escapeHtml(it)}</option>`))
+    .join("");
+}
+function fillSubSelect(sel, item, value) {
+  const subs = (item && ITEM_OPTS && ITEM_OPTS.subs && ITEM_OPTS.subs[item]) || [];
+  sel.disabled = !item || !subs.length;
+  if (!item) {
+    sel.innerHTML = `<option value="">— pilih item dulu —</option>`;
+    return;
+  }
+  if (!subs.length) {
+    sel.innerHTML = `<option value="">(item ini tanpa sub-item)</option>`;
+    return;
+  }
+  sel.innerHTML = ['<option value="">— pilih sub-item —</option>']
+    .concat(subs.map((x) => `<option value="${escapeHtml(x)}"${x === value ? " selected" : ""}>${escapeHtml(x)}</option>`))
+    .join("");
+}
+/**
+ * Hubungkan sepasang dropdown item/sub-item. Saran dari keterangan hanya mengisi
+ * selama user belum memilih sendiri; begitu dipilih manual, saran tidak menimpanya.
+ */
+function bindItemPair(itemSel, subSel, tagEl) {
+  let manual = false;
+  const markManual = () => {
+    manual = true;
+    if (tagEl) tagEl.classList.add("hidden");
+  };
+  itemSel.addEventListener("change", () => {
+    markManual();
+    fillSubSelect(subSel, itemSel.value, "");
+  });
+  subSel.addEventListener("change", markManual);
+  return {
+    applySaran(keterangan) {
+      if (manual) return;
+      const sr = itemSaran(keterangan);
+      fillItemSelect(itemSel, sr ? sr.item : "");
+      fillSubSelect(subSel, sr ? sr.item : "", sr ? sr.sub : "");
+      if (tagEl) tagEl.classList.toggle("hidden", !sr);
+    },
+    reset() {
+      manual = false;
+    },
+  };
 }
 
 // Datalist bersama untuk field KETERANGAN di pratinjau (ketik untuk mencari).
@@ -435,6 +513,8 @@ function biayaRowHtml(entry) {
     <td><select class="f-outlet">${outletOpts}</select></td>
     <td><select class="f-status">${statusOpts}</select></td>
     <td><select class="f-sumber">${sdOpts}</select></td>
+    <td><select class="f-item"></select><span class="saran-tag hidden">saran</span></td>
+    <td><select class="f-subitem"></select></td>
     <td><small>otomatis</small></td>
     <td><small>${sumber}${badge}${escapeHtml(entry.catatan || "")}</small></td>
     <td><button class="btn-mini" title="Hapus baris">✕</button></td>`;
@@ -447,9 +527,11 @@ function addBiayaRow(entry) {
   tr.innerHTML = biayaRowHtml(entry);
   tr.querySelector(".btn-mini").addEventListener("click", () => tr.remove());
   const ketInput = tr.querySelector(".f-keterangan");
+  const itemPair = bindItemPair(tr.querySelector(".f-item"), tr.querySelector(".f-subitem"), tr.querySelector(".saran-tag"));
   const syncKet = () => {
     // Cocokkan teks yang diketik/dipilih dgn daftar (tanpa peduli besar/kecil & spasi).
     const found = bmFindKeterangan(ketInput.value);
+    itemPair.applySaran(found ? found.keterangan : ketInput.value);
     tr.querySelector(".subjek").textContent = found && found.subjek ? found.subjek : "";
     // Rekomendasi outlet otomatis (hanya bila outlet masih kosong); aturan dari server.
     const outletSel = tr.querySelector(".f-outlet");
@@ -458,6 +540,7 @@ function addBiayaRow(entry) {
   };
   ketInput.addEventListener("input", syncKet);
   ketInput.addEventListener("change", syncKet);
+  itemPair.applySaran(ketInput.value); // isi awal dari keterangan hasil baca AI
   const viewLink = tr.querySelector(".view-bukti");
   if (viewLink) {
     viewLink.addEventListener("click", (ev) => {
@@ -523,6 +606,8 @@ $("#btn-biaya-submit").addEventListener("click", async () => {
     outlet: tr.querySelector(".f-outlet").value,
     status: tr.querySelector(".f-status").value,
     sumberDana: tr.querySelector(".f-sumber").value,
+    itemBiaya: tr.querySelector(".f-item").value,
+    subItemBiaya: tr.querySelector(".f-subitem").value,
   }));
   if (!rows.length) return showLog(out, "✘ Tidak ada baris.", true);
   $("#btn-biaya-submit").disabled = true;
@@ -545,6 +630,7 @@ $("#btn-biaya-submit").addEventListener("click", async () => {
 
 // ===== Input Biaya Manual (langsung ke INPUT PENGGUNAAN BIAYA) =====
 let BM_FILLED = false;
+let BM_ITEMS = null; // pasangan dropdown Item/Sub Item Biaya pada form manual
 async function ensureManualBiaya() {
   await loadOptions();
   if (!BM_FILLED) {
@@ -555,6 +641,8 @@ async function ensureManualBiaya() {
     $("#bm-outlet").innerHTML = '<option value="">— pilih —</option>' + o.outlets.map((s) => `<option>${escapeHtml(s)}</option>`).join("");
     $("#bm-status").innerHTML = o.status.map((s) => `<option${s === "BELUM INPUT" ? " selected" : ""}>${escapeHtml(s)}</option>`).join("");
     $("#bm-sumber").innerHTML = '<option value="">— pilih —</option>' + o.sumberDana.map((s) => `<option>${escapeHtml(s)}</option>`).join("");
+    BM_ITEMS = bindItemPair($("#bm-item"), $("#bm-subitem"), $("#bm-item-saran"));
+    BM_ITEMS.applySaran($("#bm-keterangan").value);
     BM_FILLED = true;
   }
   const dt = $("#bm-tanggal");
@@ -569,6 +657,7 @@ function bmFindKeterangan(text) {
 }
 function bmUpdateKeterangan() {
   const found = bmFindKeterangan($("#bm-keterangan").value);
+  if (BM_ITEMS) BM_ITEMS.applySaran(found ? found.keterangan : $("#bm-keterangan").value);
   $("#bm-subjek-note").innerHTML = found && found.subjek ? `Subjek Biaya (otomatis): <b>${escapeHtml(found.subjek)}</b>` : "";
   if (found) {
     const rec = (OPTIONS.outletRecommendations || {})[found.keterangan.trim().toLowerCase()];
@@ -590,6 +679,8 @@ $("#btn-bm-submit").addEventListener("click", async () => {
     outlet: $("#bm-outlet").value,
     status: $("#bm-status").value,
     sumberDana: $("#bm-sumber").value,
+    itemBiaya: $("#bm-item").value,
+    subItemBiaya: $("#bm-subitem").value,
   };
   if (!row.nominal || Number(row.nominal) <= 0) return showLog(out, "✘ Nominal tidak valid.", true);
   if (!row.tanggal) return showLog(out, "✘ Pilih tanggal.", true);
@@ -606,6 +697,10 @@ $("#btn-bm-submit").addEventListener("click", async () => {
     $("#bm-keterangan").value = "";
     $("#bm-nominal").value = "";
     $("#bm-subjek-note").innerHTML = "";
+    if (BM_ITEMS) {
+      BM_ITEMS.reset();
+      BM_ITEMS.applySaran("");
+    }
     loadSmart(); // perbarui daftar & notifikasi Lapor Smartlink (biaya baru bisa BELUM INPUT)
   } catch (e) {
     showLog(out, "✘ " + e.message, true);
@@ -1411,7 +1506,7 @@ let SMART_EDIT = null; // nomor baris yang sedang diedit
 const SMART_CHECKED = new Set(); // nomor baris tercentang (untuk disembunyikan)
 
 // Indeks kolom A..H pada cells[].
-const SL_COL = { subjek: 0, keterangan: 1, nominal: 2, tanggal: 3, outlet: 4, status: 5, sumberDana: 6, kode: 7 };
+const SL_COL = { subjek: 0, keterangan: 1, nominal: 2, tanggal: 3, outlet: 4, status: 5, sumberDana: 6, kode: 7, item: 8, subItem: 9 };
 
 async function copyTextToClipboard(text) {
   if (navigator.clipboard && window.isSecureContext) {
@@ -1446,6 +1541,8 @@ function slViewRow(r) {
     `<td style="text-align:center">${slStatusBtn(r)}</td>`,
     `<td>${escapeHtml(c[SL_COL.sumberDana])}</td>`,
     `<td>${escapeHtml(c[SL_COL.kode])}</td>`,
+    `<td>${escapeHtml(c[SL_COL.item] || "")}</td>`,
+    `<td>${escapeHtml(c[SL_COL.subItem] || "")}</td>`,
     `<td><button class="sl-edit" data-row="${r.row}" title="Edit baris">✎</button></td>`,
   ].join("");
 }
@@ -1468,6 +1565,8 @@ function slEditRow(r) {
     `<td style="text-align:center">${escapeHtml(c[SL_COL.status])}</td>`,
     `<td><select class="sl-f-sumber">${sumberOpts}</select></td>`,
     `<td>${escapeHtml(c[SL_COL.kode])}</td>`,
+    `<td>${escapeHtml(c[SL_COL.item] || "")}</td>`,
+    `<td>${escapeHtml(c[SL_COL.subItem] || "")}</td>`,
     `<td><button class="sl-save" data-row="${r.row}">💾 Simpan</button> <button class="sl-cancel" data-row="${r.row}">Batal</button></td>`,
   ].join("");
 }

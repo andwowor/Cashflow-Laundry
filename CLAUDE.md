@@ -55,3 +55,10 @@ yang meniru kondisi Mac (logo lokal + lock berubah), pakai `APP_REPO_DIR`.
   dan `src/monbiaya.js`).
 - Jangan pernah menulis rahasia (API key, isi service account) ke repo, commit,
   atau jawaban chat.
+- **ITEM BIAYA (I) & SUB ITEM BIAYA (J)** di INPUT PENGGUNAAN BIAYA (`src/itembiaya.js`):
+  I = dropdown dari `'BANTU DAFTAR ITEM'!A2:A200` (=UNIQUE item dari
+  `DAFTAR ITEM BIAYA SMARTLINK` kolom B). J baris N = dropdown bertingkat dari
+  `'BANTU SUB ITEM'!A{N}:CB{N}` (=UNIQUE(FILTER(C; B = I{N}))) — hanya sub-item milik
+  item di baris itu, maks. 80. Per Nov 2026 baris 121+ memakai daftar datar C2:C1000.
+  Item tanpa sub-item ada (4 item "Penyesuaian Persediaan …"). Selalu tulis ejaan
+  resmi dari dropdown; sub-item yang disaring per item sah untuk kedua jenis baris.

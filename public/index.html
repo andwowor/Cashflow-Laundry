@@ -217,7 +217,8 @@
         <h3>Input Biaya Manual</h3>
         <p class="hint">Isi satu biaya secara manual lalu simpan langsung ke sheet <b>INPUT PENGGUNAAN BIAYA</b>
           (di baris kosong terbawah). <b>Subjek Biaya</b> &amp; <b>Kode Transaksi</b> terisi otomatis oleh
-          spreadsheet (hanya tampilan).</p>
+          spreadsheet (hanya tampilan). <b>Item</b> &amp; <b>Sub Item Biaya</b> mengikuti dropdown kolom I &amp; J —
+          pilihan sub-item menyesuaikan item yang dipilih; yang bertanda <i>saran</i> terisi otomatis dari keterangan.</p>
         <div class="bm-grid">
           <div class="bm-field">
             <label>Keterangan <small>(ketik untuk cari)</small></label>
@@ -244,6 +245,14 @@
             <label>Sumber Dana</label>
             <select id="bm-sumber"><option value="">— pilih —</option></select>
           </div>
+          <div class="bm-field">
+            <label>Item Biaya <span id="bm-item-saran" class="saran-tag hidden">saran</span></label>
+            <select id="bm-item"></select>
+          </div>
+          <div class="bm-field">
+            <label>Sub Item Biaya</label>
+            <select id="bm-subitem"></select>
+          </div>
         </div>
         <div class="hint" id="bm-subjek-note"></div>
         <div class="actions">
@@ -255,7 +264,8 @@
       <div id="biaya-preview" class="card hidden">
         <h3>Pratinjau — periksa sebelum submit</h3>
         <p class="hint">Subjek Biaya &amp; Kode Transaksi terisi otomatis oleh spreadsheet (hanya tampilan).
-           Outlet wajib dipilih manual. Status selalu <b>BELUM INPUT</b>.</p>
+           Outlet wajib dipilih manual. Status selalu <b>BELUM INPUT</b>. Item &amp; Sub Item Biaya terisi otomatis
+           sebagai <i>saran</i> dari keterangan (boleh diganti); sub-item hanya menampilkan pilihan milik item terpilih.</p>
         <div class="table-wrap">
           <table id="biaya-table">
             <thead>
@@ -267,6 +277,8 @@
                 <th>Outlet</th>
                 <th>Status Smartlink</th>
                 <th>Sumber Dana</th>
+                <th>Item Biaya</th>
+                <th>Sub Item Biaya</th>
                 <th>Kode<br><small>(otomatis)</small></th>
                 <th>Catatan AI</th>
                 <th></th>

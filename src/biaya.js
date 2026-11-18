@@ -2,6 +2,7 @@
 
 const path = require("path");
 const cfg = require("./config");
+const itembiaya = require("./itembiaya");
 const { readRange, batchWrite, resolveCashflowSpreadsheetId } = require("./sheets");
 const { extractBiaya } = require("./claude");
 
@@ -241,6 +242,22 @@ async function submit(rows, aiSuggestions) {
   }
 
   const cashflow = await resolveCashflowSpreadsheetId();
+
+  // ITEM BIAYA / SUB ITEM BIAYA (opsional per baris): disamakan ke ejaan resmi
+  // dropdown kolom I/J dan diperiksa SEBELUM menulis apa pun.
+  const adaItem = rows.some((r) => String(r.itemBiaya || "").trim() || String(r.subItemBiaya || "").trim());
+  let pairs = rows.map(() => ({ item: "", sub: "" }));
+  if (adaItem) {
+    const opts = await itembiaya.loadItemOptions(cashflow.id);
+    pairs = rows.map((r, i) => {
+      try {
+        return itembiaya.resolvePair(opts, r.itemBiaya, r.subItemBiaya);
+      } catch (err) {
+        throw new Error(`Baris ${i + 1} (${r.keterangan}): ${err.message}`);
+      }
+    });
+  }
+
   // Lokasi penulisan: selalu baris kosong tepat di bawah baris TERBAWAH yang
   // sudah terisi. Pengecekan ini SELALU dibaca ulang (live) di sini, tepat
   // sebelum menulis — jadi bila ada pengisian manual langsung di spreadsheet,
@@ -264,7 +281,10 @@ async function submit(rows, aiSuggestions) {
     r.sumberDana || "",
   ]);
   const endRow = appendRow + rows.length - 1;
-  await batchWrite(cashflow.id, [{ range: `'${SHEET}'!B${appendRow}:G${endRow}`, values }]);
+  // B:G dan I:J dalam SATU permintaan. Kolom H (KODE TRANSAKSI) tidak disentuh.
+  const data = [{ range: `'${SHEET}'!B${appendRow}:G${endRow}`, values }];
+  if (adaItem) data.push({ range: `'${SHEET}'!I${appendRow}:J${endRow}`, values: pairs.map((p) => [p.item, p.sub]) });
+  await batchWrite(cashflow.id, data);
 
   recordLearning(aiSuggestions, rows);
 
@@ -274,6 +294,7 @@ async function submit(rows, aiSuggestions) {
     barisAwal: appendRow,
     barisAkhir: endRow,
     jumlah: rows.length,
+    itemDiisi: pairs.filter((p) => p.item).length,
   };
 }
 
