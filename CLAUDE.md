@@ -59,6 +59,8 @@ yang meniru kondisi Mac (logo lokal + lock berubah), pakai `APP_REPO_DIR`.
   I = dropdown dari `'BANTU DAFTAR ITEM'!A2:A200` (=UNIQUE item dari
   `DAFTAR ITEM BIAYA SMARTLINK` kolom B). J baris N = dropdown bertingkat dari
   `'BANTU SUB ITEM'!A{N}:CB{N}` (=UNIQUE(FILTER(C; B = I{N}))) — hanya sub-item milik
-  item di baris itu, maks. 80. Per Nov 2026 baris 121+ memakai daftar datar C2:C1000.
+  item di baris itu, maks. 80. Sejak 18 Nov 2026 seluruh J2:J998 (CASHFLOW NOVEMBER 2026)
+  sudah bertingkat; sebelumnya baris 121+ memakai daftar datar C2:C1000 — cek lagi bila
+  spreadsheet bulan baru dibuat dari templat lama.
   Item tanpa sub-item ada (4 item "Penyesuaian Persediaan …"). Selalu tulis ejaan
   resmi dari dropdown; sub-item yang disaring per item sah untuk kedua jenis baris.

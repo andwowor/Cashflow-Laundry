@@ -11,8 +11,9 @@
 //                  'DAFTAR ITEM BIAYA SMARTLINK'!C2:C1000;
 //                  'DAFTAR ITEM BIAYA SMARTLINK'!B2:B1000 = I{N}; C<>"")));""))
 //               → hanya sub-item milik item di baris yang sama, maks. 80 (kolom A..CB).
-//               (Baris 121+ saat ini memakai daftar datar C2:C1000; sub-item yang
-//               disaring per item tetap sah untuk keduanya.)
+//               (Sejak Nov 2026 berlaku untuk J2:J998. Templat lama memakai daftar
+//               datar C2:C1000 di baris 121+; sub-item yang disaring per item tetap
+//               sah untuk keduanya.)
 //  - Item tanpa sub-item (kolom C kosong) → SUB ITEM harus kosong.
 // Daftar item dibaca LANGSUNG dari sumber dropdown kolom I, dan sub-item dihitung
 // dengan logika yang sama persis dengan formula BANTU SUB ITEM.
