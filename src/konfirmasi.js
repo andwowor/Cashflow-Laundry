@@ -7,6 +7,7 @@ const browser = require("./smartlinkbrowser");
 const monbiaya = require("./monbiaya");
 const { readRange } = require("./sheets");
 const { systemPrompt } = require("./konfirmasiprompt");
+const akun = require("./smartlinkakun");
 
 // =====================================================================
 // Konfirmasi Biaya Smartlink — menjalankan skill konfirmasi-biaya-smartlink
@@ -123,6 +124,14 @@ function customTools(strict) {
       "Lihat daftar item yang sudah tercatat pada proses ini (untuk menghindari memeriksa item yang sama dua kali).",
       {},
       []
+    ),
+    t(
+      "isi_login",
+      "Isi kolom login Smartlink yang SEDANG AKTIF (klik kolomnya dulu) dengan akun yang disimpan Andre di " +
+        "dashboard. Server mengetik nilainya langsung; nilainya tidak pernah terlihat olehmu. " +
+        "kolom 'email' untuk email/username, 'password' untuk kata sandi.",
+      { kolom: { type: "string", enum: ["email", "password"] } },
+      ["kolom"]
     ),
     t(
       "butuh_login",
@@ -463,6 +472,22 @@ async function runCustomTool(run, name, input) {
       return { result: catat(run, input), itemBoundary: true };
     case "progres":
       return { result: progres(run) };
+    case "isi_login": {
+      const a = akun.load();
+      if (!a) {
+        return { result: { ok: false, pesan: "Akun Smartlink belum disimpan di dashboard. Panggil butuh_login." } };
+      }
+      const kolom = input.kolom === "password" ? "password" : "email";
+      if (kolom === "password") {
+        run.loginTries = (run.loginTries || 0) + 1;
+        if (run.loginTries > 2) {
+          return { result: { ok: false, pesan: "Sudah 2 kali mencoba login pada proses ini. Jangan coba lagi — panggil butuh_login." } };
+        }
+      }
+      await browser.typeSecret(kolom === "email" ? a.email : a.password);
+      log(run, kolom === "email" ? "🔐 Login otomatis: mengisi email Smartlink" : "🔐 Login otomatis: mengisi kata sandi", "info");
+      return { result: { ok: true, pesan: kolom === "email" ? "Email sudah diketik." : "Kata sandi sudah diketik (disembunyikan)." } };
+    }
     case "butuh_login":
       run.needLogin = String(input.alasan || "Sesi Smartlink habis.");
       log(run, "🔑 Smartlink meminta login: " + run.needLogin, "warn");
@@ -956,6 +981,7 @@ function status() {
       counts: h.counts, costUsd: h.costUsd, error: h.error,
     })),
     login: { open: !active && browser.isOpen() && browser.isHeadless() === false },
+    akun: akun.info(),
     screenAt: shot ? shot.at : null,
     apiKey: !!process.env.ANTHROPIC_API_KEY,
   };

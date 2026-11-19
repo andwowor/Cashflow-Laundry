@@ -420,8 +420,21 @@ async function perform(name, input = {}) {
   return { text: "OK" };
 }
 
+/**
+ * Ketik nilai rahasia (email/kata sandi login) ke kolom yang sedang aktif.
+ * Isi kolom dibersihkan dulu. Nilainya TIDAK dicatat di log mana pun.
+ */
+async function typeSecret(value) {
+  const p = page();
+  await p.keyboard.press("ControlOrMeta+a");
+  await p.keyboard.press("Backspace");
+  await p.keyboard.type(String(value), { delay: 40 });
+  await sleep(300);
+}
+
 module.exports = {
   SMARTLINK_URL,
+  typeSecret,
   PROFILE_DIR,
   VIEW,
   UI_ACTIONS,

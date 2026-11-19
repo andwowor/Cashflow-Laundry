@@ -1401,6 +1401,7 @@ function kfRender() {
   $("#btn-kf-stop").classList.toggle("hidden", !active);
   $("#btn-kf-login").textContent = k.login && k.login.open ? "✔ Selesai login (tutup jendela)" : "🔑 Login Smartlink";
   kfTabIndicator(active);
+  kfRenderAkun(k.akun);
 
   const panel = $("#kf-panel");
   const run = KF_VIEW || k.run;
@@ -1525,7 +1526,9 @@ function kfRenderResult(panel, run, k) {
         : `✅ Selesai — ${c.disetujui || 0} disetujui, ${c.dilewati || 0} dilewati`;
     } else if (phase === "need_login") {
       cls = "warn";
-      banner = "🔑 Smartlink meminta login. Klik “Login Smartlink”, masuk sebagai owner, lalu jalankan lagi.";
+      banner = k.akun && k.akun.tersimpan
+        ? "🔑 Login otomatis ke Smartlink gagal (kata sandi berubah, atau Smartlink meminta kode OTP). Perbarui akun di “Login otomatis Smartlink”, atau klik “Login Smartlink” untuk masuk manual, lalu jalankan lagi."
+        : "🔑 Smartlink meminta login. Simpan akun di “Login otomatis Smartlink” di atas (sekali saja), lalu jalankan lagi.";
     } else if (phase === "cancelled") {
       cls = "warn";
       banner = `■ Dihentikan — ${c.disetujui || 0} disetujui, ${c.dilewati || 0} dilewati sebelum berhenti`;
@@ -1589,6 +1592,55 @@ function kfRenderResult(panel, run, k) {
     if (ol) kfFillLog(ol, run.log);
   }
 }
+
+// ---------- Akun login otomatis ----------
+let KF_AKUN_INIT = false;
+function kfRenderAkun(a) {
+  if (!a) return;
+  const det = $("#kf-akun");
+  $("#kf-akun-status").textContent = a.tersimpan ? `✔ tersimpan (${a.email})` : "belum diisi";
+  $("#kf-akun-status").className = a.tersimpan ? "kf-akun-ok" : "kf-akun-no";
+  $("#btn-kf-akun-del").classList.toggle("hidden", !a.tersimpan);
+  $("#kf-akun-pass").placeholder = a.tersimpan ? "Kata sandi baru (kosongkan bila tidak berubah)" : "Kata sandi Smartlink";
+  // Belum ada akun → buka formulirnya sekali agar langsung terlihat.
+  if (!KF_AKUN_INIT) {
+    KF_AKUN_INIT = true;
+    if (!a.tersimpan) det.open = true;
+  }
+}
+
+$("#btn-kf-akun-save").addEventListener("click", async () => {
+  const btn = $("#btn-kf-akun-save");
+  btn.disabled = true;
+  try {
+    const r = await api("/api/konfirmasi/akun", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: $("#kf-akun-email").value, password: $("#kf-akun-pass").value }),
+    });
+    $("#kf-akun-pass").value = "";
+    $("#kf-akun-email").value = "";
+    if (KF) KF.akun = r.akun;
+    kfRenderAkun(r.akun);
+    $("#kf-akun").open = false;
+    showLog($("#monbiaya-result"), "✔ Akun Smartlink tersimpan di komputer ini. Robot akan login sendiri bila diperlukan.");
+  } catch (e) {
+    showLog($("#monbiaya-result"), "✘ " + e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+$("#btn-kf-akun-del").addEventListener("click", async () => {
+  if (!confirm("Hapus akun Smartlink yang tersimpan? Robot tidak bisa login sendiri lagi sampai akun diisi ulang.")) return;
+  try {
+    const r = await api("/api/konfirmasi/akun", { method: "DELETE" });
+    if (KF) KF.akun = r.akun;
+    kfRenderAkun(r.akun);
+    showLog($("#monbiaya-result"), "✔ Akun Smartlink dihapus dari komputer ini.");
+  } catch (e) {
+    showLog($("#monbiaya-result"), "✘ " + e.message, true);
+  }
+});
 
 async function kfStart(dryRun) {
   const belum = MONBIAYA && MONBIAYA.rows ? MONBIAYA.rows.filter((r) => !r.verifikasi).length : "?";

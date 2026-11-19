@@ -117,6 +117,21 @@
             <label class="hint kf-check" title="Robot berjalan di jendela Chrome yang terlihat (untuk menonton / memecahkan masalah)">
               <input type="checkbox" id="kf-show" /> Tampilkan jendela browser</label>
           </div>
+          <details id="kf-akun" class="kf-akun">
+            <summary>🔐 Login otomatis Smartlink: <span id="kf-akun-status">memuat…</span></summary>
+            <div class="kf-akun-body">
+              <p class="hint">Isi sekali saja. Sesi login Smartlink robot tersimpan, dan bila sesinya habis robot
+                login sendiri memakai akun ini — Anda tidak perlu login berulang kali. Akun disimpan <b>hanya di
+                komputer yang menjalankan dashboard</b> (tidak dikirim ke GitHub maupun ke AI; robot mengetiknya
+                langsung ke kolom login).</p>
+              <div class="kf-akun-form">
+                <input type="email" id="kf-akun-email" placeholder="Email Smartlink" autocomplete="off" />
+                <input type="password" id="kf-akun-pass" placeholder="Kata sandi Smartlink" autocomplete="new-password" />
+                <button id="btn-kf-akun-save" class="btn-primary">Simpan akun</button>
+                <button id="btn-kf-akun-del" class="btn-ghost hidden">Hapus akun</button>
+              </div>
+            </div>
+          </details>
           <div id="kf-panel" class="kf-panel hidden"></div>
         </div>
 

@@ -28,6 +28,7 @@ const tunnel = require("./src/tunnel");
 const receipt = require("./src/receipt");
 const appupdate = require("./src/appupdate");
 const konfirmasi = require("./src/konfirmasi");
+const smartlinkakun = require("./src/smartlinkakun");
 const { MODEL } = require("./src/claude");
 const auth = require("./src/auth");
 
@@ -464,6 +465,21 @@ app.post("/api/konfirmasi/login", wrap(async (req, res) => {
 
 app.post("/api/konfirmasi/login/close", wrap(async (req, res) => {
   res.json(await konfirmasi.closeLogin());
+}));
+
+// Akun Smartlink untuk login otomatis robot — disimpan hanya di data/ komputer ini.
+// Kata sandi tidak pernah dikirim balik ke browser.
+app.get("/api/konfirmasi/akun", wrap(async (req, res) => {
+  res.json({ ok: true, akun: smartlinkakun.info() });
+}));
+
+app.post("/api/konfirmasi/akun", wrap(async (req, res) => {
+  const b = req.body || {};
+  res.json({ ok: true, akun: smartlinkakun.save({ email: b.email, password: b.password }) });
+}));
+
+app.delete("/api/konfirmasi/akun", wrap(async (req, res) => {
+  res.json({ ok: true, akun: smartlinkakun.clear() });
 }));
 
 // ---------- Link online (Cloudflare Tunnel) ----------

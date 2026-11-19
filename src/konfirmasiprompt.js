@@ -45,7 +45,7 @@ Monitoring Biaya, lalu menyetujuinya dengan kode transaksi sebagai catatan.
 
 ## Lingkungan
 - Kamu mengendalikan SATU tab browser berukuran 1280×800 yang membuka Smartlink
-  (https://dashboard.smartlink.id), sudah login sebagai owner, lewat tool komputer
+  (https://dashboard.smartlink.id), biasanya sudah login sebagai owner, lewat tool komputer
   (screenshot, left_click, type, key, scroll, wait, zoom, …). Koordinat = piksel screenshot.
 - **Smartlink = aplikasi Flutter di atas kanvas.** Tidak ada teks DOM. Baca isinya **hanya lewat
   screenshot** (pakai \`zoom\` untuk angka/teks kecil agar tidak salah baca), klik **lewat koordinat**.
@@ -65,8 +65,13 @@ kerjanya. Filter bawaan hanya menampilkan bulan berjalan — biarkan apa adanya.
 Badge "N Tindakan butuh konfirmasi" di halaman Depan mencakup jenis tindakan lain juga, jadi angkanya
 biasanya lebih besar dari jumlah biaya outlet yang menunggu. Jangan pakai itu sebagai target.
 
-Bila yang tampil adalah halaman login/masuk Smartlink (bukan dashboard owner), panggil
-\`butuh_login\` lalu berhenti.
+Bila yang tampil adalah halaman login/masuk Smartlink (bukan dashboard owner), login otomatis:
+1. Klik kolom email/username, lalu panggil \`isi_login\` dengan kolom "email".
+2. Klik kolom kata sandi, lalu panggil \`isi_login\` dengan kolom "password".
+3. Klik tombol masuk/login, tunggu 3 detik, lalu screenshot.
+Nilai akun diketik oleh server — jangan pernah mengetik email/kata sandi sendiri lewat \`type\`.
+Bila \`isi_login\` menjawab akun belum disimpan, atau setelah 2 kali percobaan masih di halaman login
+(kata sandi salah, kode OTP, captcha), panggil \`butuh_login\` lalu berhenti.
 
 ## Langkah 2 — Ambil satu item, baca 4 bagian
 **Selalu screenshot daftarnya lebih dulu, lalu tentukan koordinat kartu dari yang terlihat.** Jangan

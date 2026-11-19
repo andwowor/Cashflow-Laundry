@@ -73,3 +73,6 @@ yang meniru kondisi Mac (logo lokal + lock berubah), pakai `APP_REPO_DIR`.
   sudah ✓ tapi belum disetujui disimpan per KODE TRANSAKSI (`data/konfirmasi_pending.json`), bukan
   per nomor baris. dashboard.smartlink.id tidak terjangkau dari sesi cloud — uji dengan tiruan
   Smartlink kanvas + tiruan API. Bila skill-nya berubah, sesuaikan `src/konfirmasiprompt.js`.
+  Login otomatis: akun Smartlink diisi user SEKALI di formulir dashboard → `data/smartlink_akun.json`
+  (izin 600, `src/smartlinkakun.js`). Tool `isi_login` mengetik nilainya langsung ke kolom yang aktif;
+  email/sandi tidak pernah masuk percakapan AI, log, riwayat, ataupun repo (maks. 2 percobaan/proses).
