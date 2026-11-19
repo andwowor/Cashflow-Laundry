@@ -232,6 +232,7 @@ input[type="file"] { font-family: var(--font); font-size: 13.5px; }
   box-shadow: var(--shadow);
 }
 .result-log.error { background: #4a1714; color: #ffd7cf; }
+.result-log { overflow-wrap: anywhere; } /* teks/URL panjang tidak melebarkan halaman di HP */
 
 .loading { color: var(--teal); font-size: 14.5px; font-weight: 600; padding: 10px 0; }
 .error { color: var(--err); font-size: 14px; padding: 8px 0; }
@@ -493,3 +494,89 @@ details.hint summary { cursor: pointer; font-weight: 700; color: var(--teal-dark
 }
 .saran-tag.hidden { display: none; }
 
+
+/* ===================== Konfirmasi Biaya Smartlink otomatis ===================== */
+.kf-box {
+  margin-top: 18px; padding: 16px 18px; border-radius: var(--radius-sm);
+  border: 1px solid var(--line); background: linear-gradient(180deg, #f7fbfb, #fffdf8);
+}
+.kf-box .kf-title { margin: 0 0 4px; font-size: 16px; font-weight: 800; color: var(--teal-dark); }
+.kf-box .actions { margin-top: 10px; }
+.kf-check { display: inline-flex; align-items: center; gap: 6px; margin: 0; cursor: pointer; }
+.kf-stop { border-color: var(--err); color: var(--err); }
+.kf-stop:hover { background: var(--err-soft); color: var(--err); border-color: var(--err); }
+.kf-panel { margin-top: 14px; }
+.tab-robot { margin-left: 6px; display: inline-block; animation: kf-bob 1.2s ease-in-out infinite; }
+@keyframes kf-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+
+.kf-status { display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--teal-dark); }
+.kf-spin {
+  width: 16px; height: 16px; border-radius: 50%; flex: 0 0 auto;
+  border: 3px solid var(--teal-soft); border-top-color: var(--teal); animation: kf-rot 0.8s linear infinite;
+}
+@keyframes kf-rot { to { transform: rotate(360deg); } }
+.kf-step { margin: 6px 0 8px; font-size: 14px; color: var(--ink); min-height: 1.4em; }
+.kf-stats, .kf-kpis { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.kf-chip {
+  background: var(--teal-soft); color: var(--teal-dark); border-radius: 999px;
+  padding: 3px 10px; font-size: 12.5px; font-weight: 700;
+}
+.kf-live { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+@media (max-width: 900px) { .kf-live { grid-template-columns: 1fr; } }
+.kf-shot { margin: 0; }
+.kf-shot img {
+  width: 100%; border-radius: 10px; border: 1px solid var(--line); cursor: zoom-in; display: block;
+  background: #fff; box-shadow: var(--shadow);
+}
+.kf-shot img.hidden { display: none; }
+.kf-shot-empty {
+  aspect-ratio: 16 / 10; display: flex; align-items: center; justify-content: center;
+  border: 1px dashed var(--line); border-radius: 10px; background: #fff;
+}
+.kf-shot-empty.hidden { display: none; }
+.kf-shot figcaption { margin-top: 4px; }
+.kf-log {
+  list-style: none; margin: 0; padding: 8px 10px; max-height: 420px; overflow: auto;
+  background: #0e3a43; color: #d2ecef; border-radius: 10px; font-size: 12.5px; line-height: 1.45;
+}
+.kf-log li { padding: 3px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.06); white-space: pre-wrap; word-break: break-word; }
+.kf-log-t { color: #7fb3bb; margin-right: 8px; font-variant-numeric: tabular-nums; }
+.kf-log .kf-log-detail { color: #8fb4ba; font-size: 11.5px; }
+.kf-log .kf-log-ok { color: #b7f0c8; }
+.kf-log .kf-log-warn { color: #ffe1a3; }
+.kf-log .kf-log-err { color: #ffb4a8; }
+.kf-log .kf-log-ai { color: #e9f6f7; font-style: italic; }
+.kf-log-static { max-height: 320px; margin-top: 8px; }
+
+.kf-banner { padding: 12px 14px; border-radius: 10px; font-weight: 800; font-size: 15px; }
+.kf-ok { background: #e3f3ec; color: #145c45; border: 1px solid #b9e2cf; }
+.kf-warn { background: var(--gold-soft); color: #8a5c10; border: 1px solid #efd9a3; }
+.kf-err { background: var(--err-soft); color: #8e2a20; border: 1px solid #f2c0b7; }
+.kf-meta { margin: 6px 0 10px; }
+.kf-h { margin: 14px 0 6px; font-size: 14.5px; }
+.kf-h-ok { color: #145c45; }
+.kf-h-warn { color: #8a5c10; }
+.kf-table td { vertical-align: top; }
+.kf-kode { font-family: "SF Mono", "Consolas", monospace; }
+.kf-table .kf-warn { margin-top: 4px; padding: 2px 6px; font-size: 11.5px; font-weight: 700; border-radius: 6px; }
+.kf-kpis { margin-top: 14px; }
+.kf-kpi {
+  flex: 1 1 180px; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.kf-kpi b { font-size: 22px; color: var(--teal-dark); }
+.kf-kpi span { font-size: 12.5px; color: var(--ink-soft); }
+.kf-details { margin-top: 10px; font-size: 13.5px; }
+.kf-details summary { cursor: pointer; font-weight: 700; color: var(--teal-dark); }
+.kf-list { margin: 6px 0 0; padding-left: 20px; line-height: 1.6; }
+.kf-summary { margin-top: 12px; padding: 10px 14px; border-left: 4px solid var(--teal); background: #fff; border-radius: 6px; }
+.kf-summary p { margin: 4px 0; color: var(--ink); }
+.kf-note {
+  margin-bottom: 10px; padding: 10px 14px; border-radius: 10px;
+  background: var(--teal-soft); color: var(--teal-deep); font-size: 14px;
+}
+/* Layar HP: tombol berlabel panjang boleh turun baris agar tidak melebar keluar layar. */
+@media (max-width: 600px) {
+  .actions > .btn-primary, .actions > .btn-ghost { white-space: normal; max-width: 100%; text-align: center; }
+}
+.kf-table td:last-child { min-width: 190px; }

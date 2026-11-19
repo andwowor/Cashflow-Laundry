@@ -64,3 +64,12 @@ yang meniru kondisi Mac (logo lokal + lock berubah), pakai `APP_REPO_DIR`.
   spreadsheet bulan baru dibuat dari templat lama.
   Item tanpa sub-item ada (4 item "Penyesuaian Persediaan …"). Selalu tulis ejaan
   resmi dari dropdown; sub-item yang disaring per item sah untuk kedua jenis baris.
+- **Konfirmasi Biaya Smartlink otomatis** (tombol di Monitoring Biaya; `src/konfirmasi.js`,
+  `src/smartlinkbrowser.js`, `src/konfirmasiprompt.js`): menjalankan skill
+  konfirmasi-biaya-smartlink lewat Claude computer use (`computer_toolset_20260801`) pada Chrome
+  tersembunyi di Mac (playwright-core, `channel: "chrome"`, profil `data/smartlink-chrome`; login
+  Smartlink sekali lewat tombol "Login Smartlink"). Pencocokan 5 kolom + tanda ✓ VERIFIKASI OWNER
+  dikerjakan server (tool `cocokkan_biaya` → sheet BIAYA), bukan lewat DOM dashboard. Baris yang
+  sudah ✓ tapi belum disetujui disimpan per KODE TRANSAKSI (`data/konfirmasi_pending.json`), bukan
+  per nomor baris. dashboard.smartlink.id tidak terjangkau dari sesi cloud — uji dengan tiruan
+  Smartlink kanvas + tiruan API. Bila skill-nya berubah, sesuaikan `src/konfirmasiprompt.js`.

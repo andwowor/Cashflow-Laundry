@@ -143,6 +143,7 @@ $$(".tab").forEach((btn) => {
     btn.classList.add("active");
     $("#tab-" + btn.dataset.tab).classList.add("active");
     if (btn.dataset.tab === "monbiaya" && !MONBIAYA_LOADED) loadMonBiaya();
+    if (btn.dataset.tab === "monbiaya") kfPoll();
     if (btn.dataset.tab === "smartlink" && !SMART_LOADED) loadSmart();
     if (btn.dataset.tab === "riwayat" && !RB_LOADED) rbOpen();
     if (btn.dataset.tab === "daftarbiaya" && !DB_LOADED) loadDaftarBiaya();
@@ -1317,6 +1318,370 @@ $("#monbiaya-table").addEventListener("change", (e) => {
 
 $("#btn-monbiaya-refresh").addEventListener("click", () => loadMonBiaya(true));
 
+// ================= Konfirmasi Biaya Smartlink otomatis =================
+// Tombol menjalankan skill konfirmasi-biaya-smartlink di server (robot browser +
+// Claude). Panel menampilkan progres langsung (langkah, log, layar terakhir) lalu
+// laporan akhir. Status diambil berkala selama proses berjalan.
+let KF = null; // status terakhir dari server
+let KF_TIMER = null;
+let KF_WAS_ACTIVE = false;
+let KF_SHOT_AT = 0;
+let KF_LOG_SIG = "";
+let KF_VIEW = null; // run riwayat yang sedang dilihat (null = terbaru)
+
+const KF_ALASAN = {
+  TIDAK_ADA_PASANGAN: "tidak ada pasangan di dashboard",
+  AMBIGU: "ambigu — lebih dari satu baris cocok",
+  SUMBER_BANK: "sumber dana bank, bukan kas tunai",
+  SUDAH_TERVERIFIKASI: "baris dashboard sudah terverifikasi",
+  TANPA_KETERANGAN: "tanpa keterangan di Smartlink",
+  TANPA_KODE: "kode transaksi kosong di dashboard",
+  GAGAL_VERIFIKASI: "gagal menandai ✓ di dashboard",
+  GAGAL_SETUJUI: "gagal menyetujui di Smartlink",
+  LAINNYA: "lainnya",
+};
+
+function kfDur(sec) {
+  sec = Math.max(0, Math.round(sec || 0));
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return m ? `${m} mnt ${s} dtk` : `${s} dtk`;
+}
+function kfTgl(iso) {
+  const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : escapeHtml(iso || "—");
+}
+function kfWaktu(iso) {
+  if (!iso) return "";
+  return new Date(iso).toLocaleString("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+function kfCost(usd) {
+  return usd == null ? "" : `$${Number(usd).toFixed(2)}`;
+}
+
+function kfSchedule() {
+  clearTimeout(KF_TIMER);
+  if (KF && KF.active) KF_TIMER = setTimeout(kfPoll, document.hidden ? 5000 : 2000);
+}
+
+async function kfPoll() {
+  try {
+    KF = await api("/api/konfirmasi/status");
+  } catch {
+    kfSchedule();
+    return;
+  }
+  if (KF.active) KF_VIEW = null; // proses baru → tampilkan yang sedang berjalan
+  kfRender();
+  if (KF_WAS_ACTIVE && !KF.active && MONBIAYA_LOADED) loadMonBiaya(); // tampilkan ✓ terbaru
+  KF_WAS_ACTIVE = KF.active;
+  kfSchedule();
+}
+
+function kfTabIndicator(active) {
+  const btn = document.querySelector('.tab[data-tab="monbiaya"]');
+  if (!btn) return;
+  let s = btn.querySelector(".tab-robot");
+  if (active && !s) {
+    s = document.createElement("span");
+    s.className = "tab-robot";
+    s.title = "Konfirmasi Biaya Smartlink sedang berjalan";
+    s.textContent = "🤖";
+    btn.appendChild(s);
+  } else if (!active && s) s.remove();
+}
+
+function kfRender() {
+  const k = KF;
+  if (!k) return;
+  const active = k.active;
+  $("#btn-kf-run").disabled = active;
+  $("#btn-kf-dry").disabled = active;
+  $("#btn-kf-login").disabled = active;
+  $("#btn-kf-stop").classList.toggle("hidden", !active);
+  $("#btn-kf-login").textContent = k.login && k.login.open ? "✔ Selesai login (tutup jendela)" : "🔑 Login Smartlink";
+  kfTabIndicator(active);
+
+  const panel = $("#kf-panel");
+  const run = KF_VIEW || k.run;
+  if (!run && !(k.login && k.login.open) && !(k.history && k.history.length)) {
+    panel.classList.add("hidden");
+    return;
+  }
+  panel.classList.remove("hidden");
+  if (active && !KF_VIEW) kfRenderProgress(panel, k);
+  else kfRenderResult(panel, run, k);
+}
+
+// ---------- Tampilan "dalam progress" ----------
+function kfRenderProgress(panel, k) {
+  const run = k.run;
+  if (panel.dataset.kind !== "progress") {
+    panel.dataset.kind = "progress";
+    KF_SHOT_AT = 0;
+    KF_LOG_SIG = "";
+    panel.innerHTML = `
+      <div class="kf-progress">
+        <div class="kf-status"><span class="kf-spin"></span><b class="kf-phase"></b><span class="kf-elapsed hint"></span></div>
+        <div class="kf-step"></div>
+        <div class="kf-stats"></div>
+        <div class="kf-live">
+          <figure class="kf-shot">
+            <img alt="Layar Smartlink yang sedang dilihat robot" class="hidden" />
+            <div class="kf-shot-empty hint">Menunggu layar pertama dari Smartlink…</div>
+            <figcaption class="hint">Layar Smartlink yang sedang dilihat robot · klik untuk memperbesar</figcaption>
+          </figure>
+          <ol class="kf-log"></ol>
+        </div>
+      </div>`;
+    panel.querySelector(".kf-shot img").addEventListener("click", (e) => openImageUrlModal(e.target.src, "Layar Smartlink"));
+  }
+  panel.querySelector(".kf-phase").textContent =
+    (run.phase === "starting" ? "Menyiapkan" : "Sedang berjalan") + (run.dryRun ? " — CEK SAJA" : "") + "…";
+  panel.querySelector(".kf-elapsed").textContent = " · " + kfDur(run.elapsedSec);
+  panel.querySelector(".kf-step").textContent = run.step || "";
+  const c = run.counts || {};
+  const chips = run.dryRun
+    ? [`🟢 ${c.cocok || 0} cocok`, `⏭ ${c.dilewati || 0} dilewati`]
+    : [`✅ ${c.disetujui || 0} disetujui`, `⏭ ${c.dilewati || 0} dilewati`];
+  if (c.sudah) chips.push(`☑ ${c.sudah} sudah disetujui`);
+  chips.push(`🧠 ${run.calls || 0} langkah AI`, `💲 ${kfCost(run.costUsd)}`);
+  panel.querySelector(".kf-stats").innerHTML = chips.map((t) => `<span class="kf-chip">${escapeHtml(t)}</span>`).join("");
+
+  if (k.screenAt && k.screenAt !== KF_SHOT_AT) {
+    KF_SHOT_AT = k.screenAt;
+    const img = panel.querySelector(".kf-shot img");
+    img.src = `/api/konfirmasi/screen?t=${k.screenAt}`;
+    img.classList.remove("hidden");
+    panel.querySelector(".kf-shot-empty").classList.add("hidden");
+  }
+  kfFillLog(panel.querySelector(".kf-log"), run.log);
+}
+
+function kfFillLog(ol, log) {
+  const items = (log || []).slice(-80);
+  const sig = items.length + ":" + (items.length ? items[items.length - 1].t : 0);
+  if (ol.dataset.sig === sig) return;
+  ol.dataset.sig = sig;
+  ol.innerHTML = items
+    .slice()
+    .reverse()
+    .map((e) => {
+      const jam = new Date(e.t).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      return `<li class="kf-log-${escapeHtml(e.kind)}"><span class="kf-log-t">${jam}</span>${escapeHtml(e.text)}</li>`;
+    })
+    .join("");
+}
+
+// ---------- Tampilan hasil / laporan ----------
+function kfItemRows(list, withAlasan) {
+  return list
+    .map(
+      (i, n) => `<tr>
+        <td>${n + 1}</td>
+        <td>${escapeHtml(i.keterangan || "(tanpa keterangan)")}</td>
+        <td class="num">${fmtRp(i.nominal)}</td>
+        <td>${kfTgl(i.tanggal)}</td>
+        <td>${escapeHtml(i.outlet || "")}</td>
+        <td>${escapeHtml(i.nomor || "—")}</td>
+        ${withAlasan
+          ? `<td>${escapeHtml(KF_ALASAN[i.alasan] || i.alasanLabel || i.alasan || "")}${i.catatan ? `<div class="hint">${escapeHtml(i.catatan)}</div>` : ""}</td>`
+          : `<td class="kf-kode">${escapeHtml(i.kode || "—")}${i.peringatan ? `<div class="kf-warn">⚠ ${escapeHtml(i.peringatan)}</div>` : ""}</td>`}
+      </tr>`
+    )
+    .join("");
+}
+function kfTable(title, list, withAlasan, cls = "") {
+  if (!list || !list.length) return "";
+  const last = withAlasan ? "Alasan" : "Kode transaksi";
+  return `<h4 class="kf-h ${cls}">${title} (${list.length})</h4>
+    <div class="table-wrap"><table class="kf-table"><thead><tr><th>#</th><th>Keterangan</th><th>Nominal</th>
+    <th>Tanggal</th><th>Outlet</th><th>NOMOR</th><th>${last}</th></tr></thead>
+    <tbody>${kfItemRows(list, withAlasan)}</tbody></table></div>`;
+}
+function kfDashRows(list) {
+  return list
+    .map((r) => `<li>${escapeHtml(r.nomor)} · ${escapeHtml(r.keterangan)} · ${fmtRp(r.nominal)} · ${kfTgl(r.tanggal)} · ${escapeHtml(r.outlet)}</li>`)
+    .join("");
+}
+
+function kfRenderResult(panel, run, k) {
+  panel.dataset.kind = "result";
+  let html = "";
+  if (k.login && k.login.open) {
+    html += `<div class="kf-note">🔑 Jendela Chrome untuk login Smartlink sudah terbuka di komputer yang menjalankan dashboard.
+      Masuk sebagai <b>owner</b> di jendela itu, lalu klik <b>✔ Selesai login</b>. Login tersimpan untuk proses berikutnya.</div>`;
+  }
+  if (run) {
+    const rep = run.report || {};
+    const c = run.counts || {};
+    const phase = run.phase;
+    let banner;
+    let cls;
+    if (phase === "done") {
+      cls = "ok";
+      banner = run.dryRun
+        ? `✅ Cek selesai — ${c.cocok || 0} cocok (akan disetujui bila dijalankan), ${c.dilewati || 0} dilewati`
+        : `✅ Selesai — ${c.disetujui || 0} disetujui, ${c.dilewati || 0} dilewati`;
+    } else if (phase === "need_login") {
+      cls = "warn";
+      banner = "🔑 Smartlink meminta login. Klik “Login Smartlink”, masuk sebagai owner, lalu jalankan lagi.";
+    } else if (phase === "cancelled") {
+      cls = "warn";
+      banner = `■ Dihentikan — ${c.disetujui || 0} disetujui, ${c.dilewati || 0} dilewati sebelum berhenti`;
+    } else {
+      cls = "err";
+      banner = "✘ Berhenti karena error: " + (run.error || "tidak diketahui");
+    }
+    const meta = [
+      run.dryRun ? "Mode: cek saja" : "Mode: jalankan",
+      kfWaktu(run.startedAt),
+      "durasi " + kfDur(run.elapsedSec),
+      `${run.calls || 0} langkah AI`,
+      "perkiraan biaya AI " + kfCost(run.costUsd),
+    ];
+    html += `<div class="kf-banner kf-${cls}">${escapeHtml(banner)}</div>
+      <p class="hint kf-meta">${escapeHtml(meta.join(" · "))}${KF_VIEW ? ` · <a href="#" class="kf-back">← kembali ke yang terbaru</a>` : ""}</p>`;
+
+    if (run.dryRun) html += kfTable("Cocok — akan disetujui bila dijalankan", rep.cocok, false, "kf-h-ok");
+    else html += kfTable("Disetujui", rep.disetujui, false, "kf-h-ok");
+    html += kfTable("Dilewati", rep.dilewati, true, "kf-h-warn");
+    html += kfTable("Sudah disetujui sebelumnya", rep.sudah, false);
+    if (rep.perluCek && rep.perluCek.length) {
+      html += kfTable("⚠ Sudah ✓ di dashboard tapi belum disetujui di Smartlink — dicoba lagi otomatis di proses berikutnya", rep.perluCek, false, "kf-h-warn");
+    }
+    const d = rep.dashboard || {};
+    const kpis = [];
+    kpis.push(`<div class="kf-kpi"><b>${rep.sisaMenungguSmartlink == null ? "?" : rep.sisaMenungguSmartlink}</b><span>sisa “Menunggu konfirmasi” di Smartlink</span></div>`);
+    if (!d.error && d.belumAkhir != null) {
+      kpis.push(`<div class="kf-kpi"><b>${d.belumAkhir}</b><span>sisa baris “—” di dashboard${d.belumAwal != null ? ` (awal ${d.belumAwal})` : ""}</span></div>`);
+      kpis.push(`<div class="kf-kpi"><b>${d.terverifikasi}</b><span>baris terverifikasi ✓</span></div>`);
+    }
+    if (run.report) html += `<div class="kf-kpis">${kpis.join("")}</div>`;
+    if (d.error) html += `<p class="error">Sisa baris dashboard gagal dibaca: ${escapeHtml(d.error)}</p>`;
+    if (d.sisa && d.sisa.length) {
+      html += `<details class="kf-details"><summary>Sisa baris “—” di dashboard (${d.sisa.length})</summary><ul class="kf-list">${kfDashRows(d.sisa)}</ul></details>`;
+    }
+    if (d.setoranOwner && d.setoranOwner.length) {
+      html += `<details class="kf-details"><summary>Setoran Owner — bukan pengeluaran, tidak muncul di Biaya Outlet (${d.setoranOwner.length})</summary><ul class="kf-list">${kfDashRows(d.setoranOwner)}</ul></details>`;
+    }
+    if (rep.ringkasanId || rep.ringkasanEn) {
+      html += `<div class="kf-summary">${rep.ringkasanId ? `<p><b>Ringkasan:</b> ${escapeHtml(rep.ringkasanId)}</p>` : ""}${rep.ringkasanEn ? `<p lang="en"><b>Summary:</b> ${escapeHtml(rep.ringkasanEn)}</p>` : ""}</div>`;
+    }
+    html += `<div class="actions">
+        ${rep.teks ? `<button class="btn-ghost kf-copy">📋 Salin laporan (Indonesia + English)</button>` : ""}
+      </div>
+      <details class="kf-details"><summary>Log proses</summary><ol class="kf-log kf-log-static"></ol></details>`;
+  }
+  if (k.history && k.history.length > 1) {
+    html += `<details class="kf-details kf-history"><summary>Riwayat proses (${k.history.length})</summary><ul class="kf-list">${k.history
+      .map((h) => {
+        const c = h.counts || {};
+        const what = h.mode === "cek" ? `${c.cocok || 0} cocok` : `${c.disetujui || 0} disetujui`;
+        const st = { done: "selesai", cancelled: "dihentikan", error: "error", need_login: "perlu login" }[h.phase] || h.phase;
+        return `<li><a href="#" class="kf-hist" data-id="${escapeHtml(h.id)}">${escapeHtml(kfWaktu(h.startedAt))}</a> · ${h.mode === "cek" ? "cek saja" : "jalankan"} · ${escapeHtml(st)} · ${escapeHtml(what)}, ${c.dilewati || 0} dilewati</li>`;
+      })
+      .join("")}</ul></details>`;
+  }
+  panel.innerHTML = html;
+  if (run) {
+    const ol = panel.querySelector(".kf-log-static");
+    if (ol) kfFillLog(ol, run.log);
+  }
+}
+
+async function kfStart(dryRun) {
+  const belum = MONBIAYA && MONBIAYA.rows ? MONBIAYA.rows.filter((r) => !r.verifikasi).length : "?";
+  const msg = dryRun
+    ? "Cek saja (tanpa menyetujui)?\n\nRobot membuka Smartlink, membaca setiap biaya “Menunggu konfirmasi”, lalu mencocokkannya dengan Monitoring Biaya. " +
+      "Tidak ada yang disetujui dan tidak ada ✓ yang ditulis."
+    : `Jalankan Konfirmasi Biaya Smartlink untuk seluruh antrean?\n\n` +
+      `• Baris Monitoring Biaya yang belum diverifikasi (—): ${belum}. Jumlah antrean di Smartlink dihitung robot saat berjalan.\n` +
+      `• Disetujui HANYA bila kelima kolom sama persis: keterangan, nominal, tanggal Waktu pemakaian, outlet, dan sumber dana KAS TUNAI — ` +
+      `serta baris dashboard belum ✓. Robot memberi ✓ Verifikasi Owner dulu, lalu menyetujui dengan kode transaksi sebagai catatan.\n` +
+      `• Yang tidak cocok / ambigu / ragu dilewati. Robot TIDAK PERNAH menekan “Tolak”.\n` +
+      `• Persetujuan di Smartlink tidak bisa dibatalkan.\n\nLanjutkan?`;
+  if (!confirm(msg)) return;
+  const btn = dryRun ? $("#btn-kf-dry") : $("#btn-kf-run");
+  btn.disabled = true;
+  try {
+    await api("/api/konfirmasi/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dryRun, showBrowser: $("#kf-show").checked }),
+    });
+    KF_VIEW = null;
+    $("#kf-panel").dataset.kind = "";
+  } catch (e) {
+    showLog($("#monbiaya-result"), "✘ Tidak bisa memulai konfirmasi: " + e.message, true);
+  } finally {
+    btn.disabled = false;
+    kfPoll();
+  }
+}
+
+$("#btn-kf-run").addEventListener("click", () => kfStart(false));
+$("#btn-kf-dry").addEventListener("click", () => kfStart(true));
+$("#btn-kf-stop").addEventListener("click", async () => {
+  if (!confirm("Hentikan proses konfirmasi? Item yang sudah disetujui tetap tercatat di laporan.")) return;
+  try {
+    await api("/api/konfirmasi/stop", { method: "POST" });
+  } catch (e) {
+    showLog($("#monbiaya-result"), "✘ " + e.message, true);
+  }
+  kfPoll();
+});
+$("#btn-kf-login").addEventListener("click", async () => {
+  const btn = $("#btn-kf-login");
+  const closing = KF && KF.login && KF.login.open;
+  btn.disabled = true;
+  btn.textContent = closing ? "Menutup…" : "Membuka Chrome…";
+  try {
+    await api(closing ? "/api/konfirmasi/login/close" : "/api/konfirmasi/login", { method: "POST" });
+    if (!closing) {
+      showLog($("#monbiaya-result"), "✔ Jendela Chrome Smartlink terbuka di komputer yang menjalankan dashboard. Login sebagai owner, lalu klik “✔ Selesai login”.");
+    } else {
+      showLog($("#monbiaya-result"), "✔ Jendela login ditutup. Login Smartlink tersimpan untuk robot.");
+    }
+  } catch (e) {
+    showLog($("#monbiaya-result"), "✘ " + e.message, true);
+  } finally {
+    btn.disabled = false;
+    kfPoll();
+  }
+});
+$("#kf-panel").addEventListener("click", async (e) => {
+  const t = e.target;
+  if (t.classList.contains("kf-copy")) {
+    const run = KF_VIEW || (KF && KF.run);
+    const teks = run && run.report && run.report.teks;
+    if (!teks) return;
+    try {
+      await copyTextToClipboard(teks);
+      t.textContent = "✔ Laporan disalin";
+      setTimeout(() => (t.textContent = "📋 Salin laporan (Indonesia + English)"), 1500);
+    } catch {
+      showLog($("#monbiaya-result"), "✘ Gagal menyalin laporan.", true);
+    }
+  } else if (t.classList.contains("kf-hist")) {
+    e.preventDefault();
+    try {
+      const r = await api(`/api/konfirmasi/history/${encodeURIComponent(t.dataset.id)}`);
+      KF_VIEW = KF && KF.run && KF.run.id === r.run.id ? null : r.run;
+      kfRender();
+    } catch (err) {
+      showLog($("#monbiaya-result"), "✘ " + err.message, true);
+    }
+  } else if (t.classList.contains("kf-back")) {
+    e.preventDefault();
+    KF_VIEW = null;
+    kfRender();
+  }
+});
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && KF && KF.active) kfPoll();
+});
+
 // Parse daftar NOMOR: dukung satuan ("35, 802") dan rentang ("769-804"), boleh dicampur.
 function parseNomorList(input) {
   const out = [];
@@ -1510,8 +1875,14 @@ const SL_COL = { subjek: 0, keterangan: 1, nominal: 2, tanggal: 3, outlet: 4, st
 
 async function copyTextToClipboard(text) {
   if (navigator.clipboard && window.isSecureContext) {
-    await navigator.clipboard.writeText(text);
-  } else {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      /* izin clipboard ditolak → pakai cara lama di bawah */
+    }
+  }
+  {
     const ta = document.createElement("textarea");
     ta.value = text;
     ta.style.position = "fixed";
@@ -2697,6 +3068,7 @@ loadDashboard();
 // merah pada judul tab langsung tampil tanpa harus membuka tabnya dulu.
 loadMonBiaya();
 loadSmart();
+kfPoll(); // status Konfirmasi Biaya Smartlink (tanda 🤖 di tab bila sedang berjalan)
 
 // Daftarkan service worker agar dashboard bisa di-install lewat Chrome (PWA).
 if ("serviceWorker" in navigator) {

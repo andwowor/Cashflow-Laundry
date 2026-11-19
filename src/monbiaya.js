@@ -129,15 +129,17 @@ function assertGreenReady(rowsArr) {
  * Sekali (saat pertama dipakai), biaya yang sudah "SUDAH INPUT" DAN "SUDAH
  * VERIFIKASI OWNER" dianggap historis/sudah-ditangani agar daftar awal ringkas.
  */
-async function list() {
+async function list(opts = {}) {
   const id = cfg.BIAYA_KAS_SPREADSHEET_ID;
   // Nilai terformat dipakai untuk tampilan; nilai mentah (tanggal serial &
   // nominal numerik) dipakai agar pencocokan receipt akurat. Indeks receipt
   // Drive dimuat paralel & toleran — bila gagal, daftar tetap tampil tanpa foto.
+  // opts.receipts === false → lewati Drive (dipakai pencocokan otomatis Smartlink).
+  const withReceipts = opts.receipts !== false;
   const [rows, raws, rcIndex] = await Promise.all([
     readRange(id, `'${BIAYA_SHEET}'!A1:N`, "FORMATTED_VALUE"),
     readRange(id, `'${BIAYA_SHEET}'!A1:N`, "UNFORMATTED_VALUE"),
-    receipt.loadIndex(),
+    withReceipts ? receipt.loadIndex() : Promise.resolve({ count: 0, error: null }),
   ]);
   const state = loadExported();
 
@@ -174,12 +176,15 @@ async function list() {
     const rr = raws[i] || [];
     const rawNom = rr[COL.nominal];
     const nominal = typeof rawNom === "number" ? rawNom : receipt.parseNominal(r[COL.nominal]);
-    const rc = receipt.findIn(rcIndex, {
-      outlet: norm(r[COL.outlet]),
-      iso: rowDateISO(rr[COL.tanggal], r[COL.tanggal]),
-      keterangan: norm(r[COL.keterangan]),
-      nominal,
-    });
+    const tanggalIso = rowDateISO(rr[COL.tanggal], r[COL.tanggal]);
+    const rc = withReceipts
+      ? receipt.findIn(rcIndex, {
+          outlet: norm(r[COL.outlet]),
+          iso: tanggalIso,
+          keterangan: norm(r[COL.keterangan]),
+          nominal,
+        })
+      : null;
 
     out.push({
       row: i + 1, // nomor baris di sheet
@@ -188,6 +193,9 @@ async function list() {
       verifikasi: norm(r[COL.verifikasi]),
       kode: norm(r[COL.kode]),
       receipt: rc ? { id: rc.id, name: rc.name } : null,
+      // Untuk pencocokan otomatis (konfirmasi Smartlink): nilai mentah yang rapi.
+      tanggalIso,
+      nominalNum: Number.isFinite(nominal) ? nominal : null,
     });
   }
   return {

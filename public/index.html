@@ -100,6 +100,26 @@
           <button id="btn-monbiaya-hide" class="btn-ghost">⊘ Sembunyikan</button>
           <button id="btn-monbiaya-unhide" class="btn-ghost">↩ Tampilkan</button>
         </div>
+
+        <!-- Konfirmasi Biaya Smartlink otomatis (skill konfirmasi-biaya-smartlink) -->
+        <div id="kf-box" class="kf-box">
+          <h3 class="kf-title">🤖 Konfirmasi Biaya Smartlink otomatis</h3>
+          <p class="hint">Menjalankan skill <b>/konfirmasi-biaya-smartlink</b> di latar belakang: robot membuka Smartlink,
+            mencocokkan tiap biaya <b>"Menunggu konfirmasi"</b> dengan tabel di bawah (keterangan, nominal, tanggal, outlet,
+            sumber dana harus sama persis), memberi ✓ Verifikasi Owner, lalu <b>menyetujuinya</b> dengan kode transaksi
+            sebagai catatan. Item yang ragu dilewati — robot <b>tidak pernah menolak</b>. Halaman ini boleh ditinggal;
+            progres &amp; laporan tetap tersimpan.</p>
+          <div class="actions">
+            <button id="btn-kf-run" class="btn-primary">▶ Jalankan Konfirmasi Biaya Smartlink</button>
+            <button id="btn-kf-dry" class="btn-ghost">🔍 Cek saja (tanpa menyetujui)</button>
+            <button id="btn-kf-stop" class="btn-ghost kf-stop hidden">■ Hentikan</button>
+            <button id="btn-kf-login" class="btn-ghost">🔑 Login Smartlink</button>
+            <label class="hint kf-check" title="Robot berjalan di jendela Chrome yang terlihat (untuk menonton / memecahkan masalah)">
+              <input type="checkbox" id="kf-show" /> Tampilkan jendela browser</label>
+          </div>
+          <div id="kf-panel" class="kf-panel hidden"></div>
+        </div>
+
         <div id="monbiaya-result" class="result-log hidden"></div>
         <div id="monbiaya-table" class="table-wrap">Memuat…</div>
       </div>

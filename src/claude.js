@@ -318,4 +318,4 @@ async function extractQrisBank({ images, todayIso }) {
   return (await askJson({ maxTokens: 12000, system, content, schema })).entries;
 }
 
-module.exports = { extractBiaya, extractKas, extractQris, extractQrisBank, MODEL };
+module.exports = { extractBiaya, extractKas, extractQris, extractQrisBank, MODEL, FALLBACK_BETA, client };

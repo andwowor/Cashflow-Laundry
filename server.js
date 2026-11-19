@@ -27,6 +27,7 @@ const transaksi = require("./src/transaksi");
 const tunnel = require("./src/tunnel");
 const receipt = require("./src/receipt");
 const appupdate = require("./src/appupdate");
+const konfirmasi = require("./src/konfirmasi");
 const { MODEL } = require("./src/claude");
 const auth = require("./src/auth");
 
@@ -426,6 +427,43 @@ app.post("/api/monbiaya/setoran-preview", wrap(async (req, res) => {
 app.post("/api/monbiaya/export-setoran", wrap(async (req, res) => {
   const body = req.body || {};
   res.json(await monbiaya.exportSetoranOwner(body.rows || [], body.kategori || {}));
+}));
+
+// ---------- Konfirmasi Biaya Smartlink otomatis (skill konfirmasi-biaya-smartlink) ----------
+
+app.get("/api/konfirmasi/status", wrap(async (req, res) => {
+  res.json({ ok: true, ...konfirmasi.status() });
+}));
+
+app.post("/api/konfirmasi/start", wrap(async (req, res) => {
+  const b = req.body || {};
+  res.json({ ok: true, run: konfirmasi.start({ dryRun: !!b.dryRun, showBrowser: !!b.showBrowser }) });
+}));
+
+app.post("/api/konfirmasi/stop", wrap(async (req, res) => {
+  res.json(konfirmasi.stop());
+}));
+
+// Screenshot terakhir layar Smartlink yang dilihat robot (tampilan "sedang berjalan").
+app.get("/api/konfirmasi/screen", (req, res) => {
+  const shot = konfirmasi.screen();
+  if (!shot) return res.status(404).end();
+  res.set("Content-Type", "image/jpeg").set("Cache-Control", "no-store").send(shot.buf);
+});
+
+app.get("/api/konfirmasi/history/:id", wrap(async (req, res) => {
+  const run = konfirmasi.historyRun(req.params.id);
+  if (!run) return res.status(404).json({ ok: false, error: "Riwayat tidak ditemukan." });
+  res.json({ ok: true, run });
+}));
+
+// Jendela Chrome terlihat untuk login Smartlink (sekali; sesi tersimpan di profil robot).
+app.post("/api/konfirmasi/login", wrap(async (req, res) => {
+  res.json(await konfirmasi.openLogin());
+}));
+
+app.post("/api/konfirmasi/login/close", wrap(async (req, res) => {
+  res.json(await konfirmasi.closeLogin());
 }));
 
 // ---------- Link online (Cloudflare Tunnel) ----------
