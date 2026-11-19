@@ -8,6 +8,7 @@ const monbiaya = require("./monbiaya");
 const { readRange } = require("./sheets");
 const { systemPrompt } = require("./konfirmasiprompt");
 const akun = require("./smartlinkakun");
+const robotjobs = require("./robotjobs");
 
 // =====================================================================
 // Konfirmasi Biaya Smartlink — menjalankan skill konfirmasi-biaya-smartlink
@@ -27,6 +28,11 @@ const PENDING_FILE = path.join(cfg.DATA_DIR, "konfirmasi_pending.json");
 const BIAYA_SHEET = "BIAYA";
 
 const EFFORT = "medium"; // tugas agen bertahap dengan banyak tool
+const JOB_KEYS = ["biaya", ...Object.keys(robotjobs.JOBS)];
+const isBiaya = (run) => run.job === "biaya";
+const jobOf = (run) => robotjobs.JOBS[run.job];
+const SHARED_TOOLS = ["baca_menu", "isi_login", "butuh_login"];
+const ASK_TIMEOUT_MS = 30 * 60000;
 const MAX_TOKENS = 16000;
 const MAX_MINUTES = Number(process.env.KONFIRMASI_MAX_MINUTES) || 60;
 const MAX_CALLS = Number(process.env.KONFIRMASI_MAX_CALLS) || 500;
@@ -64,6 +70,25 @@ function tglLabel(iso) {
 // ---------------- Tool untuk Claude ----------------
 
 const COMPUTER_TOOLSET = { type: "computer_toolset_20260801" };
+
+function toolMaker(strict) {
+  return (name, description, properties, required) => {
+    const def = {
+      name,
+      description,
+      input_schema: { type: "object", properties, required, additionalProperties: false },
+    };
+    if (strict) def.strict = true;
+    return def;
+  };
+}
+
+/** Daftar tool kustom untuk proses ini (biaya: tool khusus; skill lain: tool robot umum). */
+function toolsFor(run, strict) {
+  const all = customTools(strict);
+  if (isBiaya(run)) return all;
+  return [...all.filter((d) => SHARED_TOOLS.includes(d.name)), ...robotjobs.tools(toolMaker(strict), jobOf(run))];
+}
 
 function customTools(strict) {
   const t = (name, description, properties, required) => {
@@ -158,7 +183,8 @@ let RUN = null; // proses aktif / terakhir (di memori)
 
 function isActive(run) {
   // "finalizing": fase akhir sudah diketahui tetapi laporan masih disusun.
-  return !!run && (run.phase === "starting" || run.phase === "running" || !!run.finalizing);
+  // "waiting": menunggu jawaban Andre di panel dashboard.
+  return !!run && (run.phase === "starting" || run.phase === "running" || run.phase === "waiting" || !!run.finalizing);
 }
 
 function log(run, text, kind = "info") {
@@ -170,6 +196,7 @@ function log(run, text, kind = "info") {
 }
 
 function counts(run) {
+  if (!isBiaya(run)) return robotjobs.counts(run);
   const c = { disetujui: 0, dilewati: 0, sudah: 0, cocok: 0 };
   for (const i of run.items) {
     if (i.hasil === "DISETUJUI") c.disetujui++;
@@ -184,6 +211,10 @@ function publicRun(run) {
   const end = run.finishedAt ? Date.parse(run.finishedAt) : Date.now();
   return {
     id: run.id,
+    job: run.job,
+    jobTitle: isBiaya(run) ? "Konfirmasi Biaya Outlet" : jobOf(run).title,
+    param: run.param || null,
+    question: run.question ? { id: run.question.id, pertanyaan: run.question.pertanyaan, pilihan: run.question.pilihan, at: run.question.at } : null,
     mode: run.dryRun ? "cek" : "jalankan",
     dryRun: run.dryRun,
     showBrowser: run.showBrowser,
@@ -211,7 +242,7 @@ function loadHistory() {
   return Array.isArray(d.runs) ? d.runs : [];
 }
 function saveHistory(entry) {
-  const runs = [entry, ...loadHistory().filter((r) => r.id !== entry.id)].slice(0, 10);
+  const runs = [entry, ...loadHistory().filter((r) => r.id !== entry.id)].slice(0, 30);
   cfg.writeJsonFile(HISTORY_FILE, { runs });
 }
 
@@ -463,6 +494,11 @@ function describeAction(b) {
 }
 
 async function runCustomTool(run, name, input) {
+  if (!isBiaya(run) && !SHARED_TOOLS.includes(name)) {
+    const r = await robotjobs.handle(jobOf(run), run, name, input, { log, ask });
+    if (r) return r;
+    throw new Error(`Tool tidak dikenal: ${name}`);
+  }
   switch (name) {
     case "baca_menu":
       return { result: { menu: await browser.readMenu() } };
@@ -536,6 +572,15 @@ async function executeTools(run, uses, truncated) {
     }
     if (run.cancel) throw cancelError();
     try {
+      if (isComputer && !isBiaya(run) && jobOf(run).blockEnterEscape) {
+        const i = b.input || {};
+        if ((b.name === "key" || b.name === "hold_key") && /(^|\+)\s*(enter|return|kp_enter|escape|esc)\s*$/i.test(String(i.text || ""))) {
+          throw new Error("Tombol Enter/Escape diblokir pada tugas ini (skill melarangnya). Pakai klik.");
+        }
+        if (b.name === "type" && /[\r\n]/.test(String(i.text || ""))) {
+          throw new Error("Teks yang diketik tidak boleh berisi baris baru (sama dengan menekan Enter).");
+        }
+      }
       if (isComputer) {
         // "wait" dijalankan di sini agar bisa dihentikan seketika oleh tombol Hentikan.
         const out = b.name === "wait" ? await cancellableWait(run, b.input) : await browser.perform(b.name, b.input || {});
@@ -554,7 +599,7 @@ async function executeTools(run, uses, truncated) {
         lastComputer = results.length - 1;
       } else {
         const out = await runCustomTool(run, b.name, b.input || {});
-        results.push({ ...base, content: JSON.stringify(out.result) });
+        results.push({ ...base, content: typeof out.result === "string" ? out.result || "(kosong)" : JSON.stringify(out.result) });
         if (out.itemBoundary) itemBoundary = true;
         if (out.stop) stop = true;
       }
@@ -604,8 +649,8 @@ function buildBody(run, messages, f) {
   const body = {
     model: claude.MODEL,
     max_tokens: MAX_TOKENS,
-    system: [{ type: "text", text: systemPrompt({ dryRun: run.dryRun }) }],
-    tools: [COMPUTER_TOOLSET, ...customTools(f.strict)],
+    system: [{ type: "text", text: run.systemText }],
+    tools: [COMPUTER_TOOLSET, ...toolsFor(run, f.strict)],
     messages,
     thinking: f.display ? { type: "adaptive", display: "updates" } : { type: "adaptive" },
     output_config: { effort: EFFORT },
@@ -671,6 +716,7 @@ async function callClaude(run, messages, f) {
 // ---------------- Loop agen ----------------
 
 function kickoffText(run) {
+  if (!isBiaya(run)) return robotjobs.kickoffText(jobOf(run), run);
   const lines = [
     `MODE: ${run.dryRun ? "CEK SAJA (dry run) — JANGAN menyetujui apa pun" : "JALANKAN — setujui biaya yang cocok di Smartlink"}`,
     `Hari ini: ${cfg.todaySheetDate()} (WITA).`,
@@ -702,7 +748,9 @@ function kickoffText(run) {
 
 async function agentLoop(run) {
   const f = { fallbacks: true, display: true, strict: true, cache: true };
-  const deadline = Date.parse(run.startedAt) + MAX_MINUTES * 60000;
+  const maxMinutes = process.env.KONFIRMASI_MAX_MINUTES || isBiaya(run) ? MAX_MINUTES : jobOf(run).maxMinutes || MAX_MINUTES; // (env || biaya) ? … : …
+  // Waktu menunggu jawaban Andre tidak dihitung ke batas waktu.
+  const overDeadline = () => Date.now() - (run.waitMs || 0) > Date.parse(run.startedAt) + maxMinutes * 60000;
   let messages = null;
   let ctxTokens = 0;
   let bytes = 0;
@@ -720,8 +768,8 @@ async function agentLoop(run) {
 
   for (;;) {
     if (run.cancel) throw cancelError();
-    if (Date.now() > deadline) {
-      const e = new Error(`Dihentikan otomatis: melewati batas waktu ${MAX_MINUTES} menit.`);
+    if (overDeadline()) {
+      const e = new Error(`Dihentikan otomatis: melewati batas waktu ${maxMinutes} menit.`);
       e.code = "LIMIT";
       throw e;
     }
@@ -832,6 +880,7 @@ function buildText(rep) {
 }
 
 async function buildReport(run) {
+  if (!isBiaya(run)) return robotjobs.buildReport(jobOf(run), run);
   let dashboard;
   try {
     const rows = await dashboardRows();
@@ -871,15 +920,18 @@ async function buildReport(run) {
 
 async function runAgent(run) {
   try {
-    log(run, "Membaca Monitoring Biaya…");
-    const rows = await dashboardRows();
-    run.dashAwal = { belum: rows.filter((r) => !r.verifikasi).length, total: rows.length };
-    log(run, `Monitoring Biaya: ${run.dashAwal.belum} baris belum diverifikasi.`, "detail");
+    if (isBiaya(run)) {
+      log(run, "Membaca Monitoring Biaya…");
+      const rows = await dashboardRows();
+      run.dashAwal = { belum: rows.filter((r) => !r.verifikasi).length, total: rows.length };
+      log(run, `Monitoring Biaya: ${run.dashAwal.belum} baris belum diverifikasi.`, "detail");
+    }
 
     log(run, `Membuka Smartlink di browser ${run.showBrowser ? "yang terlihat" : "tersembunyi"}…`);
     browser.clearLastShot();
     await browser.open({ headless: !run.showBrowser });
     if (run.cancel) throw cancelError();
+    await browser.setViewport("smartlink", isBiaya(run) ? browser.VIEW : jobOf(run).viewport);
     await browser.gotoSmartlink();
     run.phase = "running";
     log(run, "Smartlink terbuka. Claude mulai bekerja…");
@@ -906,7 +958,10 @@ async function runAgent(run) {
       run.report = null;
       log(run, "Gagal menyusun laporan: " + e.message, "err");
     }
-    if (run.phase === "done") {
+    if (run.phase === "done" && !isBiaya(run)) {
+      const c = counts(run);
+      log(run, `✔ ${jobOf(run).title} selesai${run.dryRun ? " (cek saja)" : ""}: ${c.berhasil} berhasil, ${c.dilewati} dilewati, ${c.gagal} gagal.`, "ok");
+    } else if (run.phase === "done") {
       const c = counts(run);
       log(run, run.dryRun
         ? `✔ Selesai (cek saja): ${c.cocok} cocok, ${c.dilewati} dilewati.`
@@ -923,17 +978,30 @@ async function runAgent(run) {
   }
 }
 
-function start({ dryRun = false, showBrowser = false } = {}) {
+function start({ job = "biaya", dryRun = false, showBrowser = false, param = {} } = {}) {
+  if (!JOB_KEYS.includes(job)) throw new Error("Tugas robot tidak dikenal: " + job);
   if (RUN && isActive(RUN)) {
-    const e = new Error("Konfirmasi biaya sedang berjalan. Tunggu sampai selesai atau hentikan dulu.");
+    const e = new Error(`Robot Smartlink sedang menjalankan "${publicRun(RUN).jobTitle}". Tunggu sampai selesai atau hentikan dulu.`);
     e.code = "BUSY";
     throw e;
   }
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error("ANTHROPIC_API_KEY belum diisi di .env — fitur ini memakai Claude.");
   }
+  const p = {};
+  if (param && param.tanggal) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(param.tanggal))) throw new Error("Tanggal harus berformat YYYY-MM-DD.");
+    p.tanggal = String(param.tanggal);
+  }
   const run = {
     id: Date.now().toString(36),
+    job,
+    param: p,
+    notes: [],
+    qa: [],
+    actions: [],
+    question: null,
+    waitMs: 0,
     dryRun: !!dryRun,
     showBrowser: !!showBrowser,
     phase: "starting",
@@ -955,10 +1023,51 @@ function start({ dryRun = false, showBrowser = false } = {}) {
     cancel: false,
     abort: null,
   };
+  run.systemText = job === "biaya" ? systemPrompt({ dryRun: run.dryRun }) : robotjobs.systemPrompt(robotjobs.JOBS[job], { dryRun: run.dryRun });
   RUN = run;
-  log(run, run.dryRun ? "▶ Mulai CEK SAJA (tanpa menyetujui)." : "▶ Mulai konfirmasi biaya Smartlink.");
+  if (job === "biaya") log(run, run.dryRun ? "▶ Mulai CEK SAJA (tanpa menyetujui)." : "▶ Mulai konfirmasi biaya Smartlink.");
+  else log(run, `▶ Mulai ${robotjobs.JOBS[job].title}${run.dryRun ? " — CEK SAJA" : ""}${p.tanggal ? ` (tanggal ${p.tanggal})` : ""}.`);
   runAgent(run).catch(() => {});
   return publicRun(run);
+}
+
+/** Ajukan pertanyaan ke Andre (panel dashboard) dan tunggu jawabannya. */
+function ask(run, { pertanyaan, pilihan }) {
+  return new Promise((resolve, reject) => {
+    const t0 = Date.now();
+    const id = "q" + t0.toString(36);
+    const prevPhase = run.phase;
+    run.phase = "waiting";
+    run.question = { id, pertanyaan, pilihan, at: new Date(t0).toISOString() };
+    log(run, "✋ Menunggu jawaban Andre di panel dashboard…", "warn");
+    const finish = (fn, val) => {
+      clearInterval(iv);
+      run.waitMs = (run.waitMs || 0) + (Date.now() - t0);
+      run.question = null;
+      run.answer = null;
+      if (run.phase === "waiting") run.phase = prevPhase === "waiting" ? "running" : prevPhase;
+      fn(val);
+    };
+    run.answer = (jawaban) => finish(resolve, jawaban);
+    const iv = setInterval(() => {
+      if (run.cancel) finish(reject, cancelError());
+      else if (Date.now() - t0 > ASK_TIMEOUT_MS) {
+        log(run, "Tidak ada jawaban dalam 30 menit.", "warn");
+        finish(resolve, "TIDAK DIJAWAB dalam 30 menit — jangan jalankan langkah yang butuh izin ini; catat dan laporkan.");
+      }
+    }, 300);
+  });
+}
+
+/** Jawaban Andre dari panel dashboard. */
+function answer({ id, jawaban }) {
+  if (!RUN || !RUN.question || !RUN.answer) throw new Error("Tidak ada pertanyaan yang sedang menunggu jawaban.");
+  if (id && RUN.question.id !== id) throw new Error("Pertanyaan itu sudah tidak aktif. Muat ulang panel.");
+  const j = String(jawaban || "").trim();
+  if (!RUN.question.pilihan.includes(j)) throw new Error("Pilih salah satu jawaban yang tersedia.");
+  log(RUN, `💬 Jawaban Andre: ${j}`, "ok");
+  RUN.answer(j);
+  return { ok: true };
 }
 
 function stop() {
@@ -973,12 +1082,18 @@ function status() {
   const history = loadHistory();
   const active = !!(RUN && isActive(RUN));
   const shot = browser.lastShot();
+  const runs = {};
+  for (const j of JOB_KEYS) {
+    runs[j] = RUN && RUN.job === j ? publicRun(RUN) : history.find((h) => (h.job || "biaya") === j) || null;
+  }
   return {
     active,
+    activeJob: active ? RUN.job : null,
     run: RUN ? publicRun(RUN) : history[0] || null,
+    runs,
     history: history.map((h) => ({
-      id: h.id, mode: h.mode, phase: h.phase, startedAt: h.startedAt, finishedAt: h.finishedAt,
-      counts: h.counts, costUsd: h.costUsd, error: h.error,
+      id: h.id, job: h.job || "biaya", jobTitle: h.jobTitle || "Konfirmasi Biaya Outlet", mode: h.mode, phase: h.phase,
+      startedAt: h.startedAt, finishedAt: h.finishedAt, counts: h.counts, costUsd: h.costUsd, error: h.error,
     })),
     login: { open: !active && browser.isOpen() && browser.isHeadless() === false },
     akun: akun.info(),
@@ -1006,8 +1121,10 @@ async function closeLogin() {
 }
 
 module.exports = {
+  JOB_KEYS,
   start,
   stop,
+  answer,
   status,
   historyRun,
   openLogin,

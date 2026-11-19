@@ -76,3 +76,12 @@ yang meniru kondisi Mac (logo lokal + lock berubah), pakai `APP_REPO_DIR`.
   Login otomatis: akun Smartlink diisi user SEKALI di formulir dashboard → `data/smartlink_akun.json`
   (izin 600, `src/smartlinkakun.js`). Tool `isi_login` mengetik nilainya langsung ke kolom yang aktif;
   email/sandi tidak pernah masuk percakapan AI, log, riwayat, ataupun repo (maks. 2 percobaan/proses).
+- **Robot skill Smartlink umum** (`src/robotjobs.js`; tombol di Monitoring Biaya, Lapor Smartlink, Input Kas):
+  menjalankan skill konfirmasi-setoran-owner, input-setoran-owner, input-biaya, input-kas, dan
+  settlement-qris dengan **salinan teks skill asli di `src/skills/*.md`** + prompt adaptor yang memetakan
+  alat Claude in Chrome ke alat robot (tab smartlink/dashboard/gambar, `javascript`, `unggah_file`,
+  `daftar_drive`, `baca_sheet`, `tulis_sheet` khusus INPUT QRIS baris kosong, `tanya_andre` → kartu
+  pertanyaan di panel, `catat_progres`, `laporan_akhir`). Bila Andre mengubah skill di claude.ai, salin
+  ulang SKILL.md-nya ke `src/skills/` (di sesi cloud ada di `/root/.claude/skills/synced/…`).
+  Tab dashboard robot memakai cookie login buatan server. Skill mencari tombol tab lewat innerText persis
+  (mis. 'Input Kas') — jangan menambah teks/elemen ke label tab; tanda robot dibuat lewat CSS `::after`.

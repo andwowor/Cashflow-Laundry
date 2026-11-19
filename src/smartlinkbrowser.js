@@ -11,8 +11,10 @@ const cfg = require("./config");
 //   Smartlink cukup sekali dan tidak mengganggu Chrome harian user.
 // - Mode tersembunyi (headless) untuk berjalan di latar belakang; mode terlihat
 //   untuk login pertama kali / bila user ingin menonton.
-// - Menjalankan aksi "computer use" (klik, ketik, scroll, screenshot …) pada SATU
-//   tab berukuran tetap 1280×800 — koordinat = piksel screenshot.
+// - Menjalankan aksi "computer use" (klik, ketik, scroll, screenshot …) pada tab
+//   yang AKTIF — koordinat = piksel screenshot = piksel CSS.
+// - Beberapa tab bernama ("smartlink", "dashboard", "gambar") untuk skill yang
+//   dulu dijalankan Claude di Chrome dengan beberapa tab sekaligus.
 
 const SMARTLINK_URL = process.env.SMARTLINK_URL || "https://dashboard.smartlink.id/";
 const PROFILE_DIR = process.env.SMARTLINK_PROFILE_DIR || path.join(cfg.DATA_DIR, "smartlink-chrome");
@@ -22,7 +24,9 @@ const VIEW = { width: 1280, height: 800 };
 const DPR = 2;
 
 let _ctx = null; // BrowserContext (persisten)
-let _page = null;
+const _tabs = new Map(); // nama → Page
+let _active = "smartlink";
+let _creating = false; // sedang membuat tab sendiri (abaikan event "page")
 let _headless = null;
 let _opening = null;
 let _lastShot = null; // { buf, at }
@@ -74,7 +78,7 @@ function wirePage(p) {
 async function open({ headless }) {
   if (_opening) await _opening.catch(() => {});
   if (_ctx) {
-    if (_headless === headless || _headless === false) return _page;
+    if (_headless === headless || _headless === false) return page();
     await close();
   }
   _opening = (async () => {
@@ -104,22 +108,29 @@ async function open({ headless }) {
     ctx.on("close", () => {
       if (_ctx === ctx) {
         _ctx = null;
-        _page = null;
+        _tabs.clear();
         _headless = null;
       }
     });
     ctx.on("page", (p) => {
+      if (_creating) return;
+      // Situs membuka tab/jendela baru → jadikan tab "popup" dan ikuti.
       wirePage(p);
-      _page = p; // Smartlink membuka tab baru → ikuti tab terbaru
+      _tabs.set("popup", p);
+      _active = "popup";
       p.on("close", () => {
-        if (_page === p && _ctx) _page = _ctx.pages().slice(-1)[0] || null;
+        if (_tabs.get("popup") === p) _tabs.delete("popup");
+        if (_active === "popup") _active = "smartlink";
       });
     });
     _ctx = ctx;
     _headless = headless;
-    _page = ctx.pages()[0] || (await ctx.newPage());
-    wirePage(_page);
-    return _page;
+    _tabs.clear();
+    const first = ctx.pages()[0] || (await ctx.newPage());
+    wirePage(first);
+    _tabs.set("smartlink", first);
+    _active = "smartlink";
+    return first;
   })();
   try {
     return await _opening;
@@ -131,7 +142,8 @@ async function open({ headless }) {
 async function close() {
   const ctx = _ctx;
   _ctx = null;
-  _page = null;
+  _tabs.clear();
+  _active = "smartlink";
   _headless = null;
   if (ctx) await ctx.close().catch(() => {});
 }
@@ -143,13 +155,176 @@ function isHeadless() {
   return _headless;
 }
 
-function page() {
-  if (!_ctx || !_page || _page.isClosed()) {
+function page(name) {
+  const p = _ctx && _tabs.get(name || _active);
+  if (!_ctx || !p || p.isClosed()) {
+    if (_ctx && name && name !== "smartlink") {
+      const e = new Error(`Tab "${name}" belum dibuka.`);
+      e.code = "NO_TAB";
+      throw e;
+    }
     const e = new Error("Jendela browser Smartlink sudah tertutup.");
     e.code = "BROWSER_CLOSED";
     throw e;
   }
-  return _page;
+  return p;
+}
+
+/** Ukuran tab aktif (batas koordinat). */
+function view(name) {
+  return page(name).viewportSize() || VIEW;
+}
+
+// ---------------- Tab ----------------
+
+function activeTab() {
+  return _active;
+}
+function tabNames() {
+  return Array.from(_tabs.keys()).filter((n) => !_tabs.get(n).isClosed());
+}
+
+/** Buka (atau pakai ulang) tab bernama, opsional pindah URL & ukuran. Tab itu jadi aktif. */
+async function openTab(name, url, viewport) {
+  if (!_ctx) {
+    const e = new Error("Browser belum dibuka.");
+    e.code = "BROWSER_CLOSED";
+    throw e;
+  }
+  let p = _tabs.get(name);
+  if (!p || p.isClosed()) {
+    _creating = true;
+    try {
+      p = await _ctx.newPage();
+    } finally {
+      _creating = false;
+    }
+    wirePage(p);
+    _tabs.set(name, p);
+  }
+  if (viewport) await p.setViewportSize(viewport);
+  _active = name;
+  if (url) {
+    await p.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
+    await sleep(1200);
+  }
+  return p;
+}
+
+function switchTab(name) {
+  page(name); // lempar error bila belum ada
+  _active = name;
+}
+
+async function closeTab(name) {
+  if (name === "smartlink") throw new Error("Tab smartlink tidak boleh ditutup.");
+  const p = _tabs.get(name);
+  _tabs.delete(name);
+  if (_active === name) _active = "smartlink";
+  if (p && !p.isClosed()) await p.close().catch(() => {});
+}
+
+async function setViewport(name, viewport) {
+  await page(name).setViewportSize(viewport);
+}
+
+async function addCookies(cookies) {
+  if (_ctx) await _ctx.addCookies(cookies);
+}
+
+// URL berisi query (mis. iframe Smartlink ber-token) tidak boleh bocor ke AI/log.
+function redact(text) {
+  return String(text).replace(/(https?:\/\/[^\s"'<>`]+?)\?[^\s"'<>`]*/g, "$1?…");
+}
+
+function tabInfo(name) {
+  const p = page(name);
+  let url = "";
+  try {
+    url = redact(p.url());
+  } catch {
+    /* tab tertutup */
+  }
+  return { tab: name || _active, url };
+}
+
+/**
+ * Jalankan JavaScript di tab (setara javascript_tool): mendukung await di level
+ * atas & beberapa pernyataan; nilai ekspresi terakhir dikembalikan sebagai teks.
+ */
+async function evalJs(code, name, timeoutMs = 120000) {
+  const p = page(name);
+  const cdp = await p.context().newCDPSession(p);
+  try {
+    const call = cdp.send("Runtime.evaluate", {
+      expression: String(code),
+      replMode: true,
+      awaitPromise: true,
+      returnByValue: true,
+      userGesture: true,
+    });
+    const r = await Promise.race([
+      call,
+      sleep(timeoutMs).then(() => {
+        throw new Error(`JavaScript melewati batas ${Math.round(timeoutMs / 1000)} detik.`);
+      }),
+    ]);
+    if (r.exceptionDetails) {
+      const ex = r.exceptionDetails;
+      const msg = (ex.exception && (ex.exception.description || ex.exception.value)) || ex.text || "Error";
+      throw new Error(redact(String(msg).split("\n").slice(0, 4).join("\n")));
+    }
+    const v = r.result || {};
+    let out;
+    if (v.type === "undefined") out = "undefined";
+    else if (v.type === "string") out = v.value;
+    else if ("value" in v) out = typeof v.value === "object" ? JSON.stringify(v.value) : String(v.value);
+    else out = v.description || String(v.type);
+    out = redact(out);
+    return out.length > 8000 ? out.slice(0, 8000) + "… (terpotong)" : out;
+  } finally {
+    await cdp.detach().catch(() => {});
+  }
+}
+
+/** Screenshot PNG "skala penuh" untuk diunggah (resolusi asli, dibatasi agar tidak raksasa). */
+async function screenshotFull(name) {
+  const p = page(name);
+  const v = p.viewportSize() || VIEW;
+  const scale = Math.max(v.width, v.height) * DPR <= 2400 ? "device" : "css";
+  return p.screenshot({ type: "png", scale, timeout: 30000 });
+}
+
+/**
+ * Isi <input type=file> (selector CSS) di tab dengan file.
+ * mode "tambah" = menambah ke file yang sudah ada (seperti tarik & lepas),
+ * mode "ganti" = mengganti isinya.
+ */
+async function setFiles(name, selector, files, mode = "tambah") {
+  const p = page(name);
+  const loc = p.locator(selector).first();
+  if ((await loc.count()) === 0) throw new Error(`Input file "${selector}" tidak ditemukan di tab ${name}.`);
+  const isFile = await loc.evaluate((el) => el.tagName === "INPUT" && el.type === "file");
+  if (!isFile) throw new Error(`"${selector}" bukan input file.`);
+  if (mode === "ganti") {
+    await loc.setInputFiles(files.map((f) => ({ name: f.name, mimeType: f.mimeType, buffer: f.buffer })));
+  } else {
+    const payload = files.map((f) => ({ name: f.name, type: f.mimeType, b64: f.buffer.toString("base64") }));
+    await loc.evaluate((el, list) => {
+      const dt = new DataTransfer();
+      for (const f of el.files) dt.items.add(f);
+      for (const it of list) {
+        const bin = atob(it.b64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        dt.items.add(new File([bytes], it.name, { type: it.type }));
+      }
+      el.files = dt.files;
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    }, payload);
+  }
+  return loc.evaluate((el) => Array.from(el.files).map((f) => f.name));
 }
 
 /** Aktifkan pohon aksesibilitas Flutter (agar label menu terbaca sebagai teks). */
@@ -218,15 +393,16 @@ async function zoom(region) {
   let [x0, y0, x1, y1] = region.map(Number);
   if (x1 < x0) [x0, x1] = [x1, x0];
   if (y1 < y0) [y0, y1] = [y1, y0];
-  x0 = Math.max(0, Math.min(VIEW.width - 1, x0));
-  y0 = Math.max(0, Math.min(VIEW.height - 1, y0));
-  x1 = Math.max(x0 + 1, Math.min(VIEW.width, x1));
-  y1 = Math.max(y0 + 1, Math.min(VIEW.height, y1));
+  const V = view();
+  x0 = Math.max(0, Math.min(V.width - 1, x0));
+  y0 = Math.max(0, Math.min(V.height - 1, y0));
+  x1 = Math.max(x0 + 1, Math.min(V.width, x1));
+  y1 = Math.max(y0 + 1, Math.min(V.height, y1));
   const w = x1 - x0;
   const h = y1 - y0;
   if (w < 4 || h < 4) throw new Error("Area zoom terlalu kecil.");
   // Resolusi asli (2×) bila masih muat di 1280×800; selain itu skala CSS.
-  const scale = w * DPR <= VIEW.width && h * DPR <= VIEW.height ? "device" : "css";
+  const scale = w * DPR <= Math.max(V.width, 1280) && h * DPR <= Math.max(V.height, 800) ? "device" : "css";
   const buf = await page().screenshot({
     type: "jpeg",
     quality: 85,
@@ -291,8 +467,9 @@ function xy(coord, label = "coordinate") {
   if (!Array.isArray(coord) || coord.length !== 2) throw new Error(`${label} harus [x, y].`);
   const [x, y] = coord.map(Number);
   if (!Number.isFinite(x) || !Number.isFinite(y)) throw new Error(`${label} tidak valid.`);
-  if (x < 0 || y < 0 || x >= VIEW.width || y >= VIEW.height) {
-    throw new Error(`${label} [${x}, ${y}] di luar layar ${VIEW.width}×${VIEW.height}.`);
+  const V = view();
+  if (x < 0 || y < 0 || x >= V.width || y >= V.height) {
+    throw new Error(`${label} [${x}, ${y}] di luar layar ${V.width}×${V.height}.`);
   }
   return [Math.round(x), Math.round(y)];
 }
@@ -435,6 +612,20 @@ async function typeSecret(value) {
 module.exports = {
   SMARTLINK_URL,
   typeSecret,
+  page,
+  view,
+  activeTab,
+  tabNames,
+  openTab,
+  switchTab,
+  closeTab,
+  setViewport,
+  addCookies,
+  tabInfo,
+  evalJs,
+  screenshotFull,
+  setFiles,
+  redact,
   PROFILE_DIR,
   VIEW,
   UI_ACTIONS,

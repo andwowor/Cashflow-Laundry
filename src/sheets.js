@@ -126,6 +126,7 @@ function setCashflowOverride(spreadsheetId) {
 }
 
 module.exports = {
+  findSpreadsheetIdByTitle,
   getDataValidation,
   readRange,
   batchWrite,

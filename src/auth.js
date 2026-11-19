@@ -99,6 +99,8 @@ function requireAuth(req, res, next) {
 }
 
 module.exports = {
+  COOKIE_NAME,
+  signToken,
   username,
   isConfigured,
   checkCredentials,

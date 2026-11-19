@@ -103,20 +103,35 @@
 
         <!-- Konfirmasi Biaya Smartlink otomatis (skill konfirmasi-biaya-smartlink) -->
         <div id="kf-box" class="kf-box">
-          <h3 class="kf-title">🤖 Konfirmasi Biaya Smartlink otomatis</h3>
-          <p class="hint">Menjalankan skill <b>/konfirmasi-biaya-smartlink</b> di latar belakang: robot membuka Smartlink,
-            mencocokkan tiap biaya <b>"Menunggu konfirmasi"</b> dengan tabel di bawah (keterangan, nominal, tanggal, outlet,
-            sumber dana harus sama persis), memberi ✓ Verifikasi Owner, lalu <b>menyetujuinya</b> dengan kode transaksi
-            sebagai catatan. Item yang ragu dilewati — robot <b>tidak pernah menolak</b>. Halaman ini boleh ditinggal;
-            progres &amp; laporan tetap tersimpan.</p>
+          <h3 class="kf-title">🤖 Robot Smartlink otomatis</h3>
+          <p class="hint">Robot membuka Smartlink di latar belakang dan menjalankan skill Anda. Item yang ragu dilewati —
+            robot <b>tidak pernah menolak</b>. Halaman ini boleh ditinggal; progres &amp; laporan tetap tersimpan.</p>
+          <div class="kf-job">
+            <div class="kf-job-head"><b>Konfirmasi Biaya Outlet</b>
+              <span class="hint">skill /konfirmasi-biaya-smartlink — cocokkan biaya "Menunggu konfirmasi" dengan tabel di
+                bawah (5 kolom sama persis), beri ✓ Verifikasi Owner, lalu setujui dengan kode transaksi.</span></div>
+            <div class="actions">
+              <button id="btn-kf-run" class="btn-primary kf-start" data-job="biaya" data-dry="0">▶ Jalankan Konfirmasi Biaya Smartlink</button>
+              <button id="btn-kf-dry" class="btn-ghost kf-start" data-job="biaya" data-dry="1">🔍 Cek saja (tanpa menyetujui)</button>
+            </div>
+          </div>
+          <div class="kf-job">
+            <div class="kf-job-head"><b>Konfirmasi Setoran Owner</b>
+              <span class="hint">skill /konfirmasi-setoran-owner-smartlink — setujui Setoran Kas Outlet (catatan = kode
+                transaksi), input Pengambilan Prive, lalu ✓ Verifikasi Owner. Rencana ditampilkan dulu untuk Anda setujui.</span></div>
+            <div class="actions">
+              <button id="btn-kfs-run" class="btn-primary kf-start" data-job="setoran" data-dry="0">▶ Jalankan Konfirmasi Setoran Owner</button>
+              <button id="btn-kfs-dry" class="btn-ghost kf-start" data-job="setoran" data-dry="1">🔍 Cek saja</button>
+            </div>
+          </div>
           <div class="actions">
-            <button id="btn-kf-run" class="btn-primary">▶ Jalankan Konfirmasi Biaya Smartlink</button>
-            <button id="btn-kf-dry" class="btn-ghost">🔍 Cek saja (tanpa menyetujui)</button>
-            <button id="btn-kf-stop" class="btn-ghost kf-stop hidden">■ Hentikan</button>
+            <button id="btn-kf-stop" class="btn-ghost kf-stop kf-stop-btn hidden" data-box="mb">■ Hentikan</button>
             <button id="btn-kf-login" class="btn-ghost">🔑 Login Smartlink</button>
             <label class="hint kf-check" title="Robot berjalan di jendela Chrome yang terlihat (untuk menonton / memecahkan masalah)">
               <input type="checkbox" id="kf-show" /> Tampilkan jendela browser</label>
           </div>
+          <div id="kf-busy" class="kf-note hidden"></div>
+          <div id="kf-msg" class="result-log hidden"></div>
           <details id="kf-akun" class="kf-akun">
             <summary>🔐 Login otomatis Smartlink: <span id="kf-akun-status">memuat…</span></summary>
             <div class="kf-akun-body">
@@ -156,6 +171,34 @@
           <button id="btn-sl-refresh" class="btn-ghost">⟳ Muat ulang</button>
           <span id="sl-count" class="hint">0 dipilih</span>
           <button id="btn-sl-hide" class="btn-primary">✓ Konfirmasi sembunyikan tercentang</button>
+        </div>
+        <div id="kfl-box" class="kf-box">
+          <h3 class="kf-title">🤖 Robot Smartlink otomatis</h3>
+          <p class="hint">Robot memindahkan baris ✘ di tabel ini ke Smartlink, lalu menandainya ✓. Rencana selalu
+            ditampilkan dulu di panel ini untuk Anda setujui. Login otomatis diatur di menu <b>Monitoring Biaya</b>.</p>
+          <div class="kf-job">
+            <div class="kf-job-head"><b>Input Setoran Owner</b>
+              <span class="hint">skill /input-setoran-owner-smartlink — baris Setoran Owner → Pengambilan Prive.</span></div>
+            <div class="actions">
+              <button id="btn-kfl-setoran-run" class="btn-primary kf-start" data-job="input_setoran" data-dry="0">▶ Jalankan Input Setoran Owner</button>
+              <button id="btn-kfl-setoran-dry" class="btn-ghost kf-start" data-job="input_setoran" data-dry="1">🔍 Cek saja</button>
+            </div>
+          </div>
+          <div class="kf-job">
+            <div class="kf-job-head"><b>Input Biaya ke Smartlink</b>
+              <span class="hint">skill /input-biaya-smartlink — baris biaya (bukan Setoran Owner) → Tambah Biaya di Biaya Outlet.</span></div>
+            <div class="actions">
+              <button id="btn-kfl-biaya-run" class="btn-primary kf-start" data-job="input_biaya" data-dry="0">▶ Jalankan Input Biaya</button>
+              <button id="btn-kfl-biaya-dry" class="btn-ghost kf-start" data-job="input_biaya" data-dry="1">🔍 Cek saja</button>
+            </div>
+          </div>
+          <div class="actions">
+            <button class="btn-ghost kf-stop kf-stop-btn hidden" data-box="sl">■ Hentikan</button>
+            <label class="hint kf-check"><input type="checkbox" id="kfl-show" /> Tampilkan jendela browser</label>
+          </div>
+          <div id="kfl-busy" class="kf-note hidden"></div>
+          <div id="kfl-msg" class="result-log hidden"></div>
+          <div id="kfl-panel" class="kf-panel hidden"></div>
         </div>
         <div id="sl-result" class="result-log hidden"></div>
         <div id="sl-table" class="table-wrap">Memuat…</div>
@@ -374,6 +417,39 @@
     <section id="tab-kas" class="panel">
       <p class="section-intro">Upload screenshot saldo, AI membaca nominalnya, lalu <b>konfirmasi pratinjau</b> sebelum
          nominal &amp; tanggal hari ini ditulis ke sel tujuan.</p>
+      <div class="card">
+        <div id="kfk-box" class="kf-box" style="margin-top:0">
+          <h3 class="kf-title">🤖 Robot Smartlink otomatis</h3>
+          <p class="hint">Robot menjalankan skill Anda di latar belakang. Rencana selalu ditampilkan dulu di panel ini
+            untuk Anda setujui. Login otomatis diatur di menu <b>Monitoring Biaya</b>.</p>
+          <div class="kf-job">
+            <div class="kf-job-head"><b>Input Kas Harian</b>
+              <span class="hint">skill /input-kas-smartlink — 4 screenshot m-banking (Drive) + Kas Laci, Kas Bank &amp;
+                Kas Mesin EDC Smartlink → bagian 1–4 di bawah, Analisis, lalu Konfirmasi &amp; Simpan.</span></div>
+            <div class="actions">
+              <button id="btn-kfk-kas-run" class="btn-primary kf-start" data-job="input_kas" data-dry="0">▶ Jalankan Input Kas</button>
+              <button id="btn-kfk-kas-dry" class="btn-ghost kf-start" data-job="input_kas" data-dry="1">🔍 Cek saja</button>
+            </div>
+          </div>
+          <div class="kf-job">
+            <div class="kf-job-head"><b>Settlement QRIS</b>
+              <span class="hint">skill /settlement-qris-smartlink — INPUT QRIS, DATA QRIS (bagian 6), lalu Buat Settlement
+                per tanggal di Smartlink. Kosongkan tanggal untuk "semua".</span></div>
+            <div class="actions">
+              <label class="hint kf-check">Tanggal <input type="date" id="kfk-tanggal" style="width:auto" /></label>
+              <button id="btn-kfk-qris-run" class="btn-primary kf-start" data-job="settlement" data-dry="0">▶ Jalankan Settlement QRIS</button>
+              <button id="btn-kfk-qris-dry" class="btn-ghost kf-start" data-job="settlement" data-dry="1">🔍 Cek saja</button>
+            </div>
+          </div>
+          <div class="actions">
+            <button class="btn-ghost kf-stop kf-stop-btn hidden" data-box="kas">■ Hentikan</button>
+            <label class="hint kf-check"><input type="checkbox" id="kfk-show" /> Tampilkan jendela browser</label>
+          </div>
+          <div id="kfk-busy" class="kf-note hidden"></div>
+          <div id="kfk-msg" class="result-log hidden"></div>
+          <div id="kfk-panel" class="kf-panel hidden"></div>
+        </div>
+      </div>
       <div class="upload-row" style="margin-bottom:14px">
         <button id="btn-kas-refresh" class="btn-ghost">⟳ Muat ulang</button>
         <span class="hint" style="margin:0">Perbarui info <b>upload data terakhir</b> &amp; bersihkan pratinjau di semua bagian.</span>

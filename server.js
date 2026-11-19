@@ -29,6 +29,7 @@ const receipt = require("./src/receipt");
 const appupdate = require("./src/appupdate");
 const konfirmasi = require("./src/konfirmasi");
 const smartlinkakun = require("./src/smartlinkakun");
+const robotjobs = require("./src/robotjobs");
 const { MODEL } = require("./src/claude");
 const auth = require("./src/auth");
 
@@ -438,7 +439,27 @@ app.get("/api/konfirmasi/status", wrap(async (req, res) => {
 
 app.post("/api/konfirmasi/start", wrap(async (req, res) => {
   const b = req.body || {};
-  res.json({ ok: true, run: konfirmasi.start({ dryRun: !!b.dryRun, showBrowser: !!b.showBrowser }) });
+  res.json({
+    ok: true,
+    run: konfirmasi.start({
+      job: b.job || "biaya",
+      dryRun: !!b.dryRun,
+      showBrowser: !!b.showBrowser,
+      param: b.tanggal ? { tanggal: String(b.tanggal) } : {},
+    }),
+  });
+}));
+
+// Jawaban Andre atas pertanyaan robot (pengganti AskUserQuestion di skill).
+app.post("/api/konfirmasi/jawab", wrap(async (req, res) => {
+  const b = req.body || {};
+  res.json(konfirmasi.answer({ id: b.id, jawaban: b.jawaban }));
+}));
+
+// Gambar Drive untuk tab "penampil gambar" robot (hanya file gambar).
+app.get("/api/robot/drive/:id", wrap(async (req, res) => {
+  const { meta, buffer } = await robotjobs.driveBytes(req.params.id);
+  res.set("Content-Type", meta.mimeType).set("Cache-Control", "no-store").send(buffer);
 }));
 
 app.post("/api/konfirmasi/stop", wrap(async (req, res) => {

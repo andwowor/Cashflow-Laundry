@@ -587,3 +587,30 @@ details.hint summary { cursor: pointer; font-weight: 700; color: var(--teal-dark
 .kf-akun-body { margin-top: 8px; }
 .kf-akun-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .kf-akun-form input { flex: 1 1 220px; min-width: 0; }
+/* Robot Smartlink: baris tugas, kartu pertanyaan, laporan umum */
+.kf-job { margin-top: 12px; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 10px; background: #fff; }
+.kf-job .actions { margin-top: 8px; }
+.kf-job-head b { color: var(--teal-dark); margin-right: 6px; }
+.kf-job-head .hint { display: block; margin-top: 2px; }
+.kf-jobtitle { font-weight: 800; color: var(--teal-dark); margin-bottom: 4px; }
+.kf-spin-wait { border-top-color: var(--gold); animation-duration: 1.6s; }
+.tab-robot-wait { animation: kf-bob 0.8s ease-in-out infinite; }
+.kf-question {
+  margin: 10px 0; padding: 12px 14px; border-radius: 12px;
+  background: var(--gold-soft); border: 2px solid var(--gold); box-shadow: var(--shadow);
+}
+.kf-q-head { font-weight: 800; color: #7a5208; margin-bottom: 6px; }
+.kf-q-text, .kf-pre {
+  white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13.5px; line-height: 1.5; color: var(--ink);
+  max-height: 420px; overflow: auto; background: #fffdf6; border-radius: 8px; padding: 8px 10px;
+}
+.kf-pre { background: transparent; max-height: none; padding: 4px 0; }
+.kf-pre + .kf-pre { border-top: 1px dashed var(--line); margin-top: 8px; padding-top: 8px; }
+.kf-pre-sm { font-size: 12.5px; max-height: 160px; overflow: auto; }
+.kf-question .actions { margin-top: 10px; }
+.kf-st { white-space: nowrap; font-weight: 700; }
+.kf-st-BERHASIL .kf-st { color: #145c45; }
+.kf-st-DILEWATI .kf-st { color: #8a5c10; }
+.kf-st-GAGAL .kf-st { color: var(--err); }
+.tab.kf-robot-on::after, .tab.kf-robot-wait::after { content: "🤖"; margin-left: 6px; display: inline-block; animation: kf-bob 1.2s ease-in-out infinite; }
+.tab.kf-robot-wait::after { content: "✋"; animation-duration: 0.8s; }
