@@ -261,7 +261,7 @@
           <p class="hint">Unggah berkas proyeksi laba rugi (.xlsx). Nominal tiap komponen biaya untuk bulan
             <b class="pb-bulan-ini">berjalan</b> diambil dari sheet <b>Proyeksi MAUMBI</b> &amp; <b>Proyeksi PERKAMIL</b>
             sesuai skenario yang dipilih, lalu diisikan ke kolom bulan berjalan — kecuali baris yang otomatis (formula).
-            Anda melihat pratinjaunya dulu sebelum disimpan.</p>
+            Anda melihat pratinjaunya dulu sebelum disimpan, dan bisa <b>Undo</b> untuk mengembalikan angka lama.</p>
           <div class="upload-row">
             <input type="file" id="pb-file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
             <label class="hint" for="pb-skenario" style="margin:0">Skenario</label>
@@ -274,6 +274,7 @@
           </div>
           <div id="pb-loading" class="loading hidden">Membaca &amp; menghitung ulang formula berkas…</div>
           <div id="pb-prev"></div>
+          <div id="pb-undo"></div>
         </div>
         <div id="pb-result" class="result-log hidden"></div>
         <div id="pb-table" class="table-wrap"></div>

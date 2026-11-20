@@ -3430,6 +3430,7 @@ async function loadProyeksi() {
     PB_LOADED = true;
     out.classList.add("hidden");
     pbRender();
+    pbUndoMuat();
   } catch (e) {
     showLog(out, "✘ " + e.message, true);
     if (!PB) tbl.innerHTML = "";
@@ -3792,12 +3793,9 @@ async function pbxSimpan() {
     pbxRender();
     clearFileInput($("#pb-file"));
     PB = res.data;
-    const sorot = new Set(res.ditulis.map((x) => {
-      const m = x.a1.match(/^([A-Z]+)(\d+)$/);
-      const c = [...m[1]].reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0);
-      return `${m[2]},${c}`;
-    }));
-    pbRender(null, sorot);
+    pbRender(null, new Set(res.ditulis.map((x) => pbA1Key(x.a1))));
+    PB_UNDO = res.undo || null;
+    pbUndoRender();
     let msg = `✔ ${res.ditulis.length} sel kolom ${res.bulan.nama} terisi dari ${berkas} (skenario ${res.skenario}). TOTAL & angka otomatis sudah diperbarui.`;
     if (res.dilewati.length) {
       msg += `\n⚠ ${res.dilewati.length} sel dilewati:\n` + res.dilewati.map((x) => `  • ${x.outlet} › ${x.label} (${x.a1}): ${x.alasan}`).join("\n");
@@ -3817,6 +3815,74 @@ $("#pb-skenario").addEventListener("change", () => { if (PBX) pbxPratinjau(); })
 $("#pb-prev").addEventListener("click", (ev) => {
   if (ev.target.closest("#btn-pbx-simpan")) pbxSimpan();
   else if (ev.target.closest("#btn-pbx-batal")) { PBX = null; pbxRender(); clearFileInput($("#pb-file")); }
+});
+
+// ----- Undo: kembalikan angka lama sebelum isi dari berkas -----
+let PB_UNDO = null;
+
+// "C15" → "15,3" (baris,kolom 1-based) untuk menyorot sel di tabel.
+function pbA1Key(a1) {
+  const m = String(a1).match(/^([A-Z]+)(\d+)$/);
+  const c = [...m[1]].reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0);
+  return `${m[2]},${c}`;
+}
+
+function pbUndoRender() {
+  const box = $("#pb-undo");
+  const u = PB_UNDO;
+  if (!u) { box.innerHTML = ""; return; }
+  box.innerHTML = `<div class="pb-undo-box">
+      <div>Isi dari berkas terakhir: <b>${escapeHtml(u.berkas)}</b> (skenario ${escapeHtml(u.skenario)}) ·
+        ${escapeHtml(u.waktu)} · <b>${u.jumlah} sel</b> diubah.</div>
+      <button id="btn-pb-undo" class="btn-ghost">↶ Undo — kembalikan angka lama</button>
+    </div>`;
+}
+
+async function pbUndoMuat() {
+  try {
+    const r = await api("/api/proyeksi/berkas/undo");
+    PB_UNDO = r.undo || null;
+    pbUndoRender();
+  } catch {
+    /* status undo tidak penting untuk menampilkan tabel */
+  }
+}
+
+async function pbUndo() {
+  const u = PB_UNDO;
+  if (!u || PB_BUSY) return;
+  if (!window.confirm(`Kembalikan ${u.jumlah} sel ke angka sebelum upload ${u.berkas}?`)) return;
+  const out = $("#pb-result");
+  const btn = $("#btn-pb-undo");
+  btn.disabled = true;
+  btn.textContent = "Mengembalikan angka lama…";
+  PB_BUSY = true;
+  try {
+    const res = await pbxPost("/api/proyeksi/berkas/undo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: u.id }),
+    });
+    PB = res.data;
+    pbRender(null, new Set(res.dikembalikan.map((x) => pbA1Key(x.a1))));
+    PB_UNDO = res.undo || null;
+    pbUndoRender();
+    let msg = `↶ ${res.dikembalikan.length} sel dikembalikan ke angka sebelum upload ${res.berkas}. TOTAL & angka otomatis sudah diperbarui.`;
+    if (res.dilewati.length) {
+      msg += `\n⚠ ${res.dilewati.length} sel tidak dikembalikan:\n` + res.dilewati.map((x) => `  • ${x.outlet} › ${x.label} (${x.a1}): ${x.alasan}`).join("\n");
+    }
+    showLog(out, msg, false);
+    if (PBX) pbxPratinjau(true);
+  } catch (e) {
+    showLog(out, "✘ " + e.message, true);
+    pbUndoMuat();
+  } finally {
+    PB_BUSY = false;
+  }
+}
+
+$("#pb-undo").addEventListener("click", (ev) => {
+  if (ev.target.closest("#btn-pb-undo")) pbUndo();
 });
 
 // ================= Init =================

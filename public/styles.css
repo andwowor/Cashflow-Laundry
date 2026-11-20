@@ -711,3 +711,8 @@ a.btn-ghost { text-decoration: none; display: inline-flex; align-items: center; 
   .pb-upload { padding: 12px; }
   #pbx-grid .pb-sticky { min-width: 104px; max-width: 132px; white-space: normal; }
 }
+.pb-undo-box {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-top: 12px;
+  padding: 10px 12px; border-radius: 10px; background: var(--teal-soft); font-size: 13px; overflow-wrap: anywhere;
+}
+.pb-undo-box > div { flex: 1 1 260px; }

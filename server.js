@@ -517,6 +517,22 @@ app.post("/api/proyeksi/berkas/terapkan", async (req, res) => {
   }
 });
 
+app.get("/api/proyeksi/berkas/undo", async (req, res) => {
+  try {
+    res.json(await proyeksiupload.statusUndo());
+  } catch (err) {
+    pbErr(res, err);
+  }
+});
+
+app.post("/api/proyeksi/berkas/undo", async (req, res) => {
+  try {
+    res.json(await proyeksiupload.batalkan((req.body || {}).id));
+  } catch (err) {
+    pbErr(res, err);
+  }
+});
+
 // ---------- Konfirmasi Biaya Smartlink otomatis (skill konfirmasi-biaya-smartlink) ----------
 
 app.get("/api/konfirmasi/status", wrap(async (req, res) => {

@@ -113,3 +113,6 @@ yang meniru kondisi Mac (logo lokal + lock berubah), pakai `APP_REPO_DIR`.
   workbook dihitung ulang dengan **HyperFormula** (`hyperformula` 3.5.0, lisensi gpl-v3). Uji kesetaraan: hasilnya
   sama dengan LibreOffice (`soffice --headless --convert-to csv…`, tersedia di container) untuk semua sel sheet 5 & 6;
   sheet analisa lain memakai FORECAST/INTERCEPT/FIXED yang belum didukung — sel galat tidak pernah ditulis.
+  **Undo** (`/api/proyeksi/berkas/undo` GET status / POST {id}): tiap simpan dari berkas mencatat angka lama per sel di
+  `data/proyeksi_undo.json` (maks. 20, per ID spreadsheet, outlet + SUBJEK + a1). Undo bersifat tumpukan (yang terbaru
+  dulu), mencari baris lewat SUBJEK, dan hanya mengembalikan sel yang nilainya MASIH sama dengan hasil upload.

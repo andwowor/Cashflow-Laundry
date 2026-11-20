@@ -19,9 +19,10 @@
 // saat spreadsheet berganti ke DESEMBER 2026 otomatis memakai kolom "Des 26".
 
 const crypto = require("crypto");
+const path = require("path");
 const XLSX = require("xlsx");
 const cfg = require("./config");
-const { batchWrite } = require("./sheets");
+const { batchWrite, resolveCashflowSpreadsheetId } = require("./sheets");
 const proyeksi = require("./proyeksi");
 
 const BULAN = {
@@ -41,6 +42,11 @@ const BULAN = {
 const NAMA_SINGKAT = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"];
 const TTL_MS = 30 * 60 * 1000;
 const cache = new Map();
+// Catatan undo: angka lama tiap sel sebelum ditimpa isi dari berkas. Disimpan per ID
+// spreadsheet (CASHFLOW berganti tiap bulan) dan dicocokkan ulang lewat outlet + SUBJEK,
+// bukan hanya nomor baris. Bertahan walau aplikasi dijalankan ulang.
+const UNDO_FILE = path.join(cfg.DATA_DIR, "proyeksi_undo.json");
+const UNDO_MAX = 20;
 
 function httpError(status, message) {
   return proyeksi.httpError(status, message);
@@ -404,6 +410,17 @@ function terapkan(id, skenario, dilihat) {
     }
     if (tulis.length) {
       await batchWrite(data.spreadsheet.id, tulis.map((it) => ({ range: `'${proyeksi.SHEET}'!${it.a1}`, values: [[it.baru]] })));
+      catatUndo({
+        id: crypto.randomBytes(9).toString("hex"),
+        spreadsheetId: data.spreadsheet.id,
+        spreadsheet: data.spreadsheet.title,
+        bulan: entry.bulan.label,
+        berkas: entry.nama,
+        skenario: sk,
+        waktu: cfg.formatBusinessDateTime(new Date()),
+        dibuat: Date.now(),
+        sel: tulis.map((it) => ({ outlet: it.outlet, label: it.label, a1: it.a1, lama: it.lama, lamaTeks: it.lamaTeks, baru: it.baru })),
+      });
     }
     const fresh = tulis.length ? await proyeksi.load() : data;
     return {
@@ -412,9 +429,104 @@ function terapkan(id, skenario, dilihat) {
       bulan: entry.bulan,
       ditulis: tulis.map((it) => ({ outlet: it.outlet, label: it.label, a1: it.a1, lama: it.lamaTeks, baru: it.baru })),
       dilewati: dilewati.map((it) => ({ outlet: it.outlet, label: it.label, a1: it.a1, alasan: it.alasan })),
+      undo: ringkasUndo(undoTerakhir(data.spreadsheet.id)),
       data: fresh,
     };
   });
 }
 
-module.exports = { unggah, pratinjau, terapkan, parseBulan, ubahFormula, kunci, hitungWorkbook, ekstrakOutlet };
+// ---------- Undo isi dari berkas ----------
+
+function bacaUndo() {
+  const d = cfg.readJsonFile(UNDO_FILE, null);
+  return d && Array.isArray(d.list) ? d.list : [];
+}
+
+function simpanUndo(list) {
+  cfg.writeJsonFile(UNDO_FILE, { list: list.slice(-UNDO_MAX) });
+}
+
+function catatUndo(snap) {
+  const list = bacaUndo();
+  list.push(snap);
+  simpanUndo(list);
+}
+
+/** Isi dari berkas terakhir (belum dibatalkan) untuk spreadsheet ini — urutan tumpukan. */
+function undoTerakhir(spreadsheetId) {
+  const list = bacaUndo();
+  for (let i = list.length - 1; i >= 0; i--) {
+    if (list[i].spreadsheetId === spreadsheetId && !list[i].dibatalkan) return list[i];
+  }
+  return null;
+}
+
+function ringkasUndo(u) {
+  if (!u) return null;
+  return { id: u.id, berkas: u.berkas, skenario: u.skenario, bulan: u.bulan, waktu: u.waktu, jumlah: u.sel.length };
+}
+
+/** Status tombol undo untuk spreadsheet CASHFLOW yang aktif. */
+async function statusUndo() {
+  const { id } = await resolveCashflowSpreadsheetId();
+  return { ok: true, undo: ringkasUndo(undoTerakhir(id)) };
+}
+
+/**
+ * Kembalikan angka lama dari satu kali "isi dari berkas". Hanya sel yang nilainya MASIH sama
+ * dengan hasil upload yang dikembalikan — sel yang sudah diubah lagi sesudahnya dibiarkan.
+ */
+function batalkan(undoId) {
+  return proyeksi.exclusive(async () => {
+    const list = bacaUndo();
+    const u = list.find((x) => x.id === String(undoId || ""));
+    if (!u || u.dibatalkan) throw httpError(410, "Tidak ada isi dari berkas yang bisa dibatalkan (mungkin sudah dibatalkan).");
+    const data = await proyeksi.load();
+    if (data.spreadsheet.id !== u.spreadsheetId) {
+      throw httpError(409, `Undo ini untuk spreadsheet ${u.spreadsheet}, sedangkan yang aktif sekarang ${data.spreadsheet.title}.`);
+    }
+    const akhir = undoTerakhir(u.spreadsheetId);
+    if (!akhir || akhir.id !== u.id) throw httpError(409, "Batalkan dulu isi dari berkas yang lebih baru.");
+
+    const tulis = [];
+    const dilewati = [];
+    const hr = data.headerRow;
+    for (const s of u.sel) {
+      const ec = data.editCols.find((e) => e.group === s.outlet);
+      if (!ec) { dilewati.push({ ...s, alasan: "kolom outlet tidak ditemukan" }); continue; }
+      // Baris dicari dari SUBJEK; nomor baris lama dipakai bila SUBJEK-nya masih sama.
+      const rowLama = Number(String(s.a1).replace(/^[A-Z]+/, "")) - 1;
+      const cocok = [];
+      for (let r = hr; r < data.rows.length; r++) if (String(data.rows[r][0].v || "").trim() === s.label) cocok.push(r);
+      const r = cocok.includes(rowLama) ? rowLama : cocok.length === 1 ? cocok[0] : -1;
+      if (r < 0) { dilewati.push({ ...s, alasan: "baris SUBJEK tidak ditemukan" }); continue; }
+      const cell = data.rows[r][ec.col];
+      const a1 = `${ec.letter}${r + 1}`;
+      if (cell.k || !cell.e) { dilewati.push({ ...s, a1, alasan: "sel sekarang otomatis (formula)" }); continue; }
+      const now = typeof cell.n === "number" ? cell.n : null;
+      if (now == null || Math.abs(now - s.baru) > 1e-9) {
+        dilewati.push({ ...s, a1, alasan: `sudah diubah menjadi ${cell.v || "(kosong)"} setelah upload` });
+        continue;
+      }
+      tulis.push({ ...s, a1 });
+    }
+    if (tulis.length) {
+      await batchWrite(data.spreadsheet.id, tulis.map((s) => ({ range: `'${proyeksi.SHEET}'!${s.a1}`, values: [[s.lama == null ? "" : s.lama]] })));
+    }
+    const terbaru = bacaUndo();
+    const t = terbaru.find((x) => x.id === u.id);
+    if (t) { t.dibatalkan = true; t.dibatalkanPada = cfg.formatBusinessDateTime(new Date()); }
+    simpanUndo(terbaru);
+    const fresh = tulis.length ? await proyeksi.load() : data;
+    return {
+      ok: true,
+      berkas: u.berkas,
+      dikembalikan: tulis.map((s) => ({ outlet: s.outlet, label: s.label, a1: s.a1, dari: s.baru, ke: s.lamaTeks })),
+      dilewati: dilewati.map((s) => ({ outlet: s.outlet, label: s.label, a1: s.a1, alasan: s.alasan })),
+      undo: ringkasUndo(undoTerakhir(u.spreadsheetId)),
+      data: fresh,
+    };
+  });
+}
+
+module.exports = { unggah, pratinjau, terapkan, statusUndo, batalkan, parseBulan, ubahFormula, kunci, hitungWorkbook, ekstrakOutlet, UNDO_FILE };
