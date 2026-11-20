@@ -97,7 +97,8 @@ yang meniru kondisi Mac (logo lokal + lock berubah), pakai `APP_REPO_DIR`.
   Service account harus Editor di spreadsheet itu (bila belum, UI menampilkan petunjuk berbagi).
 - Repo ini **publik**. Jangan menambah ID file/folder Drive baru, data pribadi, atau rahasia ke repo.
 - **Proyeksi Biaya** (`src/proyeksi.js`, `/api/proyeksi`, `/api/proyeksi/simpan`): menampilkan seluruh sheet
-  PROYEKSI BIAYA (CASHFLOW bulan berjalan) lengkap dengan sel gabungan. Yang boleh diedit HANYA sel angka/kosong di
+  PROYEKSI BIAYA (CASHFLOW bulan berjalan) lengkap dengan sel gabungan, KECUALI kolom berjudul LOKASI & KET
+  (disembunyikan atas permintaan Andre; dicari dari judulnya, `hiddenCols`). Yang boleh diedit HANYA sel angka/kosong di
   kolom berjudul nama bulan spreadsheet (NOVEMBER = kolom C MAUMBI & I PERKAMIL) yang bukan formula dan bukan luapan
   rumus array (B/H = IMPORTRANGE). Kolom dicari ulang tiap muat dari baris judul (jangan dikunci ke huruf kolom).
   Setiap simpan memvalidasi ulang di server: ID spreadsheet, SUBJEK baris, bukan formula, dan nilai lama belum berubah

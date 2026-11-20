@@ -24,6 +24,7 @@ const { resolveCashflowSpreadsheetId, batchWrite } = require("./sheets");
 
 const SHEET = "PROYEKSI BIAYA";
 const MAX_ABS = 1e12;
+const HIDDEN_HEADERS = new Set(["LOKASI", "KET"]);
 
 function colLetter(idx) {
   let s = "";
@@ -155,6 +156,14 @@ async function load() {
   }
   const editSet = new Set(editCols.map((e) => e.col));
 
+  // Kolom yang tidak ditampilkan di dashboard (keputusan Andre): LOKASI & KET.
+  const hiddenCols = [];
+  if (headerRow >= 0) {
+    for (let k = 0; k <= lastCol; k++) {
+      if (HIDDEN_HEADERS.has(norm(((raw[headerRow] || [])[k] || {}).formattedValue))) hiddenCols.push(k);
+    }
+  }
+
   const rows = [];
   for (let r = 0; r <= lastRow; r++) {
     const out = [];
@@ -191,6 +200,7 @@ async function load() {
     lastCol: lastCol + 1,
     merges,
     editCols,
+    hiddenCols,
     rows,
     loadedAt: cfg.formatBusinessDateTime(new Date()),
   };

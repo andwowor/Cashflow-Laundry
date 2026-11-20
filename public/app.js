@@ -3452,15 +3452,21 @@ function pbRender(saved) {
   }
 
   const editSet = new Set(d.editCols.map((e) => e.col));
+  // Kolom yang tidak ditampilkan (LOKASI, KET) — ditentukan server dari baris judul.
+  const hide = new Set(d.hiddenCols || []);
   const span = {};
   const skip = new Set();
   d.merges.forEach((m) => {
-    span[m.r + "," + m.c] = m;
+    const vis = [];
+    for (let c = m.c; c < m.c + m.cs; c++) if (!hide.has(c)) vis.push(c);
+    if (!vis.length) return;
+    // Isi sel gabungan diambil dari sel kiri-atas, ditampilkan di kolom terlihat pertama.
+    span[m.r + "," + vis[0]] = { rs: m.rs, cs: vis.length, src: m.c };
     for (let r = m.r; r < m.r + m.rs; r++)
-      for (let c = m.c; c < m.c + m.cs; c++) if (r !== m.r || c !== m.c) skip.add(r + "," + c);
+      for (const c of vis) if (r !== m.r || c !== vis[0]) skip.add(r + "," + c);
   });
   const hdrN = Math.max(d.headerRow, d.frozenRows || 0);
-  const nCols = d.lastCol;
+  const nCols = d.lastCol - [...hide].filter((c) => c < d.lastCol).length;
   let head = "";
   let body = "";
   d.rows.forEach((row, r) => {
@@ -3474,10 +3480,11 @@ function pbRender(saved) {
     }
     const label = String(row[0].v || "").trim().toUpperCase();
     let tr = "";
-    row.forEach((cell, c) => {
+    row.forEach((own, c) => {
       const key = r + "," + c;
-      if (skip.has(key)) return;
+      if (hide.has(c) || skip.has(key)) return;
       const m = span[key];
+      const cell = m ? row[m.src] : own;
       const attrs = [];
       const cls = [];
       if (m && m.rs > 1) attrs.push(`rowspan="${m.rs}"`);
