@@ -2426,6 +2426,163 @@ $("#btn-trx-submit").addEventListener("click", async () => {
   }
 });
 
+// ================= Upload File: sub menu =================
+$$("#tab-transaksi .subtab").forEach((b) =>
+  b.addEventListener("click", () => {
+    $$("#tab-transaksi .subtab").forEach((x) => x.classList.toggle("active", x === b));
+    $$("#tab-transaksi .subpanel").forEach((p) => p.classList.toggle("active", p.id === "sub-" + b.dataset.sub));
+    if (b.dataset.sub === "transaksiharian") thLoad();
+  })
+);
+
+// ================= Upload Transaksi Harian (sama dengan Dashboard Internal) =================
+// Memanggil fungsi backend Dashboard Internal yang sama (uploadTransaksi &
+// getTransaksiInfo) lewat server dashboard ini, jadi hasilnya identik.
+let TH = null;
+
+function thTanggal(ms) {
+  if (!ms) return "";
+  return new Date(ms).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
+}
+
+async function thLoad() {
+  const el = $("#th-koneksi");
+  try {
+    TH = await api("/api/internal/status");
+  } catch (e) {
+    el.innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
+    return;
+  }
+  thRender();
+  if (TH.terhubung && TH.bolehUpload) thLoadInfo();
+}
+
+function thRender() {
+  const el = $("#th-koneksi");
+  const card = $("#th-upload-card");
+  if (!TH.terhubung) {
+    card.classList.add("hidden");
+    $("#th-info").innerHTML = "";
+    el.innerHTML = `
+      <p class="hint">${TH.kedaluwarsa ? "<b>Sesi Dashboard Internal sudah habis.</b> " : ""}Sub menu ini memakai fungsi yang sama
+        dengan menu <b>Upload Transaksi Harian</b> di Dashboard Internal — hasilnya langsung masuk ke sheet
+        <b>TRANSAKSI HARIAN</b> yang dipakai Petugas Setrika. Hubungkan sekali dengan akun <b>Owner/Manajer</b>
+        Dashboard Internal (berlaku 30 hari). Kata sandi tidak disimpan — hanya token sesi, di komputer ini.</p>
+      <div class="th-login">
+        <input type="text" id="th-nomor" placeholder="Nomor pegawai" autocomplete="username" />
+        <input type="password" id="th-pass" placeholder="Password" autocomplete="current-password" />
+        <button id="btn-th-login" class="btn-primary">Masuk</button>
+      </div>
+      <div id="th-login-msg" class="error hidden"></div>`;
+    const go = () => thLogin();
+    $("#btn-th-login").addEventListener("click", go);
+    $("#th-pass").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") go();
+    });
+    return;
+  }
+  const u = TH.user || {};
+  el.innerHTML = `
+    <div class="th-terhubung">🔗 Terhubung ke Dashboard Internal sebagai <b>${escapeHtml(u.nama || u.nomorPegawai)}</b>
+      (${escapeHtml(u.roleLabel || u.role || "")})${TH.exp ? ` · berlaku sampai ${escapeHtml(thTanggal(TH.exp))}` : ""}
+      <button id="btn-th-logout" class="btn-ghost btn-th-kecil">Keluar</button></div>`;
+  $("#btn-th-logout").addEventListener("click", thLogout);
+  if (!TH.bolehUpload) {
+    card.classList.add("hidden");
+    $("#th-info").innerHTML = `<div class="th-notice th-err">🔒 <div>Halaman ini hanya untuk Manajer atau Owner.</div></div>`;
+    return;
+  }
+  card.classList.remove("hidden");
+}
+
+async function thLogin() {
+  const msg = $("#th-login-msg");
+  const btn = $("#btn-th-login");
+  msg.classList.add("hidden");
+  btn.disabled = true;
+  btn.textContent = "Masuk…";
+  try {
+    TH = await api("/api/internal/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nomorPegawai: $("#th-nomor").value, password: $("#th-pass").value }),
+    });
+    thRender();
+    if (TH.bolehUpload) thLoadInfo();
+  } catch (e) {
+    msg.textContent = "✘ " + e.message;
+    msg.classList.remove("hidden");
+    btn.disabled = false;
+    btn.textContent = "Masuk";
+  }
+}
+
+async function thLogout() {
+  if (!confirm("Putuskan hubungan dengan Dashboard Internal? Anda perlu login lagi untuk upload.")) return;
+  try {
+    TH = await api("/api/internal/logout", { method: "POST" });
+  } catch {
+    /* tetap tampilkan ulang */
+  }
+  $("#th-hasil").innerHTML = "";
+  thLoad();
+}
+
+async function thLoadInfo() {
+  try {
+    const r = await api("/api/internal/transaksi-info");
+    $("#th-info").innerHTML = `<div class="th-notice">📦 <div><b>${escapeHtml(String(r.jumlah))} nota</b> tersimpan di database.${
+      r.lastUpload ? " Upload terakhir: " + escapeHtml(r.lastUpload) : ""
+    }</div></div>`;
+  } catch (e) {
+    if (/login|sesi|terhubung/i.test(e.message)) thLoad();
+  }
+}
+
+$("#btn-th-upload").addEventListener("click", async () => {
+  const input = $("#th-file");
+  const file = input.files && input.files[0];
+  const hasil = $("#th-hasil");
+  if (!file) {
+    hasil.innerHTML = `<div class="th-notice th-err">✘ <div>Pilih file .xlsx dahulu.</div></div>`;
+    return;
+  }
+  const btn = $("#btn-th-upload");
+  btn.disabled = true;
+  $("#th-loading").classList.remove("hidden");
+  hasil.innerHTML = "";
+  try {
+    const fd = new FormData();
+    fd.append("file", file, file.name);
+    const res = await api("/api/internal/upload-transaksi", { method: "POST", body: fd });
+    let html = `<div class="th-notice">✅ <div>${escapeHtml(res.message)}</div></div>`;
+    // Nota yang keterangannya belum terbaca penuh — ditampilkan supaya bisa langsung dicek.
+    const perlu = res.perluDicek || [];
+    if (perlu.length) {
+      html += `<div class="card th-perlu">
+        <h3>⚠️ ${perlu.length} nota perlu dicek</h3>
+        <p class="hint">Ada bagian keterangan yang belum bisa dibaca sistem, jadi jumlah pcs-nya mungkin kurang.
+          Periksa notanya di aplikasi laundry, lalu kirimkan contohnya agar polanya ditambahkan.</p>
+        ${perlu
+          .slice(0, 30)
+          .map((x) => `<div class="th-item"><div class="th-t1">${escapeHtml(x.nota)}</div><div class="th-t2">${escapeHtml(x.customer || "—")} • ${escapeHtml(x.catatan)}</div></div>`)
+          .join("")}
+        ${perlu.length > 30 ? `<p class="hint">dan ${perlu.length - 30} nota lain — lihat kolom CATATAN PARSE di sheet TRANSAKSI HARIAN.</p>` : ""}
+      </div>`;
+    }
+    html += `<p class="th-ok">Transaksi harian terproses ✅</p>`;
+    hasil.innerHTML = html;
+    clearFileInput(input);
+    thLoadInfo();
+  } catch (e) {
+    hasil.innerHTML = `<div class="th-notice th-err">✘ <div>${escapeHtml(e.message)}</div></div>`;
+    if (/login|sesi|terhubung/i.test(e.message)) thLoad();
+  } finally {
+    btn.disabled = false;
+    $("#th-loading").classList.add("hidden");
+  }
+});
+
 // ================= Riwayat Biaya per Bulan =================
 let RB = null;
 let RB_LOADED = false;

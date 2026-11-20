@@ -85,3 +85,11 @@ yang meniru kondisi Mac (logo lokal + lock berubah), pakai `APP_REPO_DIR`.
   ulang SKILL.md-nya ke `src/skills/` (di sesi cloud ada di `/root/.claude/skills/synced/…`).
   Tab dashboard robot memakai cookie login buatan server. Skill mencari tombol tab lewat innerText persis
   (mis. 'Input Kas') — jangan menambah teks/elemen ke label tab; tanda robot dibuat lewat CSS `::after`.
+- **Upload File** (dulu menu "Upload Pelunasan"): dua sub menu — *Upload Pelunasan* (fitur lama, `#sub-pelunasan`)
+  dan *Upload Transaksi Harian* (`src/internalapi.js`). Yang kedua memanggil fungsi backend Dashboard Internal
+  (repo `andwowor/Internal-Co-Clean-Laundry`, Apps Script action `uploadTransaksi` & `getTransaksiInfo`) yang
+  sama persis dengan menu di https://internal-co-clean-laundry.andwowor.workers.dev — jangan menyalin ulang
+  aturan pembacaan nota ke repo ini. Login akun Owner/Manajer internal sekali; hanya token (30 hari) disimpan di
+  `data/internal_sesi.json`. URL Web App = `API_URL` di `public/js/config.js` repo internal (override: env
+  `INTERNAL_API_URL`) — bila deployment internal berganti URL, perbarui `DEFAULT_API_URL`.
+- Repo ini **publik**. Jangan menambah ID file/folder Drive baru, data pribadi, atau rahasia ke repo.

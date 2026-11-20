@@ -614,3 +614,29 @@ details.hint summary { cursor: pointer; font-weight: 700; color: var(--teal-dark
 .kf-st-GAGAL .kf-st { color: var(--err); }
 .tab.kf-robot-on::after, .tab.kf-robot-wait::after { content: "🤖"; margin-left: 6px; display: inline-block; animation: kf-bob 1.2s ease-in-out infinite; }
 .tab.kf-robot-wait::after { content: "✋"; animation-duration: 0.8s; }
+
+/* Sub menu (mis. Upload File › Upload Pelunasan / Upload Transaksi Harian) */
+.subtabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.subtab {
+  background: #fff; border: 1.5px solid var(--line); color: var(--ink-soft); border-radius: 999px;
+  padding: 9px 16px; font-family: var(--font); font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.subtab:hover { border-color: var(--teal); color: var(--teal-dark); }
+.subtab.active { background: var(--teal); border-color: var(--teal); color: #fff; box-shadow: var(--shadow); }
+.subpanel { display: none; }
+.subpanel.active { display: block; }
+.card h2 small.hint { font-size: 13px; font-weight: 600; margin-left: 4px; }
+.th-login { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.th-login input { flex: 1 1 200px; min-width: 0; }
+.th-terhubung { padding: 10px 14px; border-radius: 10px; background: var(--teal-soft); color: var(--teal-deep); font-size: 14px; }
+.btn-th-kecil { padding: 4px 10px; font-size: 12.5px; margin-left: 8px; }
+.th-notice {
+  display: flex; gap: 10px; align-items: flex-start; margin-top: 10px; padding: 10px 14px;
+  border-radius: 10px; background: #eaf4f6; border: 1px solid #cfe5ea; color: var(--ink); font-size: 14px;
+}
+.th-notice.th-err { background: var(--err-soft); border-color: #f2c0b7; color: #8e2a20; }
+.th-perlu { margin-top: 10px; }
+.th-item { padding: 8px 0; border-bottom: 1px solid var(--line); }
+.th-t1 { font-weight: 700; color: var(--ink); }
+.th-t2 { font-size: 13px; color: var(--ink-soft); }
+.th-ok { color: #145c45; font-weight: 700; margin-top: 8px; }

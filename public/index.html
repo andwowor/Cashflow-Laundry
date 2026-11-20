@@ -34,7 +34,7 @@
       <button class="tab" data-tab="kas">Input Kas</button>
       <button class="tab" data-tab="setoran">Setoran Kas</button>
       <button class="tab" data-tab="deposit">Deposit Pelanggan</button>
-      <button class="tab" data-tab="transaksi">Upload Pelunasan</button>
+      <button class="tab" data-tab="transaksi">Upload File</button>
       <button class="tab" data-tab="pengaturan">Pengaturan</button>
       <button class="tab logout" id="btn-logout" title="Keluar">⎋ Keluar</button>
     </nav>
@@ -614,6 +614,13 @@
 
     <!-- ============ TAB UPLOAD TRANSAKSI ============ -->
     <section id="tab-transaksi" class="panel">
+      <nav class="subtabs" aria-label="Sub menu Upload File">
+        <button class="subtab active" data-sub="pelunasan">💵 Upload Pelunasan</button>
+        <button class="subtab" data-sub="transaksiharian">📤 Upload Transaksi Harian</button>
+      </nav>
+
+      <!-- Sub menu: Upload Pelunasan -->
+      <div id="sub-pelunasan" class="subpanel active">
       <div class="card">
         <h2>Upload Data Pelunasan</h2>
         <p class="hint">Upload file ekspor <b>.xlsx</b> (Rekap Transaksi). Data <b>baris 28 s/d terbawah</b>
@@ -634,6 +641,29 @@
             <button id="btn-trx-submit" class="btn-primary">💾 Upload ke Sheet</button>
           </div>
           <div id="trx-result" class="result-log hidden"></div>
+        </div>
+      </div>
+      </div>
+
+      <!-- Sub menu: Upload Transaksi Harian (sama dengan menu di Dashboard Internal) -->
+      <div id="sub-transaksiharian" class="subpanel">
+        <div class="card">
+          <h2>📤 Upload Transaksi Harian <small class="hint">rekap dari aplikasi laundry (.xlsx)</small></h2>
+          <div id="th-koneksi">Memuat…</div>
+          <div id="th-info"></div>
+        </div>
+        <div id="th-upload-card" class="card hidden">
+          <h3>Upload file rekap transaksi</h3>
+          <p class="hint">Pilih file Excel (.xlsx) hasil export "Rekap Data Transaksi" dari aplikasi laundry. Sistem otomatis
+            membaca nomor nota, pelanggan, tanggal, jumlah pcs, dan berat (kg) tiap nota — dipakai Petugas Setrika saat
+            mengisi performa. Data diakumulasi (nota lama tetap tersimpan).</p>
+          <label class="hint" for="th-file" style="display:block;margin:10px 0 4px">File transaksi (.xlsx)</label>
+          <div class="upload-row">
+            <input type="file" id="th-file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+            <button id="btn-th-upload" class="btn-primary">📤 Upload &amp; Proses</button>
+          </div>
+          <div id="th-loading" class="loading hidden">Memproses file di Dashboard Internal… (bisa sampai beberapa menit)</div>
+          <div id="th-hasil"></div>
         </div>
       </div>
     </section>
