@@ -28,6 +28,7 @@
       <button class="tab" data-tab="monbiaya">Monitoring Biaya</button>
       <button class="tab" data-tab="smartlink">Lapor Smartlink</button>
       <button class="tab" data-tab="riwayat">Riwayat Biaya</button>
+      <button class="tab" data-tab="proyeksi">Proyeksi Biaya</button>
       <button class="tab" data-tab="aliran">Aliran Kas</button>
       <button class="tab" data-tab="biaya">Input Biaya</button>
       <button class="tab" data-tab="daftarbiaya">Daftar Biaya Baru</button>
@@ -239,6 +240,24 @@
         <div id="rb-total" class="last-sync hidden"></div>
         <div id="rb-result" class="result-log hidden"></div>
         <div id="rb-table" class="table-wrap"></div>
+      </div>
+    </section>
+
+    <!-- ============ TAB PROYEKSI BIAYA ============ -->
+    <section id="tab-proyeksi" class="panel">
+      <div class="card">
+        <h2>Proyeksi Biaya</h2>
+        <p class="hint">Seluruh isi sheet <b>PROYEKSI BIAYA</b> pada spreadsheet CASHFLOW bulan ini.
+          Angka di kolom <b id="pb-bulan">bulan berjalan</b> yang bergaris putus-putus bisa <b>diklik lalu diubah</b>
+          (tekan <b>Enter</b> untuk menyimpan, <b>Esc</b> untuk batal) — perubahan langsung tersimpan di spreadsheet.
+          Sel abu-abu bertanda <b>ƒ</b> dihitung otomatis oleh formula, jadi tidak bisa diedit.</p>
+        <div class="upload-row">
+          <button id="btn-pb-load" class="btn-ghost">↻ Muat ulang</button>
+          <a id="pb-open" class="btn-ghost hidden" target="_blank" rel="noopener">Buka di Google Sheets ↗</a>
+          <span id="pb-meta" class="hint" style="margin:0"></span>
+        </div>
+        <div id="pb-result" class="result-log hidden"></div>
+        <div id="pb-table" class="table-wrap"></div>
       </div>
     </section>
 

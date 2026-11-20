@@ -17,6 +17,7 @@ const kas = require("./src/kas");
 const qris = require("./src/qris");
 const qrisbank = require("./src/qrisbank");
 const monbiaya = require("./src/monbiaya");
+const proyeksi = require("./src/proyeksi");
 const moninput = require("./src/moninput");
 const riwayat = require("./src/riwayat");
 const daftarbiaya = require("./src/daftarbiaya");
@@ -285,6 +286,21 @@ app.post("/api/qrisbank/analyze", upload.array("files", 10), wrap(async (req, re
 app.post("/api/qrisbank/submit", wrap(async (req, res) => {
   res.json(await qrisbank.submit((req.body || {}).entries));
 }));
+
+// ---------- Proyeksi Biaya (sheet PROYEKSI BIAYA, CASHFLOW bulan berjalan) ----------
+
+app.get("/api/proyeksi", wrap(async (req, res) => {
+  res.json({ ok: true, ...(await proyeksi.load()) });
+}));
+
+app.post("/api/proyeksi/simpan", async (req, res) => {
+  try {
+    res.json(await proyeksi.save(req.body || {}));
+  } catch (err) {
+    if (!err.status) console.error(err);
+    res.status(err.status || 500).json({ ok: false, error: err.message || String(err), data: err.data || null });
+  }
+});
 
 // ---------- Monitoring biaya (sheet BIAYA) ----------
 

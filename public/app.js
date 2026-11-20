@@ -146,6 +146,7 @@ $$(".tab").forEach((btn) => {
     if (btn.dataset.tab === "monbiaya" || btn.dataset.tab === "smartlink" || btn.dataset.tab === "kas") kfPoll();
     if (btn.dataset.tab === "smartlink" && !SMART_LOADED) loadSmart();
     if (btn.dataset.tab === "riwayat" && !RB_LOADED) rbOpen();
+    if (btn.dataset.tab === "proyeksi") loadProyeksi(); // selalu segarkan saat dibuka
     if (btn.dataset.tab === "daftarbiaya" && !DB_LOADED) loadDaftarBiaya();
     if (btn.dataset.tab === "deposit" && !DEP_LOADED) loadDeposit();
     if (btn.dataset.tab === "aliran" && !AL_LOADED) alOpen();
@@ -3391,6 +3392,220 @@ $("#al-table").addEventListener("change", async (e) => {
   } catch (err) {
     showLog($("#al-result"), "✘ Gagal simpan catatan: " + err.message, true);
   }
+});
+
+// ================= Proyeksi Biaya =================
+// Seluruh isi sheet PROYEKSI BIAYA (CASHFLOW bulan berjalan). Hanya sel angka di
+// kolom bulan berjalan (mis. NOVEMBER) yang bukan formula yang bisa diedit;
+// server memvalidasi ulang setiap penyimpanan lalu mengirim tabel terbaru
+// (TOTAL & angka formula ikut diperbarui).
+let PB = null;
+let PB_LOADED = false;
+let PB_BUSY = false;
+
+function pbFmtInput(n) {
+  return n == null ? "" : Number(n).toLocaleString("id-ID", { maximumFractionDigits: 6 });
+}
+
+// "1.250.000", "Rp 1.250.000", "1250000", "-50.000", "12,5" → angka; "" → null; lainnya → NaN.
+function pbParse(v) {
+  let s = String(v == null ? "" : v).replace(/rp/gi, "").replace(/\s+/g, "").replace(/−/g, "-");
+  if (s === "") return null;
+  let neg = false;
+  if (/^\(.*\)$/.test(s)) { neg = true; s = s.slice(1, -1); }
+  if (s.startsWith("-")) { neg = !neg; s = s.slice(1); }
+  if (!/^\d{1,3}(\.\d{3})*(,\d+)?$|^\d+(,\d+)?$/.test(s)) return NaN;
+  const n = Number(s.replace(/\./g, "").replace(",", "."));
+  return neg ? -n : n;
+}
+
+async function loadProyeksi() {
+  const out = $("#pb-result");
+  const tbl = $("#pb-table");
+  if (PB_BUSY || tbl.querySelector(".pb-editing")) return; // jangan ganggu yang sedang diedit
+  if (!PB) tbl.innerHTML = '<p class="hint" style="padding:12px;margin:0">Memuat sheet PROYEKSI BIAYA…</p>';
+  $("#btn-pb-load").disabled = true;
+  try {
+    PB = await api("/api/proyeksi");
+    PB_LOADED = true;
+    out.classList.add("hidden");
+    pbRender();
+  } catch (e) {
+    showLog(out, "✘ " + e.message, true);
+    if (!PB) tbl.innerHTML = "";
+  } finally {
+    $("#btn-pb-load").disabled = false;
+  }
+}
+
+function pbRender(saved) {
+  const d = PB;
+  if (!d) return;
+  $("#pb-bulan").textContent = d.monthName || "bulan berjalan";
+  const link = $("#pb-open");
+  link.href = d.spreadsheet.url;
+  link.classList.remove("hidden");
+  const kol = d.editCols.map((e) => `${e.group ? e.group + " › " : ""}${e.header} (kolom ${e.letter})`).join(", ");
+  $("#pb-meta").textContent = `${d.spreadsheet.title} · dimuat ${d.loadedAt}` + (kol ? ` · bisa diedit: ${kol}` : "");
+  if (!d.editCols.length) {
+    showLog($("#pb-result"), `⚠ Kolom ${d.monthName} tidak ditemukan di baris judul sheet — tabel hanya bisa dilihat.`, true);
+  }
+
+  const editSet = new Set(d.editCols.map((e) => e.col));
+  const span = {};
+  const skip = new Set();
+  d.merges.forEach((m) => {
+    span[m.r + "," + m.c] = m;
+    for (let r = m.r; r < m.r + m.rs; r++)
+      for (let c = m.c; c < m.c + m.cs; c++) if (r !== m.r || c !== m.c) skip.add(r + "," + c);
+  });
+  const hdrN = Math.max(d.headerRow, d.frozenRows || 0);
+  const nCols = d.lastCol;
+  let head = "";
+  let body = "";
+  d.rows.forEach((row, r) => {
+    const isHead = r < hdrN;
+    const tag = isHead ? "th" : "td";
+    const filled = row.filter((x) => x.v !== "").length;
+    const rowHasMerge = d.merges.some((m) => m.r <= r && r < m.r + m.rs);
+    if (isHead && filled === 1 && row[0].v !== "" && !rowHasMerge) {
+      head += `<tr><th class="pb-title" colspan="${nCols}">${escapeHtml(row[0].v)}</th></tr>`;
+      return;
+    }
+    const label = String(row[0].v || "").trim().toUpperCase();
+    let tr = "";
+    row.forEach((cell, c) => {
+      const key = r + "," + c;
+      if (skip.has(key)) return;
+      const m = span[key];
+      const attrs = [];
+      const cls = [];
+      if (m && m.rs > 1) attrs.push(`rowspan="${m.rs}"`);
+      if (m && m.cs > 1) { attrs.push(`colspan="${m.cs}"`); if (isHead) cls.push("pb-group"); }
+      if (c === 0) cls.push("pb-sticky");
+      const editCol = editSet.has(c);
+      let html = escapeHtml(cell.v);
+      if (isHead) {
+        if (editCol && r === d.headerRow - 1) { cls.push("pb-hedit"); html += ' <span aria-hidden="true">✎</span>'; }
+      } else {
+        if (typeof cell.n === "number" && c > 0) cls.push("num");
+        if (typeof cell.n === "number" && cell.n < 0) cls.push("neg");
+        if (editCol) cls.push("pb-col-edit");
+        if (cell.k === "f" || cell.k === "a") {
+          const tip = cell.k === "f" ? "Otomatis dari formula: " + cell.fx : "Otomatis: hasil rumus array di sel lain";
+          attrs.push(`title="${escapeHtml(tip)}"`);
+          if (editCol) { cls.push("pb-fx"); html = `<span class="pb-f">ƒ</span>${html}`; }
+        }
+        if (cell.err) { cls.push("neg"); attrs.push(`title="${escapeHtml(cell.err)}"`); }
+        if (cell.e) {
+          cls.push("pb-edit");
+          if (saved && saved.r === r + 1 && saved.c === c + 1) cls.push("pb-saved");
+          attrs.push(`data-r="${r + 1}" data-c="${c + 1}" tabindex="0" title="Klik untuk mengubah"`);
+          html = `<span class="pb-val">${html || '<span class="pb-empty">kosong</span>'}</span>`;
+        }
+      }
+      if (cls.length) attrs.push(`class="${cls.join(" ")}"`);
+      tr += `<${tag} ${attrs.join(" ")}>${html}</${tag}>`;
+    });
+    const trCls = !isHead && /^TOTAL\b/.test(label) ? ' class="pb-total"' : "";
+    if (isHead) head += `<tr>${tr}</tr>`;
+    else body += `<tr${trCls}>${tr}</tr>`;
+  });
+  $("#pb-table").innerHTML = `<table id="pb-grid"><thead>${head}</thead><tbody>${body}</tbody></table>`;
+  if (saved) {
+    const td = $(`#pb-grid td.pb-edit[data-r="${saved.r}"][data-c="${saved.c}"]`);
+    setTimeout(() => td && td.classList.remove("pb-saved"), 1800);
+    // Lanjut ke sel berikutnya di kolom yang sama (Enter untuk mengedit).
+    if (saved.next) {
+      const nx = $$(`#pb-grid td.pb-edit[data-c="${saved.c}"]`).find((x) => Number(x.dataset.r) > saved.r);
+      if (nx) nx.focus();
+    }
+  }
+}
+
+function pbStartEdit(td) {
+  if (!PB || PB_BUSY || td.classList.contains("pb-editing")) return;
+  const r = Number(td.dataset.r);
+  const c = Number(td.dataset.c);
+  const cell = PB.rows[r - 1][c - 1];
+  const out = $("#pb-result");
+  td.classList.add("pb-editing");
+  td.innerHTML = '<input class="pb-input" type="text" inputmode="decimal" autocomplete="off" aria-label="Nominal baru" />';
+  const inp = td.querySelector("input");
+  inp.value = pbFmtInput(typeof cell.n === "number" ? cell.n : null);
+  inp.focus();
+  inp.select();
+  let done = false;
+  const finish = async (mode) => {
+    if (done) return;
+    if (mode === "cancel") { done = true; pbRender(); return; }
+    const v = pbParse(inp.value);
+    if (Number.isNaN(v)) {
+      showLog(out, "✘ Nominal tidak valid. Tulis angka saja, mis. 1.250.000 (boleh dikosongkan).", true);
+      if (mode === "blur") { done = true; pbRender(); return; }
+      inp.classList.add("pb-bad");
+      inp.focus();
+      return;
+    }
+    done = true;
+    const lama = typeof cell.n === "number" ? cell.n : null;
+    if ((v == null && lama == null) || (v != null && lama != null && Math.abs(v - lama) < 1e-9)) {
+      pbRender(mode === "enter" ? { r, c, next: true } : null);
+      return;
+    }
+    await pbSave(r, c, v, lama, td, mode === "enter");
+  };
+  inp.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); finish("enter"); }
+    else if (e.key === "Escape") { e.preventDefault(); finish("cancel"); }
+  });
+  inp.addEventListener("input", () => inp.classList.remove("pb-bad"));
+  inp.addEventListener("blur", () => finish("blur"));
+}
+
+async function pbSave(r, c, nilai, lama, td, next) {
+  const out = $("#pb-result");
+  PB_BUSY = true;
+  td.innerHTML = '<span class="pb-saving">menyimpan…</span>';
+  try {
+    const res = await fetch("/api/proyeksi/simpan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ row: r, col: c, nilai, lama, label: PB.rows[r - 1][0].v, token: PB.spreadsheet.id }),
+    });
+    if (res.status === 401) { window.location = "/login"; return; }
+    const data = await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }));
+    if (!res.ok || !data.ok) {
+      if (data.data) PB = data.data;
+      pbRender();
+      showLog(out, "✘ " + (data.error || `HTTP ${res.status}`), true);
+      return;
+    }
+    PB = data.data;
+    pbRender({ r, c, next });
+    const s = data.saved;
+    showLog(
+      out,
+      `✔ Tersimpan di spreadsheet: ${s.group ? s.group + " › " : ""}${s.header} › ${s.label} (sel ${s.a1}): ` +
+        `${s.lama || "kosong"} → ${s.baru || "kosong"}. TOTAL & angka otomatis sudah diperbarui.`
+    );
+  } catch (e) {
+    pbRender();
+    showLog(out, "✘ Gagal menyimpan: " + e.message, true);
+  } finally {
+    PB_BUSY = false;
+  }
+}
+
+$("#btn-pb-load").addEventListener("click", () => loadProyeksi());
+$("#pb-table").addEventListener("click", (ev) => {
+  const td = ev.target.closest("td.pb-edit");
+  if (td) pbStartEdit(td);
+});
+$("#pb-table").addEventListener("keydown", (ev) => {
+  const td = ev.target.closest && ev.target.closest("td.pb-edit");
+  if (!td || ev.target !== td) return;
+  if (ev.key === "Enter" || ev.key === "F2") { ev.preventDefault(); pbStartEdit(td); }
 });
 
 // ================= Init =================
