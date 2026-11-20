@@ -3438,10 +3438,11 @@ async function loadProyeksi() {
   }
 }
 
-function pbRender(saved) {
+function pbRender(saved, sorot) {
   const d = PB;
   if (!d) return;
   $("#pb-bulan").textContent = d.monthName || "bulan berjalan";
+  $$(".pb-bulan-ini").forEach((x) => (x.textContent = d.monthName || "berjalan"));
   const link = $("#pb-open");
   link.href = d.spreadsheet.url;
   link.classList.remove("hidden");
@@ -3506,7 +3507,7 @@ function pbRender(saved) {
         if (cell.err) { cls.push("neg"); attrs.push(`title="${escapeHtml(cell.err)}"`); }
         if (cell.e) {
           cls.push("pb-edit");
-          if (saved && saved.r === r + 1 && saved.c === c + 1) cls.push("pb-saved");
+          if ((saved && saved.r === r + 1 && saved.c === c + 1) || (sorot && sorot.has(`${r + 1},${c + 1}`))) cls.push("pb-saved");
           attrs.push(`data-r="${r + 1}" data-c="${c + 1}" tabindex="0" title="Klik untuk mengubah"`);
           html = `<span class="pb-val">${html || '<span class="pb-empty">kosong</span>'}</span>`;
         }
@@ -3519,6 +3520,7 @@ function pbRender(saved) {
     else body += `<tr${trCls}>${tr}</tr>`;
   });
   $("#pb-table").innerHTML = `<table id="pb-grid"><thead>${head}</thead><tbody>${body}</tbody></table>`;
+  if (sorot && sorot.size) setTimeout(() => $$("#pb-grid td.pb-saved").forEach((x) => x.classList.remove("pb-saved")), 4000);
   if (saved) {
     const td = $(`#pb-grid td.pb-edit[data-r="${saved.r}"][data-c="${saved.c}"]`);
     setTimeout(() => td && td.classList.remove("pb-saved"), 1800);
@@ -3590,6 +3592,7 @@ async function pbSave(r, c, nilai, lama, td, next) {
     }
     PB = data.data;
     pbRender({ r, c, next });
+    if (PBX) pbxPratinjau(true);
     const s = data.saved;
     showLog(
       out,
@@ -3613,6 +3616,207 @@ $("#pb-table").addEventListener("keydown", (ev) => {
   const td = ev.target.closest && ev.target.closest("td.pb-edit");
   if (!td || ev.target !== td) return;
   if (ev.key === "Enter" || ev.key === "F2") { ev.preventDefault(); pbStartEdit(td); }
+});
+
+// ----- Proyeksi Biaya › isi otomatis dari berkas proyeksi (.xlsx) -----
+let PBX = null; // pratinjau berkas yang sedang ditampilkan
+
+const PBX_STATUS = {
+  tulis: "akan diisi",
+  sama: "sudah sama",
+  formula: "otomatis (formula)",
+  "tidak-ada": "tidak ada di berkas",
+  galat: "tidak bisa dihitung",
+  kosong: "kosong di berkas",
+  "tidak-bisa": "bukan angka",
+};
+
+function pbxRp(n) {
+  return n == null ? "" : Math.round(n).toLocaleString("id-ID");
+}
+
+async function pbxPost(path, opts) {
+  const res = await fetch(path, opts);
+  if (res.status === 401) {
+    window.location = "/login";
+    throw new Error("Sesi berakhir, silakan login ulang.");
+  }
+  const data = await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }));
+  if (!res.ok || data.ok === false) {
+    const err = new Error(data.error || `HTTP ${res.status}`);
+    err.status = res.status;
+    err.data = data.data || null;
+    throw err;
+  }
+  return data;
+}
+
+function pbxCell(it) {
+  if (!it) return '<td class="pbx-skip">—</td>';
+  const tag = (t) => `<span class="pbx-tag">${escapeHtml(t)}</span>`;
+  const lama = escapeHtml(it.lamaTeks || "kosong");
+  const diBerkas = it.berkas != null ? ` title="Di berkas: ${escapeHtml(pbxRp(it.berkas))}"` : "";
+  switch (it.status) {
+    case "tulis":
+      return `<td class="num pbx-tulis"><span class="pbx-lama">${lama}</span> → <b>${escapeHtml(pbxRp(it.baru))}</b></td>`;
+    case "sama":
+      return `<td class="num pbx-sama">${escapeHtml(pbxRp(it.baru))} ${tag("sama")}</td>`;
+    case "formula":
+      return `<td class="num pbx-fx"${diBerkas}><span class="pb-f">ƒ</span>${escapeHtml(it.lamaTeks)} ${tag("otomatis")}</td>`;
+    case "galat":
+      return `<td class="num pbx-err" title="${escapeHtml(it.galat || "")}">⚠ ${escapeHtml(it.galat || "galat")}</td>`;
+    default:
+      return `<td class="num pbx-skip">${escapeHtml(it.lamaTeks)} ${tag(PBX_STATUS[it.status] || it.status)}</td>`;
+  }
+}
+
+function pbxRender() {
+  const box = $("#pb-prev");
+  const p = PBX;
+  if (!p) { box.innerHTML = ""; return; }
+  const sel = $("#pb-skenario");
+  if (p.skenarioList && p.skenarioList.length) {
+    sel.innerHTML = p.skenarioList
+      .map((s) => `<option value="${escapeHtml(s)}"${s === p.skenario ? " selected" : ""}>${escapeHtml(s.charAt(0) + s.slice(1).toLowerCase())}</option>`)
+      .join("");
+  }
+  const outs = p.outlets.map((o) => o.outlet);
+  const labels = [];
+  const by = {};
+  p.items.forEach((it) => {
+    if (!by[it.label]) { by[it.label] = {}; labels.push(it.label); }
+    by[it.label][it.outlet] = it;
+  });
+  const sumber = p.outlets
+    .map((o) => {
+      let s = `<div><b>${escapeHtml(o.outlet)}</b> (kolom ${escapeHtml(o.kolomSheet)}) ← `;
+      s += o.kolomBerkas
+        ? `sheet “${escapeHtml(o.sheetBerkas)}”, kolom ${escapeHtml(o.kolomBerkas)} (${escapeHtml(o.judulBerkas)})`
+        : `<span class="pbx-warn">tidak ada data</span>`;
+      s += "</div>";
+      o.catatan.forEach((c) => (s += `<div class="pbx-warn">⚠ ${escapeHtml(c)}</div>`));
+      if (o.ekstra.length) s += `<div class="pbx-warn">⚠ Komponen di berkas yang tidak ada di sheet (tidak diisi): ${escapeHtml(o.ekstra.join(", "))}</div>`;
+      return s;
+    })
+    .join("");
+  const r = p.ringkas;
+  const rows = labels.map((l) => `<tr><td class="pb-sticky">${escapeHtml(l)}</td>${outs.map((o) => pbxCell(by[l][o])).join("")}</tr>`).join("");
+  box.innerHTML = `
+    <div class="pbx-card">
+      <div class="pbx-info">
+        <div>Berkas: <b>${escapeHtml(p.berkas)}</b> · bulan <b>${escapeHtml(p.bulan.label)}</b> (kolom “${escapeHtml(p.bulan.singkat)}” di berkas) · skenario <b>${escapeHtml(p.skenario)}</b></div>
+        ${sumber}
+      </div>
+      <div class="pbx-ringkas">
+        <span class="pbx-chip pbx-tulis">${r.tulis} sel akan diisi</span>
+        <span class="pbx-chip">${r.sama} sudah sama</span>
+        <span class="pbx-chip pbx-fx">${r.formula} otomatis (formula) dilewati</span>
+        ${r.lain ? `<span class="pbx-chip pbx-skip">${r.lain} lainnya dilewati</span>` : ""}
+      </div>
+      <div class="table-wrap"><table id="pbx-grid"><thead><tr><th class="pb-sticky">Komponen</th>${outs
+        .map((o) => `<th>${escapeHtml(o)} · sekarang → dari berkas</th>`)
+        .join("")}</tr></thead><tbody>${rows}</tbody></table></div>
+      <p class="hint">Nominal dibulatkan ke rupiah terdekat. Sel bertanda <b>ƒ</b> dihitung otomatis oleh formula
+        spreadsheet, jadi tidak diubah (arahkan kursor untuk melihat angka di berkas).</p>
+      <div class="upload-row">
+        <button id="btn-pbx-simpan" class="btn-primary"${r.tulis ? "" : " disabled"}>✔ Simpan ke spreadsheet (${r.tulis} sel)</button>
+        <button id="btn-pbx-batal" class="btn-ghost">Batal</button>
+      </div>
+    </div>`;
+}
+
+function pbxSibuk(on, teks) {
+  $("#btn-pb-baca").disabled = on;
+  $("#pb-skenario").disabled = on;
+  const s = $("#btn-pbx-simpan");
+  if (s && on) s.disabled = true;
+  const l = $("#pb-loading");
+  if (teks) l.textContent = teks;
+  l.classList.toggle("hidden", !on);
+}
+
+async function pbxBaca() {
+  const input = $("#pb-file");
+  const file = input.files && input.files[0];
+  const out = $("#pb-result");
+  if (!file) { showLog(out, "✘ Pilih berkas proyeksi (.xlsx) dahulu.", true); return; }
+  pbxSibuk(true, "Membaca & menghitung ulang formula berkas…");
+  $("#pb-prev").innerHTML = "";
+  PBX = null;
+  try {
+    const fd = new FormData();
+    fd.append("file", file, file.name);
+    fd.append("skenario", $("#pb-skenario").value);
+    PBX = await pbxPost("/api/proyeksi/berkas", { method: "POST", body: fd });
+    out.classList.add("hidden");
+    pbxRender();
+  } catch (e) {
+    showLog(out, "✘ " + e.message, true);
+  } finally {
+    pbxSibuk(false);
+  }
+}
+
+async function pbxPratinjau(diam) {
+  if (!PBX) return;
+  const out = $("#pb-result");
+  if (!diam) pbxSibuk(true, "Menyusun pratinjau…");
+  try {
+    PBX = await pbxPost("/api/proyeksi/berkas/pratinjau", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: PBX.id, skenario: $("#pb-skenario").value }),
+    });
+    pbxRender();
+  } catch (e) {
+    if (e.status === 410) { PBX = null; pbxRender(); }
+    showLog(out, "✘ " + e.message, true);
+  } finally {
+    if (!diam) pbxSibuk(false);
+  }
+}
+
+async function pbxSimpan() {
+  if (!PBX) return;
+  const out = $("#pb-result");
+  const dilihat = PBX.items.filter((it) => it.status === "tulis").map((it) => ({ a1: it.a1, lama: it.lama }));
+  pbxSibuk(true, `Menyimpan ${dilihat.length} sel ke spreadsheet…`);
+  try {
+    const res = await pbxPost("/api/proyeksi/berkas/terapkan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: PBX.id, skenario: PBX.skenario, dilihat }),
+    });
+    const berkas = PBX.berkas;
+    PBX = null;
+    pbxRender();
+    clearFileInput($("#pb-file"));
+    PB = res.data;
+    const sorot = new Set(res.ditulis.map((x) => {
+      const m = x.a1.match(/^([A-Z]+)(\d+)$/);
+      const c = [...m[1]].reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0);
+      return `${m[2]},${c}`;
+    }));
+    pbRender(null, sorot);
+    let msg = `✔ ${res.ditulis.length} sel kolom ${res.bulan.nama} terisi dari ${berkas} (skenario ${res.skenario}). TOTAL & angka otomatis sudah diperbarui.`;
+    if (res.dilewati.length) {
+      msg += `\n⚠ ${res.dilewati.length} sel dilewati:\n` + res.dilewati.map((x) => `  • ${x.outlet} › ${x.label} (${x.a1}): ${x.alasan}`).join("\n");
+    }
+    showLog(out, msg, false);
+  } catch (e) {
+    showLog(out, "✘ " + e.message, true);
+    if (e.status === 410) { PBX = null; pbxRender(); }
+    else if (PBX) pbxPratinjau(true);
+  } finally {
+    pbxSibuk(false);
+  }
+}
+
+$("#btn-pb-baca").addEventListener("click", pbxBaca);
+$("#pb-skenario").addEventListener("change", () => { if (PBX) pbxPratinjau(); });
+$("#pb-prev").addEventListener("click", (ev) => {
+  if (ev.target.closest("#btn-pbx-simpan")) pbxSimpan();
+  else if (ev.target.closest("#btn-pbx-batal")) { PBX = null; pbxRender(); clearFileInput($("#pb-file")); }
 });
 
 // ================= Init =================

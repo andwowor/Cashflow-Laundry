@@ -235,7 +235,12 @@ let queue = Promise.resolve();
  * spreadsheet sudah berubah sejak dimuat, penyimpanan ditolak (409) agar tidak menimpa.
  */
 function save(body) {
-  const run = queue.then(() => doSave(body || {}));
+  return exclusive(() => doSave(body || {}));
+}
+
+/** Jalankan fn bergiliran dengan penyimpanan lain (edit sel & isi dari berkas) agar tidak saling tabrak. */
+function exclusive(fn) {
+  const run = queue.then(fn);
   queue = run.catch(() => {});
   return run;
 }
@@ -295,4 +300,4 @@ async function doSave(body) {
   };
 }
 
-module.exports = { load, save, parseNominal, colLetter, monthNameOf, SHEET };
+module.exports = { load, save, exclusive, httpError, parseNominal, colLetter, monthNameOf, SHEET };

@@ -256,6 +256,25 @@
           <a id="pb-open" class="btn-ghost hidden" target="_blank" rel="noopener">Buka di Google Sheets ↗</a>
           <span id="pb-meta" class="hint" style="margin:0"></span>
         </div>
+        <div class="pb-upload">
+          <h3>📤 Isi otomatis dari berkas proyeksi</h3>
+          <p class="hint">Unggah berkas proyeksi laba rugi (.xlsx). Nominal tiap komponen biaya untuk bulan
+            <b class="pb-bulan-ini">berjalan</b> diambil dari sheet <b>Proyeksi MAUMBI</b> &amp; <b>Proyeksi PERKAMIL</b>
+            sesuai skenario yang dipilih, lalu diisikan ke kolom bulan berjalan — kecuali baris yang otomatis (formula).
+            Anda melihat pratinjaunya dulu sebelum disimpan.</p>
+          <div class="upload-row">
+            <input type="file" id="pb-file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+            <label class="hint" for="pb-skenario" style="margin:0">Skenario</label>
+            <select id="pb-skenario" style="max-width:150px">
+              <option value="PESIMIS">Pesimis</option>
+              <option value="REALISTIS" selected>Realistis</option>
+              <option value="OPTIMIS">Optimis</option>
+            </select>
+            <button id="btn-pb-baca" class="btn-primary">Baca berkas</button>
+          </div>
+          <div id="pb-loading" class="loading hidden">Membaca &amp; menghitung ulang formula berkas…</div>
+          <div id="pb-prev"></div>
+        </div>
         <div id="pb-result" class="result-log hidden"></div>
         <div id="pb-table" class="table-wrap"></div>
       </div>

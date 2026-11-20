@@ -18,6 +18,7 @@ const qris = require("./src/qris");
 const qrisbank = require("./src/qrisbank");
 const monbiaya = require("./src/monbiaya");
 const proyeksi = require("./src/proyeksi");
+const proyeksiupload = require("./src/proyeksiupload");
 const moninput = require("./src/moninput");
 const riwayat = require("./src/riwayat");
 const daftarbiaya = require("./src/daftarbiaya");
@@ -478,6 +479,41 @@ app.post("/api/transaksi-harian/upload", uploadXlsx.single("file"), async (req, 
     res.json({ ok: true, ...(await transaksiharian.upload(req.file.buffer)) });
   } catch (err) {
     thErr(res, err);
+  }
+});
+
+// ---------- Proyeksi Biaya › isi dari berkas proyeksi laba rugi (.xlsx) ----------
+
+const pbErr = (res, err) => {
+  if (!err.status) console.error(err);
+  res.status(err.status || 500).json({ ok: false, error: err.message || String(err), data: err.data || null });
+};
+
+app.post("/api/proyeksi/berkas", uploadXlsx.single("file"), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ ok: false, error: "Pilih berkas .xlsx dahulu." });
+    const nama = Buffer.from(req.file.originalname || "", "latin1").toString("utf8");
+    res.json(await proyeksiupload.unggah(req.file.buffer, nama, (req.body || {}).skenario));
+  } catch (err) {
+    pbErr(res, err);
+  }
+});
+
+app.post("/api/proyeksi/berkas/pratinjau", async (req, res) => {
+  try {
+    const b = req.body || {};
+    res.json(await proyeksiupload.pratinjau(b.id, b.skenario));
+  } catch (err) {
+    pbErr(res, err);
+  }
+});
+
+app.post("/api/proyeksi/berkas/terapkan", async (req, res) => {
+  try {
+    const b = req.body || {};
+    res.json(await proyeksiupload.terapkan(b.id, b.skenario, b.dilihat));
+  } catch (err) {
+    pbErr(res, err);
   }
 });
 

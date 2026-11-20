@@ -104,3 +104,12 @@ yang meniru kondisi Mac (logo lokal + lock berubah), pakai `APP_REPO_DIR`.
   Setiap simpan memvalidasi ulang di server: ID spreadsheet, SUBJEK baris, bukan formula, dan nilai lama belum berubah
   (bila berubah → 409 + tabel terbaru, tidak menimpa). Ditulis per sel (USER_ENTERED), lalu tabel dibaca ulang agar
   TOTAL ikut terbarui.
+  **Isi dari berkas proyeksi** (`src/proyeksiupload.js`, `/api/proyeksi/berkas{,/pratinjau,/terapkan}`): unggah workbook
+  `Proyeksi_LabaRugi_CoCleanLaundry_…xlsx` → nominal komponen dari sheet "5. Proyeksi MAUMBI"/"6. Proyeksi PERKAMIL"
+  (cari sheet `Proyeksi <OUTLET>` sesuai kelompok kolom), blok "SKENARIO …" (default REALISTIS, bisa dipilih), kolom
+  bulan = bulan spreadsheet CASHFLOW aktif ("Nov 26"; di blok REALISTIS ada juga realisasi "Nov-25" → pilih yang di
+  bawah judul PROYEKSI). Cocok per nama SUBJEK, dibulatkan ke rupiah, sel formula dilewati, pratinjau dulu lalu satu
+  batchWrite (sel yang berubah sejak pratinjau dilewati). Sel di berkas itu FORMULA TANPA NILAI TERSIMPAN → seluruh
+  workbook dihitung ulang dengan **HyperFormula** (`hyperformula` 3.5.0, lisensi gpl-v3). Uji kesetaraan: hasilnya
+  sama dengan LibreOffice (`soffice --headless --convert-to csv…`, tersedia di container) untuk semua sel sheet 5 & 6;
+  sheet analisa lain memakai FORECAST/INTERCEPT/FIXED yang belum didukung — sel galat tidak pernah ditulis.
