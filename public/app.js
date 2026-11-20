@@ -2436,106 +2436,57 @@ $$("#tab-transaksi .subtab").forEach((b) =>
 );
 
 // ================= Upload Transaksi Harian (sama dengan Dashboard Internal) =================
-// Memanggil fungsi backend Dashboard Internal yang sama (uploadTransaksi &
-// getTransaksiInfo) lewat server dashboard ini, jadi hasilnya identik.
-let TH = null;
+// Sama dengan menu Upload Transaksi Harian di Dashboard Internal (aturan baca
+// nota disalin apa adanya), tanpa login: server menulis langsung ke sheet
+// TRANSAKSI HARIAN memakai service account dashboard ini.
 
-function thTanggal(ms) {
-  if (!ms) return "";
-  return new Date(ms).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
+/** fetch JSON yang membawa kode error (mis. NO_ACCESS) ke pemanggil. */
+async function thApi(path, opts = {}) {
+  const res = await fetch(path, opts);
+  if (res.status === 401) {
+    window.location = "/login";
+    throw new Error("Sesi berakhir, silakan login ulang.");
+  }
+  const data = await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }));
+  if (!res.ok || data.ok === false) {
+    const e = new Error(data.error || `HTTP ${res.status}`);
+    Object.assign(e, { code: data.code, serviceAccount: data.serviceAccount, spreadsheetUrl: data.spreadsheetUrl });
+    throw e;
+  }
+  return data;
+}
+
+function thTampilAkses(e) {
+  const el = $("#th-akses");
+  if (!e || e.code !== "NO_ACCESS") {
+    el.classList.add("hidden");
+    el.innerHTML = "";
+    return false;
+  }
+  el.classList.remove("hidden");
+  el.innerHTML = `<div class="th-notice th-err">🔑 <div>
+      <b>Dashboard belum punya akses ke spreadsheet PERFORMA PEGAWAI CO CLEAN LAUNDRY</b> (tempat sheet TRANSAKSI HARIAN).
+      Lakukan sekali saja: buka <a href="${escapeHtml(e.spreadsheetUrl || "#")}" target="_blank" rel="noopener">spreadsheet itu</a>
+      → <b>Bagikan</b> → tambahkan <code class="th-email">${escapeHtml(e.serviceAccount || "email service account dashboard")}</code>
+      sebagai <b>Editor</b>, lalu klik <button id="btn-th-cek" class="btn-ghost btn-th-kecil">⟳ Cek lagi</button></div></div>`;
+  $("#btn-th-cek").addEventListener("click", thLoad);
+  return true;
 }
 
 async function thLoad() {
-  const el = $("#th-koneksi");
-  try {
-    TH = await api("/api/internal/status");
-  } catch (e) {
-    el.innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
-    return;
-  }
-  thRender();
-  if (TH.terhubung && TH.bolehUpload) thLoadInfo();
-}
-
-function thRender() {
-  const el = $("#th-koneksi");
-  const card = $("#th-upload-card");
-  if (!TH.terhubung) {
-    card.classList.add("hidden");
-    $("#th-info").innerHTML = "";
-    el.innerHTML = `
-      <p class="hint">${TH.kedaluwarsa ? "<b>Sesi Dashboard Internal sudah habis.</b> " : ""}Sub menu ini memakai fungsi yang sama
-        dengan menu <b>Upload Transaksi Harian</b> di Dashboard Internal — hasilnya langsung masuk ke sheet
-        <b>TRANSAKSI HARIAN</b> yang dipakai Petugas Setrika. Hubungkan sekali dengan akun <b>Owner/Manajer</b>
-        Dashboard Internal (berlaku 30 hari). Kata sandi tidak disimpan — hanya token sesi, di komputer ini.</p>
-      <div class="th-login">
-        <input type="text" id="th-nomor" placeholder="Nomor pegawai" autocomplete="username" />
-        <input type="password" id="th-pass" placeholder="Password" autocomplete="current-password" />
-        <button id="btn-th-login" class="btn-primary">Masuk</button>
-      </div>
-      <div id="th-login-msg" class="error hidden"></div>`;
-    const go = () => thLogin();
-    $("#btn-th-login").addEventListener("click", go);
-    $("#th-pass").addEventListener("keydown", (e) => {
-      if (e.key === "Enter") go();
-    });
-    return;
-  }
-  const u = TH.user || {};
-  el.innerHTML = `
-    <div class="th-terhubung">🔗 Terhubung ke Dashboard Internal sebagai <b>${escapeHtml(u.nama || u.nomorPegawai)}</b>
-      (${escapeHtml(u.roleLabel || u.role || "")})${TH.exp ? ` · berlaku sampai ${escapeHtml(thTanggal(TH.exp))}` : ""}
-      <button id="btn-th-logout" class="btn-ghost btn-th-kecil">Keluar</button></div>`;
-  $("#btn-th-logout").addEventListener("click", thLogout);
-  if (!TH.bolehUpload) {
-    card.classList.add("hidden");
-    $("#th-info").innerHTML = `<div class="th-notice th-err">🔒 <div>Halaman ini hanya untuk Manajer atau Owner.</div></div>`;
-    return;
-  }
-  card.classList.remove("hidden");
-}
-
-async function thLogin() {
-  const msg = $("#th-login-msg");
-  const btn = $("#btn-th-login");
-  msg.classList.add("hidden");
-  btn.disabled = true;
-  btn.textContent = "Masuk…";
-  try {
-    TH = await api("/api/internal/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nomorPegawai: $("#th-nomor").value, password: $("#th-pass").value }),
-    });
-    thRender();
-    if (TH.bolehUpload) thLoadInfo();
-  } catch (e) {
-    msg.textContent = "✘ " + e.message;
-    msg.classList.remove("hidden");
-    btn.disabled = false;
-    btn.textContent = "Masuk";
-  }
-}
-
-async function thLogout() {
-  if (!confirm("Putuskan hubungan dengan Dashboard Internal? Anda perlu login lagi untuk upload.")) return;
-  try {
-    TH = await api("/api/internal/logout", { method: "POST" });
-  } catch {
-    /* tetap tampilkan ulang */
-  }
-  $("#th-hasil").innerHTML = "";
-  thLoad();
+  await thLoadInfo();
 }
 
 async function thLoadInfo() {
   try {
-    const r = await api("/api/internal/transaksi-info");
+    const r = await thApi("/api/transaksi-harian/info");
+    thTampilAkses(null);
     $("#th-info").innerHTML = `<div class="th-notice">📦 <div><b>${escapeHtml(String(r.jumlah))} nota</b> tersimpan di database.${
       r.lastUpload ? " Upload terakhir: " + escapeHtml(r.lastUpload) : ""
     }</div></div>`;
   } catch (e) {
-    if (/login|sesi|terhubung/i.test(e.message)) thLoad();
+    if (!thTampilAkses(e)) $("#th-info").innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
+    else $("#th-info").innerHTML = "";
   }
 }
 
@@ -2554,7 +2505,7 @@ $("#btn-th-upload").addEventListener("click", async () => {
   try {
     const fd = new FormData();
     fd.append("file", file, file.name);
-    const res = await api("/api/internal/upload-transaksi", { method: "POST", body: fd });
+    const res = await thApi("/api/transaksi-harian/upload", { method: "POST", body: fd });
     let html = `<div class="th-notice">✅ <div>${escapeHtml(res.message)}</div></div>`;
     // Nota yang keterangannya belum terbaca penuh — ditampilkan supaya bisa langsung dicek.
     const perlu = res.perluDicek || [];
@@ -2575,8 +2526,8 @@ $("#btn-th-upload").addEventListener("click", async () => {
     clearFileInput(input);
     thLoadInfo();
   } catch (e) {
-    hasil.innerHTML = `<div class="th-notice th-err">✘ <div>${escapeHtml(e.message)}</div></div>`;
-    if (/login|sesi|terhubung/i.test(e.message)) thLoad();
+    if (thTampilAkses(e)) hasil.innerHTML = "";
+    else hasil.innerHTML = `<div class="th-notice th-err">✘ <div>${escapeHtml(e.message)}</div></div>`;
   } finally {
     btn.disabled = false;
     $("#th-loading").classList.add("hidden");

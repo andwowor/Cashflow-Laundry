@@ -649,10 +649,10 @@
       <div id="sub-transaksiharian" class="subpanel">
         <div class="card">
           <h2>📤 Upload Transaksi Harian <small class="hint">rekap dari aplikasi laundry (.xlsx)</small></h2>
-          <div id="th-koneksi">Memuat…</div>
-          <div id="th-info"></div>
+          <div id="th-akses" class="hidden"></div>
+          <div id="th-info"><p class="hint">Memuat…</p></div>
         </div>
-        <div id="th-upload-card" class="card hidden">
+        <div id="th-upload-card" class="card">
           <h3>Upload file rekap transaksi</h3>
           <p class="hint">Pilih file Excel (.xlsx) hasil export "Rekap Data Transaksi" dari aplikasi laundry. Sistem otomatis
             membaca nomor nota, pelanggan, tanggal, jumlah pcs, dan berat (kg) tiap nota — dipakai Petugas Setrika saat
@@ -662,7 +662,7 @@
             <input type="file" id="th-file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
             <button id="btn-th-upload" class="btn-primary">📤 Upload &amp; Proses</button>
           </div>
-          <div id="th-loading" class="loading hidden">Memproses file di Dashboard Internal… (bisa sampai beberapa menit)</div>
+          <div id="th-loading" class="loading hidden">Memproses file… (bisa sampai beberapa menit untuk file besar)</div>
           <div id="th-hasil"></div>
         </div>
       </div>

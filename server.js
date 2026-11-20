@@ -30,7 +30,7 @@ const appupdate = require("./src/appupdate");
 const konfirmasi = require("./src/konfirmasi");
 const smartlinkakun = require("./src/smartlinkakun");
 const robotjobs = require("./src/robotjobs");
-const internalapi = require("./src/internalapi");
+const transaksiharian = require("./src/transaksiharian");
 const { MODEL } = require("./src/claude");
 const auth = require("./src/auth");
 
@@ -432,48 +432,36 @@ app.post("/api/monbiaya/export-setoran", wrap(async (req, res) => {
   res.json(await monbiaya.exportSetoranOwner(body.rows || [], body.kategori || {}));
 }));
 
-// ---------- Upload File › Upload Transaksi Harian (dashboard internal) ----------
-// Memanggil fungsi backend Dashboard Internal yang sama (uploadTransaksi &
-// getTransaksiInfo) sehingga hasilnya identik dengan menu di sana.
+// ---------- Upload File › Upload Transaksi Harian ----------
+// Sama dengan menu Upload Transaksi Harian di Dashboard Internal (aturan baca
+// nota disalin apa adanya), tanpa login: menulis langsung ke sheet TRANSAKSI
+// HARIAN memakai service account dashboard ini.
 
 const uploadXlsx = multer({ storage: multer.memoryStorage(), limits: { fileSize: 30 * 1024 * 1024 } });
 
-const internalErr = (res, err) =>
-  res.status(err.code === "SESSION_ENDED" ? 409 : 500).json({ ok: false, error: err.message, sessionEnded: err.code === "SESSION_ENDED" });
+const thErr = (res, err) =>
+  res.status(err.code === "NO_ACCESS" ? 403 : 500).json({
+    ok: false,
+    error: err.message,
+    code: err.code || null,
+    serviceAccount: err.serviceAccount || null,
+    spreadsheetUrl: err.spreadsheetUrl || null,
+  });
 
-app.get("/api/internal/status", wrap(async (req, res) => {
-  res.json({ ok: true, ...internalapi.status() });
-}));
-
-app.post("/api/internal/login", async (req, res) => {
+app.get("/api/transaksi-harian/info", async (req, res) => {
   try {
-    const b = req.body || {};
-    res.json({ ok: true, ...(await internalapi.login(b.nomorPegawai, b.password)) });
+    res.json({ ok: true, ...(await transaksiharian.info()) });
   } catch (err) {
-    internalErr(res, err);
+    thErr(res, err);
   }
 });
 
-app.post("/api/internal/logout", wrap(async (req, res) => {
-  internalapi.logout();
-  res.json({ ok: true, ...internalapi.status() });
-}));
-
-app.get("/api/internal/transaksi-info", async (req, res) => {
+app.post("/api/transaksi-harian/upload", uploadXlsx.single("file"), async (req, res) => {
   try {
-    res.json({ ok: true, ...(await internalapi.transaksiInfo()) });
+    if (!req.file) return res.status(400).json({ ok: false, error: "Pilih file .xlsx dahulu." });
+    res.json({ ok: true, ...(await transaksiharian.upload(req.file.buffer)) });
   } catch (err) {
-    internalErr(res, err);
-  }
-});
-
-app.post("/api/internal/upload-transaksi", uploadXlsx.single("file"), async (req, res) => {
-  try {
-    const f = req.file;
-    if (!f) return res.status(400).json({ ok: false, error: "Pilih file .xlsx dahulu." });
-    res.json({ ok: true, ...(await internalapi.uploadTransaksi(f.buffer, f.originalname)) });
-  } catch (err) {
-    internalErr(res, err);
+    thErr(res, err);
   }
 });
 

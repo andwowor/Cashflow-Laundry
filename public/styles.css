@@ -640,3 +640,4 @@ details.hint summary { cursor: pointer; font-weight: 700; color: var(--teal-dark
 .th-t1 { font-weight: 700; color: var(--ink); }
 .th-t2 { font-size: 13px; color: var(--ink-soft); }
 .th-ok { color: #145c45; font-weight: 700; margin-top: 8px; }
+.th-email { font-size: 12.5px; background: #fff; padding: 1px 6px; border-radius: 6px; word-break: break-all; }
