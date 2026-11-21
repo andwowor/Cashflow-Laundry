@@ -716,3 +716,28 @@ a.btn-ghost { text-decoration: none; display: inline-flex; align-items: center; 
   padding: 10px 12px; border-radius: 10px; background: var(--teal-soft); font-size: 13px; overflow-wrap: anywhere;
 }
 .pb-undo-box > div { flex: 1 1 260px; }
+
+/* Upload Transaksi Harian › klarifikasi nota perlu dicek */
+.th-kl-cara { margin: 4px 0 10px; padding-left: 20px; line-height: 1.6; }
+.th-kl { display: flex; gap: 16px; align-items: flex-start; padding: 10px 0; }
+.th-kl-info { flex: 1 1 55%; min-width: 0; }
+.th-kl-form { flex: 0 0 360px; min-width: 0; }
+.th-ket {
+  font-size: 12.5px; color: var(--ink-soft); white-space: pre-wrap; overflow-wrap: anywhere;
+  background: #faf7ef; border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; margin-top: 5px;
+}
+.th-ket-kosong { font-style: italic; }
+.th-kl-row { display: flex; gap: 6px; }
+.th-kl-input { flex: 1 1 auto; min-width: 0; }
+.th-kl-row .btn-primary { padding: 8px 14px; }
+.th-kl-hasil { font-size: 12.5px; margin-top: 5px; overflow-wrap: anywhere; }
+.th-kl-hasil.ok { color: #145c45; font-weight: 600; }
+.th-kl-hasil.err { color: var(--err); }
+.th-kl-ok .th-t1 { color: #145c45; }
+.th-kamus-item { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.th-kamus-item > div { min-width: 0; overflow-wrap: anywhere; }
+#th-kamus summary { cursor: pointer; }
+@media (max-width: 700px) {
+  .th-kl { flex-direction: column; gap: 8px; }
+  .th-kl-form { flex-basis: auto; width: 100%; }
+}

@@ -482,6 +482,45 @@ app.post("/api/transaksi-harian/upload", uploadXlsx.single("file"), async (req, 
   }
 });
 
+// Klarifikasi keterangan nota "perlu dicek" (kamus di sheet KLARIFIKASI KETERANGAN).
+const thErr2 = (res, err) => {
+  if (err.status && err.status < 500 && err.code !== "NO_ACCESS") return res.status(err.status).json({ ok: false, error: err.message });
+  if (!err.code) console.error(err);
+  thErr(res, err);
+};
+
+app.get("/api/transaksi-harian/perlu-dicek", (req, res) => {
+  try {
+    res.json(transaksiharian.perluDicek());
+  } catch (err) {
+    thErr2(res, err);
+  }
+});
+
+app.post("/api/transaksi-harian/klarifikasi", async (req, res) => {
+  try {
+    res.json(await transaksiharian.klarifikasi(req.body || {}));
+  } catch (err) {
+    thErr2(res, err);
+  }
+});
+
+app.get("/api/transaksi-harian/kamus", async (req, res) => {
+  try {
+    res.json(await transaksiharian.kamus());
+  } catch (err) {
+    thErr2(res, err);
+  }
+});
+
+app.post("/api/transaksi-harian/kamus/hapus", async (req, res) => {
+  try {
+    res.json(await transaksiharian.hapusAturan((req.body || {}).baris));
+  } catch (err) {
+    thErr2(res, err);
+  }
+});
+
 // ---------- Proyeksi Biaya › isi dari berkas proyeksi laba rugi (.xlsx) ----------
 
 const pbErr = (res, err) => {

@@ -95,6 +95,15 @@ yang meniru kondisi Mac (logo lokal + lock berubah), pakai `APP_REPO_DIR`.
   upsert per NO NOTA, kolom koreksi PCS/tanpa judul tak disentuh, USER_ENTERED, KONFIG › TRANSAKSI_LAST_UPLOAD.
   Kesetaraan diuji dengan menjalankan fungsi ASLI Kode.gs di vm (pola harness repo internal) vs salinan.
   Service account harus Editor di spreadsheet itu (bila belum, UI menampilkan petunjuk berbagi).
+  **Klarifikasi nota perlu dicek** (`src/transaksiharian/klarifikasi.js`; `/api/transaksi-harian/{perlu-dicek,
+  klarifikasi,kamus,kamus/hapus}`): owner menulis arti keterangan di kotak kanan tiap nota. Ditafsirkan jadi aturan
+  ALIAS (salah ketik → kata yang dikenal parser, mis. hndk→handuk, pvs→pcs), HITUNG (barang baru, ditambahkan
+  sementara ke `SATUAN_BAJU` selama agregasi), ABAIKAN (diganti "satuan"), atau NOTA (teks mis. "10 pcs" ditempel ke
+  baris kiloan nota itu saja). Disimpan di sheet **KLARIFIKASI KETERANGAN** (PERFORMA PEGAWAI; RAW; AKTIF=TIDAK untuk
+  menghapus) dan diterapkan sebagai lapisan SEBELUM `agregasiTransaksi_` — `kodeinternal.js` tetap salinan murni; tanpa
+  aturan hasil upload identik dengan aslinya. KETERANGAN ASLI di sheet tetap teks kasir. Nota perlu dicek upload
+  terakhir + baris mentahnya disimpan di `data/transaksi_perlu_dicek.json` (per NO NOTA) agar bisa dihitung ulang dan
+  ditulis ulang ke TRANSAKSI HARIAN begitu diklarifikasi. Aturan ini belum dipakai Dashboard Internal (Kode.gs).
 - Repo ini **publik**. Jangan menambah ID file/folder Drive baru, data pribadi, atau rahasia ke repo.
 - **Proyeksi Biaya** (`src/proyeksi.js`, `/api/proyeksi`, `/api/proyeksi/simpan`): menampilkan seluruh sheet
   PROYEKSI BIAYA (CASHFLOW bulan berjalan) lengkap dengan sel gabungan, KECUALI kolom berjudul LOKASI & KET

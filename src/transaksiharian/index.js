@@ -4,7 +4,8 @@ const cfg = require("../config");
 const sheets = require("../sheets");
 const { sheetsClient, serviceAccountEmail } = require("../google");
 const { bacaXlsxSheet } = require("./xlsx");
-const { agregasiTransaksi_, KOLOM_KOREKSI_PCS } = require("./kodeinternal");
+const { KOLOM_KOREKSI_PCS } = require("./kodeinternal");
+const klar = require("./klarifikasi");
 
 /*
  * Upload File › Upload Transaksi Harian — padanan apiUploadTransaksi_() dan
@@ -131,15 +132,95 @@ async function info() {
 
 let _sibuk = false;
 
+/**
+ * Upsert daftar nota hasil agregasi ke TRANSAKSI HARIAN (bagian tulis apiUploadTransaksi_).
+ * Dipakai saat upload dan saat nota dihitung ulang setelah klarifikasi.
+ */
+async function tulisKeSheet(id, list) {
+  const judul = ((await sheets.readRange(id, `${qs(SHEET)}!1:1`, "FORMATTED_VALUE"))[0] || []).map((h) => String(h).trim());
+  const posisi = {};
+  judul.forEach((h, i) => {
+    if (h && posisi[h] === undefined) posisi[h] = i;
+  });
+  if (posisi["NO NOTA"] === undefined) {
+    throw new Error(`Sheet ${SHEET} tidak punya kolom "NO NOTA". Jalankan setupSpreadsheet dulu.`);
+  }
+
+  // upsert berdasar NO NOTA (akumulasi lintas hari)
+  const noCol = colLetter(posisi["NO NOTA"]);
+  const kolNota = await sheets.readRange(id, `${qs(SHEET)}!${noCol}2:${noCol}`, "UNFORMATTED_VALUE");
+  const existing = {};
+  kolNota.forEach((r, i) => {
+    const no = String(((r || [])[0]) || "").trim();
+    if (no) existing[no] = i + 2;
+  });
+
+  const hari = formatWita(false);
+  const oleh = await nomorPegawaiOwner(id);
+  // Kolom yang diisi dari file: berjudul, dikenal, dan BUKAN kolom koreksi PCS.
+  const rowMapOf = (t) => ({
+    "NO NOTA": t.nota, "NAMA PELANGGAN": t.customer, OUTLET: t.outlet,
+    "TGL TERIMA": t.tglTerima, "TGL SELESAI": t.tglSelesai, "TOTAL TAGIHAN": t.total,
+    "JUMLAH PCS": t.pcs, "TOTAL BERAT": Math.round(t.kg * 1000) / 1000,
+    "TANGGAL UPLOAD": hari, "DIUPLOAD OLEH": String(oleh),
+    SATUAN: t.satuan || "", "PCS SATUAN": t.pcsSatuan || 0, "TOTAL PCS": t.totalPcs,
+    "CATATAN PARSE": t.catatan || "",
+    "KETERANGAN ASLI": t.keteranganAsli || "",
+  });
+  const kunciMilik = Object.keys(rowMapOf({ kg: 0 }));
+  const milik = judul.map((h, c) => (h && KOLOM_KOREKSI_PCS.indexOf(h) < 0 && kunciMilik.includes(h) ? c : -1)).filter((c) => c >= 0);
+  // Segmen kolom bersebelahan (mis. A:N dan T) agar kolom lain tak tertimpa.
+  const segmen = [];
+  for (const c of milik) {
+    const last = segmen[segmen.length - 1];
+    if (last && last[1] === c - 1) last[1] = c;
+    else segmen.push([c, c]);
+  }
+
+  let baru = 0;
+  let perbarui = 0;
+  const updates = [];
+  const appendBuffer = [];
+  for (const t of list) {
+    const rowMap = rowMapOf(t);
+    const barisLama = existing[t.nota];
+    if (barisLama) {
+      for (const [a, b] of segmen) {
+        const vals = [];
+        for (let c = a; c <= b; c++) vals.push(rowMap[judul[c]]);
+        updates.push({ range: `${qs(SHEET)}!${colLetter(a)}${barisLama}:${colLetter(b)}${barisLama}`, values: [vals] });
+      }
+      perbarui++;
+    } else {
+      // Baris baru: kolom selain milik dibiarkan kosong (seperti kode aslinya).
+      appendBuffer.push(judul.map((h) => (h && KOLOM_KOREKSI_PCS.indexOf(h) < 0 && h in rowMap ? rowMap[h] : "")));
+      baru++;
+    }
+  }
+  for (let i = 0; i < updates.length; i += 400) await sheets.batchWrite(id, updates.slice(i, i + 400));
+  if (appendBuffer.length) {
+    await sheetsClient().spreadsheets.values.append({
+      spreadsheetId: id,
+      range: `${qs(SHEET)}!A1`,
+      valueInputOption: "USER_ENTERED",
+      insertDataOption: "OVERWRITE",
+      requestBody: { values: appendBuffer },
+    });
+  }
+  return { baru, perbarui };
+}
+
 /** = apiUploadTransaksi_: baca file, agregasi per nota, upsert ke TRANSAKSI HARIAN. */
 async function upload(buffer) {
   if (_sibuk) throw new Error("Masih memproses upload sebelumnya. Tunggu sebentar lalu coba lagi.");
   if (!buffer || !buffer.length) throw new Error("File tidak terkirim.");
   _sibuk = true;
   try {
+    let rows;
     let list;
     try {
-      list = agregasiTransaksi_(bacaXlsxSheet(buffer));
+      rows = bacaXlsxSheet(buffer);
+      list = klar.agregasi(rows, []); // = agregasiTransaksi_ asli (galat file dilaporkan lebih dulu)
     } catch (err) {
       throw new Error("Gagal memproses file: " + (err && err.message ? err.message : err));
     }
@@ -147,76 +228,11 @@ async function upload(buffer) {
 
     const id = spreadsheetId();
     try {
-      const judul = ((await sheets.readRange(id, `${qs(SHEET)}!1:1`, "FORMATTED_VALUE"))[0] || []).map((h) => String(h).trim());
-      const posisi = {};
-      judul.forEach((h, i) => {
-        if (h && posisi[h] === undefined) posisi[h] = i;
-      });
-      if (posisi["NO NOTA"] === undefined) {
-        throw new Error(`Sheet ${SHEET} tidak punya kolom "NO NOTA". Jalankan setupSpreadsheet dulu.`);
-      }
+      // Klarifikasi owner (sheet KLARIFIKASI KETERANGAN) — kosong = hasil persis seperti aslinya.
+      const aturan = await klar.aturanAktif(id);
+      if (aturan.length) list = klar.agregasi(rows, aturan);
 
-      // upsert berdasar NO NOTA (akumulasi lintas hari)
-      const noCol = colLetter(posisi["NO NOTA"]);
-      const kolNota = await sheets.readRange(id, `${qs(SHEET)}!${noCol}2:${noCol}`, "UNFORMATTED_VALUE");
-      const existing = {};
-      kolNota.forEach((r, i) => {
-        const no = String(((r || [])[0]) || "").trim();
-        if (no) existing[no] = i + 2;
-      });
-
-      const hari = formatWita(false);
-      const oleh = await nomorPegawaiOwner(id);
-      // Kolom yang diisi dari file: berjudul, dikenal, dan BUKAN kolom koreksi PCS.
-      const rowMapOf = (t) => ({
-        "NO NOTA": t.nota, "NAMA PELANGGAN": t.customer, OUTLET: t.outlet,
-        "TGL TERIMA": t.tglTerima, "TGL SELESAI": t.tglSelesai, "TOTAL TAGIHAN": t.total,
-        "JUMLAH PCS": t.pcs, "TOTAL BERAT": Math.round(t.kg * 1000) / 1000,
-        "TANGGAL UPLOAD": hari, "DIUPLOAD OLEH": String(oleh),
-        SATUAN: t.satuan || "", "PCS SATUAN": t.pcsSatuan || 0, "TOTAL PCS": t.totalPcs,
-        "CATATAN PARSE": t.catatan || "",
-        "KETERANGAN ASLI": t.keteranganAsli || "",
-      });
-      const kunciMilik = Object.keys(rowMapOf({ kg: 0 }));
-      const milik = judul.map((h, c) => (h && KOLOM_KOREKSI_PCS.indexOf(h) < 0 && kunciMilik.includes(h) ? c : -1)).filter((c) => c >= 0);
-      // Segmen kolom bersebelahan (mis. A:N dan T) agar kolom lain tak tertimpa.
-      const segmen = [];
-      for (const c of milik) {
-        const last = segmen[segmen.length - 1];
-        if (last && last[1] === c - 1) last[1] = c;
-        else segmen.push([c, c]);
-      }
-
-      let baru = 0;
-      let perbarui = 0;
-      const updates = [];
-      const appendBuffer = [];
-      for (const t of list) {
-        const rowMap = rowMapOf(t);
-        const barisLama = existing[t.nota];
-        if (barisLama) {
-          for (const [a, b] of segmen) {
-            const vals = [];
-            for (let c = a; c <= b; c++) vals.push(rowMap[judul[c]]);
-            updates.push({ range: `${qs(SHEET)}!${colLetter(a)}${barisLama}:${colLetter(b)}${barisLama}`, values: [vals] });
-          }
-          perbarui++;
-        } else {
-          // Baris baru: kolom selain milik dibiarkan kosong (seperti kode aslinya).
-          appendBuffer.push(judul.map((h) => (h && KOLOM_KOREKSI_PCS.indexOf(h) < 0 && h in rowMap ? rowMap[h] : "")));
-          baru++;
-        }
-      }
-      for (let i = 0; i < updates.length; i += 400) await sheets.batchWrite(id, updates.slice(i, i + 400));
-      if (appendBuffer.length) {
-        await sheetsClient().spreadsheets.values.append({
-          spreadsheetId: id,
-          range: `${qs(SHEET)}!A1`,
-          valueInputOption: "USER_ENTERED",
-          insertDataOption: "OVERWRITE",
-          requestBody: { values: appendBuffer },
-        });
-      }
+      const { baru, perbarui } = await tulisKeSheet(id, list);
 
       // setKonfigValue_('TRANSAKSI_LAST_UPLOAD', nowIso_())
       const sekarang = formatWita(true);
@@ -234,7 +250,15 @@ async function upload(buffer) {
         });
       }
 
-      const perluDicek = list.filter((t) => t.catatan).map((t) => ({ nota: t.nota, customer: t.customer, catatan: t.catatan }));
+      // Nota perlu dicek disimpan lokal (beserta baris mentahnya) agar bisa diklarifikasi kapan saja.
+      try {
+        klar.simpanPerluDicek(rows, list);
+      } catch (e) {
+        console.error("Gagal menyimpan daftar nota perlu dicek:", e.message);
+      }
+      const perluDicek = list
+        .filter((t) => t.catatan)
+        .map((t) => ({ nota: t.nota, customer: t.customer, catatan: t.catatan, keterangan: t.keteranganAsli || "", totalPcs: t.totalPcs }));
       return {
         message:
           "Berhasil memproses file: " + baru + " nota baru, " + perbarui + " diperbarui." +
@@ -243,6 +267,7 @@ async function upload(buffer) {
         perbarui,
         total: list.length,
         perluDicek,
+        aturanDipakai: aturan.length,
       };
     } catch (err) {
       const f = await friendly(err);
@@ -254,4 +279,120 @@ async function upload(buffer) {
   }
 }
 
-module.exports = { info, upload, spreadsheetUrl, _colLetter: colLetter };
+// ---------- Klarifikasi keterangan nota perlu dicek ----------
+
+/** Hitung ulang nota perlu dicek (upload terakhir) dengan aturan aktif; tulis yang berubah ke sheet. */
+async function hitungUlangPerlu(id, d) {
+  if (!d || !d.urutan.length) return { ditulis: [] };
+  const aturan = await klar.aturanAktif(id);
+  const rows = (d.judul || []).concat(...d.urutan.filter((no) => d.nota[no]).map((no) => d.nota[no].rows));
+  const list = klar.agregasi(rows, aturan);
+  const berubah = [];
+  for (const t of list) {
+    const x = d.nota[t.nota];
+    if (!x) continue;
+    const s = klar.sidik(t);
+    if (s !== x.sidik) berubah.push(t);
+    x.sidik = s;
+    x.totalPcs = t.totalPcs;
+    x.catatan = t.catatan || "";
+  }
+  if (berubah.length) await tulisKeSheet(id, berubah);
+  klar.tulisPerluDicek(d);
+  return { ditulis: berubah.map((t) => t.nota) };
+}
+
+function antre(fn) {
+  if (_sibuk) {
+    const e = new Error("Masih memproses upload / klarifikasi lain. Tunggu sebentar lalu coba lagi.");
+    e.status = 409;
+    return Promise.reject(e);
+  }
+  _sibuk = true;
+  return Promise.resolve()
+    .then(fn)
+    .catch(async (err) => {
+      if (err && err.status) throw err;
+      const f = await friendly(err);
+      if (f.code) f.status = 403;
+      throw f;
+    })
+    .finally(() => {
+      _sibuk = false;
+    });
+}
+
+/** Simpan klarifikasi satu nota → aturan baru di sheet, lalu nota perlu dicek dihitung ulang. */
+function klarifikasi(body) {
+  return antre(async () => {
+    const id = spreadsheetId();
+    const no = String((body && body.nota) || "").trim();
+    if (!no) throw klar.httpError(400, "Nomor nota kosong.");
+    const d = klar.bacaPerluDicek();
+    const x = d && d.nota[no];
+    const data = {
+      nota: no,
+      customer: x ? x.customer : String(body.customer || ""),
+      catatan: x ? x.catatanAwal : String(body.catatan || ""),
+      keterangan: x ? x.keterangan : String(body.keterangan || ""),
+      klarifikasi: String(body.klarifikasi || ""),
+    };
+    const baru = klar.tafsir(data);
+    await klar.simpanAturan(id, data, baru);
+    // Aturan lama untuk kata / nota yang sama diganti oleh yang baru.
+    const semua = await klar.bacaAturan(id, true);
+    const terbaru = new Set(semua.slice(-baru.length).map((a) => a.baris));
+    for (const a of semua) {
+      if (!a.aktif || terbaru.has(a.baris)) continue;
+      const bentrok = baru.some((b) => (b.jenis === "NOTA" ? a.jenis === "NOTA" && a.kata === b.kata : a.jenis !== "NOTA" && a.kata === b.kata));
+      if (bentrok) await klar.nonaktifkan(id, a.baris);
+    }
+    let ditulis = [];
+    if (d) {
+      if (x) x.klarifikasi = data.klarifikasi;
+      ({ ditulis } = await hitungUlangPerlu(id, d));
+      if (x) {
+        x.hasil = baru.map(klar.jelaskan).join("; ");
+        klar.tulisPerluDicek(d);
+      }
+    }
+    const daftar = klar.daftarPerlu(d);
+    return {
+      ok: true,
+      aturan: baru.map((a) => ({ ...a, penjelasan: klar.jelaskan(a) })),
+      nota: daftar.find((n) => n.nota === no) || null,
+      ditulis,
+      perluDicek: daftar,
+      adaData: !!x,
+    };
+  });
+}
+
+/** Nota perlu dicek dari upload terakhir (tetap ada walau aplikasi dijalankan ulang). */
+function perluDicek() {
+  const d = klar.bacaPerluDicek();
+  return { ok: true, waktu: d ? d.waktu : "", perluDicek: klar.daftarPerlu(d) };
+}
+
+/** Daftar aturan klarifikasi yang aktif (terbaru di atas). */
+async function kamus() {
+  try {
+    const list = (await klar.bacaAturan(spreadsheetId(), true)).filter((a) => a.aktif).reverse();
+    return { ok: true, aturan: list.map((a) => ({ ...a, penjelasan: klar.jelaskan(a) })) };
+  } catch (err) {
+    throw await friendly(err);
+  }
+}
+
+/** Nonaktifkan satu aturan (AKTIF = TIDAK) lalu hitung ulang nota perlu dicek. */
+function hapusAturan(baris) {
+  return antre(async () => {
+    const id = spreadsheetId();
+    await klar.nonaktifkan(id, baris);
+    const d = klar.bacaPerluDicek();
+    const { ditulis } = d ? await hitungUlangPerlu(id, d) : { ditulis: [] };
+    return { ok: true, ditulis, perluDicek: klar.daftarPerlu(d), ...(await kamus()) };
+  });
+}
+
+module.exports = { info, upload, klarifikasi, perluDicek, kamus, hapusAturan, spreadsheetUrl, _colLetter: colLetter };

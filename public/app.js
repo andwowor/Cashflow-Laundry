@@ -2476,7 +2476,204 @@ function thTampilAkses(e) {
 
 async function thLoad() {
   await thLoadInfo();
+  thLoadPerlu();
+  thLoadKamus();
 }
+
+// ----- Klarifikasi nota "perlu dicek" -----
+let TH_PESAN = {}; // pesan hasil simpan per nota (tetap tampil setelah daftar digambar ulang)
+let TH_DATA = {}; // data nota perlu dicek yang sedang tampil
+let TH_SEMUA = false; // tampilkan semua nota (bukan hanya 30 pertama)
+let TH_LIST = []; // daftar terakhir (untuk tombol "tampilkan semua")
+const TH_MAKS = 30;
+let TH_WAKTU = "";
+
+function thPlaceholder(catatan) {
+  const m = String(catatan || "").match(/satuan belum dikenali:\s*([^•]+)/);
+  if (m) {
+    const kata = m[1].split(",")[0].trim().replace(/^\d+\s*/, "");
+    return `mis. ${kata} = nama barang yang benar`;
+  }
+  return "jumlah pcs sebenarnya, mis. 10 pcs";
+}
+
+function thRenderPerlu(list, waktu) {
+  const card = $("#th-perlu-card");
+  const box = $("#th-perlu-list");
+  if (!list || !list.length) {
+    card.classList.add("hidden");
+    box.innerHTML = "";
+    return;
+  }
+  const belum = list.filter((n) => !n.selesai).length;
+  const w = waktu == null ? TH_WAKTU : waktu;
+  $("#th-perlu-judul").innerHTML = belum
+    ? `⚠️ ${belum} nota perlu dicek${w ? ` <small class="hint">(upload ${escapeHtml(w)})</small>` : ""}`
+    : `✅ Semua nota sudah diklarifikasi${w ? ` <small class="hint">(upload ${escapeHtml(w)})</small>` : ""}`;
+  card.classList.remove("hidden");
+  TH_DATA = {};
+  TH_LIST = list;
+  TH_WAKTU = waktu == null ? TH_WAKTU : waktu;
+  list.forEach((n) => (TH_DATA[n.nota] = n));
+  // Yang belum beres di atas; tampil 30 dulu supaya halaman tidak terlalu panjang.
+  const urut = list.filter((n) => !n.selesai).concat(list.filter((n) => n.selesai));
+  const tampil = TH_SEMUA ? urut : urut.slice(0, TH_MAKS);
+  const sisa = urut.length - tampil.length;
+  box.innerHTML = tampil
+    .map((n) => {
+      const ket = n.keterangan
+        ? `<div class="th-ket">${escapeHtml(n.keterangan)}</div>`
+        : `<div class="th-ket th-ket-kosong">(keterangan kosong)</div>`;
+      const pesan = TH_PESAN[n.nota];
+      const pesanHtml = pesan ? `<div class="th-kl-hasil ${pesan.ok ? "ok" : "err"}">${escapeHtml(pesan.teks)}</div>` : "";
+      const form = n.selesai
+        ? `<div class="th-kl-hasil ok">✓ Beres — sekarang ${escapeHtml(String(n.totalPcs))} pcs${
+            n.totalPcsAwal != null && n.totalPcsAwal !== n.totalPcs ? ` (sebelumnya ${escapeHtml(String(n.totalPcsAwal))})` : ""
+          }.</div>${pesan && pesan.ok ? pesanHtml : n.hasil ? `<div class="th-kl-hasil">${escapeHtml(n.hasil)}</div>` : ""}`
+        : `<div class="th-kl-row">
+             <input type="text" class="th-kl-input" maxlength="300" placeholder="${escapeHtml(thPlaceholder(n.catatan))}"
+               value="${escapeHtml(n.klarifikasi || "")}" aria-label="Klarifikasi nota ${escapeHtml(n.nota)}" />
+             <button class="btn-primary th-kl-btn">Simpan</button>
+           </div>${pesanHtml}${
+             n.catatanSekarang && n.catatanSekarang !== n.catatan ? `<div class="th-kl-hasil err">Masih perlu dicek: ${escapeHtml(n.catatanSekarang)}</div>` : ""
+           }`;
+      return `<div class="th-item th-kl${n.selesai ? " th-kl-ok" : ""}" data-nota="${escapeHtml(n.nota)}">
+        <div class="th-kl-info">
+          <div class="th-t1">${escapeHtml(n.nota)}</div>
+          <div class="th-t2">${escapeHtml(n.customer || "—")} • ${escapeHtml(n.catatan || "")}</div>
+          ${ket}
+        </div>
+        <div class="th-kl-form">${form}</div>
+      </div>`;
+    })
+    .join("") + (sisa > 0 ? `<button id="btn-th-semua" class="btn-ghost">Tampilkan ${sisa} nota lainnya</button>` : "");
+}
+
+async function thLoadPerlu() {
+  try {
+    const r = await thApi("/api/transaksi-harian/perlu-dicek");
+    thRenderPerlu(r.perluDicek, r.waktu);
+  } catch {
+    /* daftar lokal; abaikan bila gagal */
+  }
+}
+
+async function thSimpanKlarifikasi(item) {
+  const nota = item.dataset.nota;
+  const inp = item.querySelector(".th-kl-input");
+  const btn = item.querySelector(".th-kl-btn");
+  const teks = inp.value.trim();
+  if (!teks) {
+    TH_PESAN[nota] = { ok: false, teks: "Tulis klarifikasinya dahulu." };
+    inp.focus();
+    thTampilPesan(item, TH_PESAN[nota]);
+    return;
+  }
+  btn.disabled = true;
+  inp.disabled = true;
+  btn.textContent = "Menyimpan…";
+  try {
+    const n = TH_DATA[nota] || {};
+    const res = await thApi("/api/transaksi-harian/klarifikasi", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nota, klarifikasi: teks, catatan: n.catatan || "", keterangan: n.keterangan || "", customer: n.customer || "" }),
+    });
+    const dipelajari = res.aturan.map((a) => a.penjelasan).join("; ");
+    const lain = (res.ditulis || []).filter((x) => x !== nota).length;
+    let teksHasil = `✓ Tersimpan: ${dipelajari}.`;
+    if (lain) teksHasil += ` Ikut diperbarui: ${lain} nota lain.`;
+    if (!res.adaData) teksHasil += " Berlaku mulai upload berikutnya (upload ulang file yang sama untuk memperbarui nota ini).";
+    TH_PESAN[nota] = { ok: true, teks: teksHasil };
+    if (res.adaData) thRenderPerlu(res.perluDicek, null);
+    else thTampilPesan(item, TH_PESAN[nota]);
+    thLoadKamus();
+  } catch (e) {
+    TH_PESAN[nota] = { ok: false, teks: "✘ " + e.message };
+    thTampilPesan(item, TH_PESAN[nota]);
+  } finally {
+    if (document.body.contains(btn)) {
+      btn.disabled = false;
+      inp.disabled = false;
+      btn.textContent = "Simpan";
+    }
+  }
+}
+
+function thTampilPesan(item, pesan) {
+  let el = item.querySelector(".th-kl-pesan");
+  if (!el) {
+    el = document.createElement("div");
+    el.className = "th-kl-hasil th-kl-pesan";
+    item.querySelector(".th-kl-form").appendChild(el);
+  }
+  el.classList.toggle("ok", !!pesan.ok);
+  el.classList.toggle("err", !pesan.ok);
+  el.textContent = pesan.teks;
+}
+
+$("#th-perlu-list").addEventListener("click", (ev) => {
+  if (ev.target.closest("#btn-th-semua")) {
+    TH_SEMUA = true;
+    thRenderPerlu(TH_LIST, null);
+    return;
+  }
+  const btn = ev.target.closest(".th-kl-btn");
+  if (btn) thSimpanKlarifikasi(btn.closest(".th-kl"));
+});
+$("#th-perlu-list").addEventListener("keydown", (ev) => {
+  if (ev.key === "Enter" && ev.target.classList.contains("th-kl-input")) {
+    ev.preventDefault();
+    thSimpanKlarifikasi(ev.target.closest(".th-kl"));
+  }
+});
+
+async function thLoadKamus() {
+  const box = $("#th-kamus-list");
+  try {
+    const r = await thApi("/api/transaksi-harian/kamus");
+    thRenderKamus(r.aturan || []);
+  } catch (e) {
+    box.innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
+  }
+}
+
+function thRenderKamus(list) {
+  $("#th-kamus-n").textContent = list.length ? `(${list.length} aturan)` : "(belum ada)";
+  $("#th-kamus-list").innerHTML = list.length
+    ? list
+        .map(
+          (a) => `<div class="th-kamus-item">
+            <div><div>${escapeHtml(a.penjelasan)}</div>
+              <div class="th-t2">${escapeHtml(a.waktu || "")}${a.nota ? " · dari nota " + escapeHtml(a.nota) : ""}${
+                a.klarifikasi ? ` · “${escapeHtml(a.klarifikasi)}”` : ""
+              }</div></div>
+            <button class="btn-ghost btn-th-kecil th-kamus-hapus" data-baris="${a.baris}">Hapus</button>
+          </div>`
+        )
+        .join("")
+    : `<p class="hint">Belum ada aturan. Aturan muncul di sini setelah Anda mengisi klarifikasi nota yang perlu dicek.</p>`;
+}
+
+$("#th-kamus-list").addEventListener("click", async (ev) => {
+  const btn = ev.target.closest(".th-kamus-hapus");
+  if (!btn) return;
+  const teks = btn.parentElement.querySelector("div > div").textContent;
+  if (!window.confirm(`Hapus aturan ini?\n${teks}`)) return;
+  btn.disabled = true;
+  try {
+    const r = await thApi("/api/transaksi-harian/kamus/hapus", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ baris: Number(btn.dataset.baris) }),
+    });
+    thRenderKamus(r.aturan || []);
+    thRenderPerlu(r.perluDicek, null);
+  } catch (e) {
+    btn.disabled = false;
+    window.alert(e.message);
+  }
+});
 
 async function thLoadInfo() {
   try {
@@ -2507,23 +2704,15 @@ $("#btn-th-upload").addEventListener("click", async () => {
     const fd = new FormData();
     fd.append("file", file, file.name);
     const res = await thApi("/api/transaksi-harian/upload", { method: "POST", body: fd });
-    let html = `<div class="th-notice">✅ <div>${escapeHtml(res.message)}</div></div>`;
-    // Nota yang keterangannya belum terbaca penuh — ditampilkan supaya bisa langsung dicek.
-    const perlu = res.perluDicek || [];
-    if (perlu.length) {
-      html += `<div class="card th-perlu">
-        <h3>⚠️ ${perlu.length} nota perlu dicek</h3>
-        <p class="hint">Ada bagian keterangan yang belum bisa dibaca sistem, jadi jumlah pcs-nya mungkin kurang.
-          Periksa notanya di aplikasi laundry, lalu kirimkan contohnya agar polanya ditambahkan.</p>
-        ${perlu
-          .slice(0, 30)
-          .map((x) => `<div class="th-item"><div class="th-t1">${escapeHtml(x.nota)}</div><div class="th-t2">${escapeHtml(x.customer || "—")} • ${escapeHtml(x.catatan)}</div></div>`)
-          .join("")}
-        ${perlu.length > 30 ? `<p class="hint">dan ${perlu.length - 30} nota lain — lihat kolom CATATAN PARSE di sheet TRANSAKSI HARIAN.</p>` : ""}
-      </div>`;
-    }
+    let html = `<div class="th-notice">✅ <div>${escapeHtml(res.message)}${
+      res.aturanDipakai ? ` <span class="hint">(${res.aturanDipakai} aturan kamus klarifikasi dipakai)</span>` : ""
+    }</div></div>`;
     html += `<p class="th-ok">Transaksi harian terproses ✅</p>`;
     hasil.innerHTML = html;
+    // Nota yang keterangannya belum terbaca penuh — tampil dengan kotak klarifikasi.
+    TH_PESAN = {};
+    TH_SEMUA = false;
+    thRenderPerlu((res.perluDicek || []).map((n) => ({ ...n, catatanSekarang: n.catatan, totalPcsAwal: n.totalPcs })), "");
     clearFileInput(input);
     thLoadInfo();
   } catch (e) {
