@@ -741,3 +741,36 @@ a.btn-ghost { text-decoration: none; display: inline-flex; align-items: center; 
   .th-kl { flex-direction: column; gap: 8px; }
   .th-kl-form { flex-basis: auto; width: 100%; }
 }
+
+/* ===================== Kas Sewa Gedung ===================== */
+.ks-saldo { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1.4fr; gap: 12px; margin-top: 12px; }
+.ks-kartu { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px 14px; background: #fffdf8; min-width: 0; }
+.ks-utama { background: var(--teal-soft); border-color: #cfe3e6; }
+.ks-label { font-size: 12px; font-weight: 700; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .04em; }
+.ks-angka { font-size: 22px; font-weight: 800; color: var(--teal-dark); margin-top: 4px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ks-utama .ks-angka { font-size: 28px; }
+.ks-angka.kecil { font-size: 18px; }
+.ks-sub { font-size: 12.5px; color: var(--ink-soft); margin-top: 4px; overflow-wrap: anywhere; }
+#tab-kassewa .pos { color: #146c4a; }
+#tab-kassewa .neg { color: var(--err); }
+.ks-jenis { display: flex; gap: 10px; flex-wrap: wrap; margin: 6px 0 10px; }
+.ks-pilih { display: flex; align-items: center; gap: 6px; border: 1.5px solid var(--line); border-radius: 12px; padding: 8px 12px; cursor: pointer; background: #fff; }
+.ks-pilih:has(input:checked) { border-color: var(--teal); background: var(--teal-soft); }
+.ks-pilih span { font-weight: 700; }
+.ks-pilih small { color: var(--ink-soft); }
+.ks-cepat { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 8px; }
+.ks-chip { border: 1px dashed var(--teal); background: #fff; color: var(--teal-dark); border-radius: 999px; padding: 4px 10px; font-size: 12.5px; cursor: pointer; font-family: var(--font); }
+.ks-chip:hover { background: var(--teal-soft); }
+.ks-preview { font-size: 13.5px; margin: 4px 0 12px; min-height: 18px; }
+#ks-grid { font-size: 13px; }
+#ks-grid td, #ks-grid th { white-space: nowrap; padding: 8px 10px; }
+#ks-grid td.ks-ket { white-space: normal; min-width: 180px; max-width: 360px; }
+#ks-grid tr.ks-baru td { background: var(--gold-soft) !important; }
+.ks-tag { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--teal-soft); color: var(--teal-dark); }
+@media (max-width: 900px) { .ks-saldo { grid-template-columns: 1fr 1fr; } .ks-utama { grid-column: 1 / -1; } }
+@media (max-width: 560px) {
+  .ks-saldo { grid-template-columns: 1fr; gap: 8px; }
+  .ks-kartu { padding: 10px 12px; }
+  .ks-utama .ks-angka { font-size: 26px; }
+  .ks-angka { font-size: 19px; }
+}

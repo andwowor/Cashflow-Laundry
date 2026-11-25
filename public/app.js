@@ -147,6 +147,7 @@ $$(".tab").forEach((btn) => {
     if (btn.dataset.tab === "smartlink" && !SMART_LOADED) loadSmart();
     if (btn.dataset.tab === "riwayat" && !RB_LOADED) rbOpen();
     if (btn.dataset.tab === "proyeksi") loadProyeksi(); // selalu segarkan saat dibuka
+    if (btn.dataset.tab === "kassewa") loadKasSewa(); // selalu segarkan saat dibuka
     if (btn.dataset.tab === "daftarbiaya" && !DB_LOADED) loadDaftarBiaya();
     if (btn.dataset.tab === "deposit" && !DEP_LOADED) loadDeposit();
     if (btn.dataset.tab === "aliran" && !AL_LOADED) alOpen();
@@ -4073,6 +4074,245 @@ async function pbUndo() {
 $("#pb-undo").addEventListener("click", (ev) => {
   if (ev.target.closest("#btn-pb-undo")) pbUndo();
 });
+
+// ================= Kas Sewa Gedung =================
+// Sheet KAS SEWA GEDUNG (CASHFLOW bulan berjalan): saldo, riwayat pergerakan, input transaksi.
+let KS = null;
+let KS_BUSY = false;
+let KS_SOROT = null; // baris yang baru disimpan (disorot di riwayat)
+const KS_BULAN_PENDEK = ["Jan", "Feb", "Mar", "Apr", "Mei", "Juni", "Juli", "Agustus", "September", "Okt", "Nov", "Des"];
+const KS_BULAN = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+
+function ksRp(n, tanda) {
+  const v = Math.round(Number(n) || 0);
+  const t = "Rp" + Math.abs(v).toLocaleString("id-ID");
+  if (v < 0) return "−" + t;
+  return (tanda && v > 0 ? "+" : "") + t;
+}
+
+function ksNominal() {
+  const d = String($("#ks-nominal").value || "").replace(/\D/g, "");
+  return d ? Number(d) : 0;
+}
+
+async function loadKasSewa() {
+  if (KS_BUSY) return;
+  if (!KS) $("#ks-saldo").innerHTML = '<p class="hint">Memuat sheet KAS SEWA GEDUNG…</p>';
+  $("#btn-ks-load").disabled = true;
+  try {
+    KS = await api("/api/kassewa");
+    ksRender();
+  } catch (e) {
+    $("#ks-saldo").innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
+  } finally {
+    $("#btn-ks-load").disabled = false;
+  }
+}
+
+function ksRender() {
+  const d = KS;
+  if (!d) return;
+  $("#ks-open").href = d.spreadsheet.url;
+  $("#ks-open").classList.remove("hidden");
+  $("#ks-meta").textContent = `${d.spreadsheet.title} · ${d.jumlah} transaksi · dimuat ${d.dimuat}`;
+  $("#ks-warn").innerHTML = (d.peringatan || []).map((w) => `<div class="th-notice th-err">⚠️ <div>${escapeHtml(w)}</div></div>`).join("");
+  const t = d.terakhir;
+  $("#ks-saldo").innerHTML = `
+    <div class="ks-kartu ks-utama">
+      <div class="ks-label">Saldo terkini</div>
+      <div class="ks-angka ${d.saldo < 0 ? "neg" : ""}">${ksRp(d.saldo)}</div>
+      <div class="ks-sub">${t ? "per " + escapeHtml(t.tanggalTeks || "-") : "belum ada transaksi"}</div>
+    </div>
+    <div class="ks-kartu"><div class="ks-label">Total masuk</div><div class="ks-angka pos">${ksRp(d.masuk, true)}</div></div>
+    <div class="ks-kartu"><div class="ks-label">Total keluar</div><div class="ks-angka neg">${ksRp(d.keluar)}</div></div>
+    <div class="ks-kartu"><div class="ks-label">Transaksi terakhir</div>${
+      t
+        ? `<div class="ks-sub">${escapeHtml(t.tanggalTeks)} · ${escapeHtml(t.keterangan || "-")}</div>
+           <div class="ks-angka kecil ${t.nominal < 0 ? "neg" : "pos"}">${ksRp(t.nominal, true)}</div>`
+        : '<div class="ks-sub">-</div>'
+    }</div>`;
+  // saran keterangan
+  $("#dl-ks-ket").innerHTML = (d.saran || []).map((k) => `<option value="${escapeHtml(k)}"></option>`).join("");
+  if (!$("#ks-tanggal").value) $("#ks-tanggal").value = d.hariIni;
+  // pilihan bulan riwayat
+  const sel = $("#ks-bulan");
+  const pilih = sel.value;
+  const bulan = [...new Set(d.transaksi.map((x) => (x.tanggal || "").slice(0, 7)).filter(Boolean))].sort().reverse();
+  sel.innerHTML =
+    '<option value="">Semua bulan</option>' +
+    bulan.map((b) => `<option value="${b}">${KS_BULAN[Number(b.slice(5, 7)) - 1]} ${b.slice(0, 4)}</option>`).join("");
+  if (bulan.includes(pilih)) sel.value = pilih;
+  ksRenderCepat();
+  ksPreview();
+  ksRenderRiwayat();
+}
+
+function ksRenderCepat() {
+  const iso = $("#ks-tanggal").value || (KS && KS.hariIni) || "";
+  const m = iso.match(/^(\d{4})-(\d{2})/);
+  if (!m) { $("#ks-cepat").innerHTML = ""; return; }
+  const teks = `Tabungan Sewa Gedung ${KS_BULAN_PENDEK[Number(m[2]) - 1]} ${m[1]}`;
+  $("#ks-cepat").innerHTML = `<span class="hint">Isi cepat:</span>
+    <button type="button" class="ks-chip" data-jenis="masuk" data-ket="${escapeHtml(teks)}">${escapeHtml(teks)}</button>
+    <button type="button" class="ks-chip" data-jenis="keluar" data-ket="Biaya admin">Biaya admin</button>`;
+}
+
+function ksJenis() {
+  const r = document.querySelector('input[name="ks-jenis"]:checked');
+  return r ? r.value : "masuk";
+}
+
+function ksPreview() {
+  const el = $("#ks-preview");
+  const n = ksNominal();
+  if (!KS || !n) { el.textContent = ""; return; }
+  const nilai = ksJenis() === "masuk" ? n : -n;
+  const setelah = KS.saldo + nilai;
+  el.innerHTML = `Akan dicatat <b class="${nilai < 0 ? "neg" : "pos"}">${ksRp(nilai, true)}</b> di kolom <b>${escapeHtml($("#ks-outlet").value)}</b> ·
+    saldo menjadi <b class="${setelah < 0 ? "neg" : ""}">${ksRp(setelah)}</b>`;
+}
+
+function ksRenderRiwayat() {
+  const d = KS;
+  if (!d) return;
+  const bln = $("#ks-bulan").value;
+  const jenis = $("#ks-fjenis").value;
+  const cari = $("#ks-cari").value.trim().toLowerCase();
+  const list = d.transaksi.filter(
+    (t) =>
+      (!bln || (t.tanggal || "").startsWith(bln)) &&
+      (!jenis || (jenis === "masuk" ? t.nominal > 0 : t.nominal < 0)) &&
+      (!cari || `${t.keterangan} ${t.status} ${t.outlet}`.toLowerCase().includes(cari))
+  );
+  const masuk = list.filter((t) => t.nominal > 0).reduce((a, t) => a + t.nominal, 0);
+  const keluar = list.filter((t) => t.nominal < 0).reduce((a, t) => a + t.nominal, 0);
+  const rk = $("#ks-ringkas");
+  rk.classList.remove("hidden");
+  rk.innerHTML = `<b>${list.length}</b> transaksi · masuk <b class="pos">${ksRp(masuk, true)}</b> · keluar <b class="neg">${ksRp(keluar)}</b> ·
+    selisih <b>${ksRp(masuk + keluar, true)}</b>`;
+  if (!list.length) {
+    $("#ks-table").innerHTML = '<p class="hint" style="padding:12px;margin:0">Tidak ada transaksi yang cocok.</p>';
+    return;
+  }
+  const rows = list
+    .map(
+      (t) => `<tr class="${KS_SOROT === t.row ? "ks-baru" : ""}" data-row="${t.row}">
+        <td class="ks-tgl">${escapeHtml(t.tanggalTeks || "-")}</td>
+        <td class="ks-ket">${escapeHtml(t.keterangan || "-")}</td>
+        <td>${escapeHtml(t.outlet)}</td>
+        <td class="num pos">${t.nominal > 0 ? ksRp(t.nominal) : ""}</td>
+        <td class="num neg">${t.nominal < 0 ? ksRp(t.nominal) : ""}</td>
+        <td class="num ${t.saldoSetelah < 0 ? "neg" : ""}">${ksRp(t.saldoSetelah)}</td>
+        <td class="ks-status">${t.status ? `<span class="ks-tag">${escapeHtml(t.status)}</span>` : ""}</td>
+      </tr>`
+    )
+    .join("");
+  $("#ks-table").innerHTML = `<table id="ks-grid"><thead><tr>
+      <th>Tanggal</th><th>Keterangan</th><th>Outlet</th><th class="num">Masuk</th><th class="num">Keluar</th>
+      <th class="num">Saldo</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+async function ksPost(path, body) {
+  const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (res.status === 401) { window.location = "/login"; throw new Error("Sesi berakhir, silakan login ulang."); }
+  const data = await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }));
+  if (!res.ok || data.ok === false) {
+    const e = new Error(data.error || `HTTP ${res.status}`);
+    e.data = data.data || null;
+    throw e;
+  }
+  return data;
+}
+
+async function ksSimpan() {
+  const out = $("#ks-result");
+  if (!KS) return;
+  const nominal = ksNominal();
+  const ket = $("#ks-ket").value.trim();
+  if (!$("#ks-tanggal").value) return showLog(out, "✘ Isi tanggal transaksi.", true);
+  if (!nominal) return showLog(out, "✘ Isi nominal, mis. 3.500.000", true);
+  if (!ket) return showLog(out, "✘ Isi keterangan transaksi.", true);
+  const btn = $("#btn-ks-simpan");
+  btn.disabled = true;
+  btn.textContent = "Menyimpan…";
+  KS_BUSY = true;
+  try {
+    const r = await ksPost("/api/kassewa/simpan", {
+      tanggal: $("#ks-tanggal").value,
+      jenis: ksJenis(),
+      outlet: $("#ks-outlet").value,
+      nominal,
+      keterangan: ket,
+      token: KS.spreadsheet.id,
+    });
+    KS = r.data;
+    KS_SOROT = r.tersimpan.row;
+    ksRender();
+    const t = r.tersimpan;
+    showLog(out, `✔ Tersimpan di sheet KAS SEWA GEDUNG baris ${t.row}: ${t.tanggalTeks} · ${t.keterangan} · ${ksRp(t.nominal, true)} (${t.outlet}). Saldo sekarang ${ksRp(t.saldoSetelah)}.`);
+    $("#ks-batal-box").innerHTML = `<button id="btn-ks-batal" class="btn-ghost" data-row="${t.row}" data-kunci="${t.kunci}">↶ Batalkan transaksi ini</button>`;
+    $("#ks-nominal").value = "";
+    $("#ks-ket").value = "";
+    ksPreview();
+    const tr = document.querySelector(`#ks-grid tr[data-row="${t.row}"]`);
+    if (tr) setTimeout(() => tr.classList.remove("ks-baru"), 4000);
+  } catch (e) {
+    if (e.data) { KS = e.data; ksRender(); }
+    showLog(out, "✘ " + e.message, true);
+  } finally {
+    KS_BUSY = false;
+    btn.disabled = false;
+    btn.textContent = "Simpan transaksi";
+  }
+}
+
+async function ksBatal(btn) {
+  if (!KS || KS_BUSY) return;
+  if (!window.confirm("Batalkan transaksi yang baru disimpan? Barisnya akan dikosongkan lagi di sheet.")) return;
+  const out = $("#ks-result");
+  btn.disabled = true;
+  KS_BUSY = true;
+  try {
+    const r = await ksPost("/api/kassewa/batalkan", { row: Number(btn.dataset.row), kunci: btn.dataset.kunci, token: KS.spreadsheet.id });
+    KS = r.data;
+    KS_SOROT = null;
+    ksRender();
+    $("#ks-batal-box").innerHTML = "";
+    showLog(out, `↶ Transaksi "${r.dibatalkan.keterangan}" (${ksRp(r.dibatalkan.nominal, true)}) dibatalkan — baris ${r.dibatalkan.row} dikosongkan. Saldo sekarang ${ksRp(KS.saldo)}.`);
+  } catch (e) {
+    if (e.data) { KS = e.data; ksRender(); }
+    btn.disabled = false;
+    showLog(out, "✘ " + e.message, true);
+  } finally {
+    KS_BUSY = false;
+  }
+}
+
+$("#btn-ks-load").addEventListener("click", loadKasSewa);
+$("#btn-ks-simpan").addEventListener("click", ksSimpan);
+$("#ks-batal-box").addEventListener("click", (ev) => {
+  const b = ev.target.closest("#btn-ks-batal");
+  if (b) ksBatal(b);
+});
+$("#ks-nominal").addEventListener("input", (ev) => {
+  const d = ev.target.value.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+  ev.target.value = d ? Number(d).toLocaleString("id-ID") : "";
+  ksPreview();
+});
+$("#ks-outlet").addEventListener("change", ksPreview);
+$$('input[name="ks-jenis"]').forEach((r) => r.addEventListener("change", ksPreview));
+$("#ks-tanggal").addEventListener("change", ksRenderCepat);
+$("#ks-cepat").addEventListener("click", (ev) => {
+  const c = ev.target.closest(".ks-chip");
+  if (!c) return;
+  $("#ks-ket").value = c.dataset.ket;
+  const r = document.querySelector(`input[name="ks-jenis"][value="${c.dataset.jenis}"]`);
+  if (r) r.checked = true;
+  ksPreview();
+  $("#ks-nominal").focus();
+});
+["#ks-bulan", "#ks-fjenis"].forEach((s) => $(s).addEventListener("change", ksRenderRiwayat));
+$("#ks-cari").addEventListener("input", ksRenderRiwayat);
 
 // ================= Init =================
 {

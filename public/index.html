@@ -34,6 +34,7 @@
       <button class="tab" data-tab="daftarbiaya">Daftar Biaya Baru</button>
       <button class="tab" data-tab="kas">Input Kas</button>
       <button class="tab" data-tab="setoran">Setoran Kas</button>
+      <button class="tab" data-tab="kassewa">Kas Sewa Gedung</button>
       <button class="tab" data-tab="deposit">Deposit Pelanggan</button>
       <button class="tab" data-tab="transaksi">Upload File</button>
       <button class="tab" data-tab="pengaturan">Pengaturan</button>
@@ -648,6 +649,72 @@
         <div id="dep-preview" class="hidden"></div>
         <div id="dep-result" class="result-log hidden"></div>
         <div id="dep-error" class="error hidden"></div>
+      </div>
+    </section>
+
+    <!-- ============ TAB KAS SEWA GEDUNG ============ -->
+    <section id="tab-kassewa" class="panel">
+      <div class="card">
+        <h2>Kas Sewa Gedung</h2>
+        <p class="hint">Data dari sheet <b>KAS SEWA GEDUNG</b> pada spreadsheet CASHFLOW bulan ini. Nominal
+          <b>positif</b> = uang masuk (tabungan sewa gedung / pengembalian), <b>negatif</b> = uang keluar (pemakaian).
+          Saldo = jumlah seluruh transaksi.</p>
+        <div class="upload-row">
+          <button id="btn-ks-load" class="btn-ghost">↻ Muat ulang</button>
+          <a id="ks-open" class="btn-ghost hidden" target="_blank" rel="noopener">Buka di Google Sheets ↗</a>
+          <span id="ks-meta" class="hint" style="margin:0"></span>
+        </div>
+        <div id="ks-warn"></div>
+        <div id="ks-saldo" class="ks-saldo"><p class="hint">Memuat…</p></div>
+      </div>
+
+      <div class="card">
+        <h3>Input transaksi</h3>
+        <div class="ks-jenis" role="radiogroup" aria-label="Jenis transaksi">
+          <label class="ks-pilih"><input type="radio" name="ks-jenis" value="masuk" checked /> <span>⬆ Masuk</span>
+            <small>tabungan / pengembalian</small></label>
+          <label class="ks-pilih"><input type="radio" name="ks-jenis" value="keluar" /> <span>⬇ Keluar</span>
+            <small>pemakaian</small></label>
+        </div>
+        <div class="upload-row">
+          <label class="hint" for="ks-tanggal" style="margin:0">Tanggal</label>
+          <input type="date" id="ks-tanggal" style="max-width:170px" />
+          <label class="hint" for="ks-outlet" style="margin:0">Outlet</label>
+          <select id="ks-outlet" style="max-width:150px">
+            <option value="MAUMBI">MAUMBI</option>
+            <option value="PERKAMIL">PERKAMIL</option>
+          </select>
+          <label class="hint" for="ks-nominal" style="margin:0">Nominal (Rp)</label>
+          <input type="text" id="ks-nominal" inputmode="numeric" autocomplete="off" placeholder="mis. 3.500.000" style="max-width:170px" />
+        </div>
+        <div class="db-field">
+          <label for="ks-ket">Keterangan</label>
+          <input type="text" id="ks-ket" list="dl-ks-ket" maxlength="200" autocomplete="off" placeholder="mis. Tabungan Sewa Gedung Nov 2026" />
+          <datalist id="dl-ks-ket"></datalist>
+        </div>
+        <div id="ks-cepat" class="ks-cepat"></div>
+        <div id="ks-preview" class="ks-preview"></div>
+        <button id="btn-ks-simpan" class="btn-primary">Simpan transaksi</button>
+        <div id="ks-result" class="result-log hidden"></div>
+        <div id="ks-batal-box"></div>
+      </div>
+
+      <div class="card">
+        <h3>Riwayat pergerakan kas</h3>
+        <div class="upload-row">
+          <label class="hint" for="ks-bulan" style="margin:0">Bulan</label>
+          <select id="ks-bulan" style="max-width:190px"><option value="">Semua bulan</option></select>
+          <label class="hint" for="ks-fjenis" style="margin:0">Jenis</label>
+          <select id="ks-fjenis" style="max-width:140px">
+            <option value="">Semua</option>
+            <option value="masuk">Masuk</option>
+            <option value="keluar">Keluar</option>
+          </select>
+          <label class="hint" for="ks-cari" style="margin:0">Cari</label>
+          <input type="text" id="ks-cari" placeholder="keterangan…" style="max-width:220px" />
+        </div>
+        <div id="ks-ringkas" class="last-sync hidden"></div>
+        <div id="ks-table" class="table-wrap"></div>
       </div>
     </section>
 

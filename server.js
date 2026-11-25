@@ -18,6 +18,7 @@ const qris = require("./src/qris");
 const qrisbank = require("./src/qrisbank");
 const monbiaya = require("./src/monbiaya");
 const proyeksi = require("./src/proyeksi");
+const kassewa = require("./src/kassewa");
 const proyeksiupload = require("./src/proyeksiupload");
 const moninput = require("./src/moninput");
 const riwayat = require("./src/riwayat");
@@ -287,6 +288,37 @@ app.post("/api/qrisbank/analyze", upload.array("files", 10), wrap(async (req, re
 app.post("/api/qrisbank/submit", wrap(async (req, res) => {
   res.json(await qrisbank.submit((req.body || {}).entries));
 }));
+
+// ---------- Kas Sewa Gedung (sheet KAS SEWA GEDUNG, CASHFLOW bulan berjalan) ----------
+
+const ksErr = (res, err) => {
+  if (!err.status) console.error(err);
+  res.status(err.status || 500).json({ ok: false, error: err.message || String(err), data: err.data || null });
+};
+
+app.get("/api/kassewa", async (req, res) => {
+  try {
+    res.json(await kassewa.load());
+  } catch (err) {
+    ksErr(res, err);
+  }
+});
+
+app.post("/api/kassewa/simpan", async (req, res) => {
+  try {
+    res.json(await kassewa.simpan(req.body || {}));
+  } catch (err) {
+    ksErr(res, err);
+  }
+});
+
+app.post("/api/kassewa/batalkan", async (req, res) => {
+  try {
+    res.json(await kassewa.batalkan(req.body || {}));
+  } catch (err) {
+    ksErr(res, err);
+  }
+});
 
 // ---------- Proyeksi Biaya (sheet PROYEKSI BIAYA, CASHFLOW bulan berjalan) ----------
 

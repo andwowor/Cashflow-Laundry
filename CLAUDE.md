@@ -104,6 +104,15 @@ yang meniru kondisi Mac (logo lokal + lock berubah), pakai `APP_REPO_DIR`.
   aturan hasil upload identik dengan aslinya. KETERANGAN ASLI di sheet tetap teks kasir. Nota perlu dicek upload
   terakhir + baris mentahnya disimpan di `data/transaksi_perlu_dicek.json` (per NO NOTA) agar bisa dihitung ulang dan
   ditulis ulang ke TRANSAKSI HARIAN begitu diklarifikasi. Aturan ini belum dipakai Dashboard Internal (Kode.gs).
+- **Kas Sewa Gedung** (`src/kassewa.js`, `/api/kassewa`, `/api/kassewa/{simpan,batalkan}`): sheet KAS SEWA GEDUNG di
+  CASHFLOW bulan berjalan (tiap bulan membawa seluruh riwayat sejak Okt 2025). Kolom: A MAUMBI / B PERKAMIL = nominal
+  bertanda (+ masuk: tabungan/pengembalian, − keluar), C PERIODE (serial tanggal, validasi tanggal), D TOTAL
+  `=IFERROR(A+B;"")` sudah terpasang s/d baris 1002, E KETERANGAN, F status bebas ("Sudah dikembalikan"), G `=D` di
+  sebagian baris berstatus. Baris 2: D2 `=SUM(D3:D100)` = saldo; A2/B2/G2 rentangnya tidak lengkap. Dashboard menghitung
+  saldo dari SEMUA baris dan memperingatkan bila transaksi melewati rentang D2. Kolom A/B tidak konsisten per outlet
+  (tabungan PERKAMIL sering dicatat di A) — jangan tampilkan saldo per outlet. Input menulis RAW (nominal bertanda,
+  serial tanggal, keterangan) di baris setelah transaksi terakhir (dicari ulang tiap simpan; rumus D disalin bila
+  kosong). "Batalkan" hanya mengosongkan A/B/C/E baris yang isinya masih persis sama (kunci hash).
 - Repo ini **publik**. Jangan menambah ID file/folder Drive baru, data pribadi, atau rahasia ke repo.
 - **Proyeksi Biaya** (`src/proyeksi.js`, `/api/proyeksi`, `/api/proyeksi/simpan`): menampilkan seluruh sheet
   PROYEKSI BIAYA (CASHFLOW bulan berjalan) lengkap dengan sel gabungan, KECUALI kolom berjudul LOKASI & KET
