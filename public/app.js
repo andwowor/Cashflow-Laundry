@@ -4365,7 +4365,8 @@ function gjRender() {
     }</div>`;
 
   $("#gj-status").innerHTML = gjTabelStatusHtml(d, "gj-grid-status");
-  $("#gj-catatan").innerHTML = (d.catatan || []).map((c) => `<div class="th-notice th-err">⚠️ <div>${escapeHtml(c)}</div></div>`).join("");
+  $("#gj-catatan").innerHTML = (d.info || []).map((c) => `<div class="th-notice">✅ <div>${escapeHtml(c)}</div></div>`).join("") +
+    (d.catatan || []).map((c) => `<div class="th-notice th-err">⚠️ <div>${escapeHtml(c)}</div></div>`).join("");
 
   // Kartu per pegawai: yang dibayar dulu, lalu yang tidak ada gaji bulan ini.
   const urut = d.pegawai.filter((p) => p.aktif).concat(d.pegawai.filter((p) => !p.aktif));
@@ -4457,17 +4458,33 @@ function gjKartuHtml(p, opsi) {
   let statusForm = "";
   if (o.depan && p.status) {
     const st = p.status;
+    const od = st.olehDashboard;
     const badge = st.aktif
-      ? `<span class="kb-tag hijau">${st.terdaftar ? "AKTIF" : "belum terdaftar di Dashboard Internal"}</span>`
+      ? st.terdaftar ? '<span class="kb-tag hijau">AKTIF</span>' : '<span class="kb-tag abu">belum terdaftar di Dashboard Internal</span>'
       : `<span class="kb-tag merah">NONAKTIF${st.berhenti ? " sejak " + escapeHtml(st.berhenti) : ""}</span>`;
-    statusHtml = `<div class="gjd-status">${badge}
-      <button type="button" class="gj-salin gjd-status-btn" data-baris="${p.baris}" data-aktif="${st.aktif ? "0" : "1"}">${st.aktif ? (o.statusBuka === p.baris ? "Tutup" : "Nonaktifkan") : "Aktifkan"}</button></div>`;
-    if (st.aktif && o.statusBuka === p.baris) {
-      statusForm = `<div class="gjd-status-form" data-baris="${p.baris}">
+    const ket = od && od.bulanIni
+      ? od.mode === "nol" ? ' <span class="gj-kecil">gaji pokok dinolkan dari dashboard</span>' : ` <span class="gj-kecil">${od.hariKerja} hari kerja dibayar</span>`
+      : "";
+    const bukaIni = o.statusBuka === p.baris;
+    statusHtml = `<div class="gjd-status">${badge}${ket}
+      <button type="button" class="gj-salin gjd-status-btn" data-baris="${p.baris}" data-aktif="${st.aktif ? "0" : "1"}">${st.aktif ? (bukaIni ? "Tutup" : "Nonaktifkan") : "Aktifkan"}</button></div>`;
+    if (st.terapkan) {
+      statusForm += `<div class="gjd-terapkan">⚠️ Di sheet PEGAWAI sudah NONAKTIF${st.terapkan.tanggal ? " sejak " + escapeHtml(st.berhenti) : ""}, tetapi gaji pokoknya
+        masih ${gjRp(p.gajiPokok)}. <button type="button" class="gj-salin gjd-terapkan-btn" data-baris="${p.baris}">${bukaIni ? "Tutup" : "Terapkan aturan berhenti"}</button></div>`;
+    }
+    if ((st.aktif || st.terapkan) && bukaIni) {
+      const terapkan = !st.aktif;
+      const tglTetap = terapkan && st.terapkan.tanggal;
+      const maks = o.hariIni < o.akhirBulan ? o.hariIni : o.akhirBulan;
+      statusForm += `<div class="gjd-status-form" data-baris="${p.baris}" data-terapkan="${terapkan ? "1" : "0"}">
         <label class="kb-opsi">Tanggal berhenti
-          <input type="date" class="gjd-berhenti" value="${o.hariIni}" min="${o.bulanBerjalan}-01" max="${o.hariIni}" /></label>
+          <input type="date" class="gjd-berhenti" value="${tglTetap || maks}" max="${maks}"${tglTetap ? " disabled" : ""} /></label>
+        ${st.mulai ? `<div class="gj-kecil">Mulai kontrak (sheet PEGAWAI): <b>${escapeHtml(st.mulai.split("-").reverse().join("/"))}</b></div>`
+          : `<div class="gj-kecil">Tanggal kontrak aktif tidak ada di sheet PEGAWAI — pilih masa kerjanya:</div>
+             <label class="kb-opsi"><input type="radio" name="gjd-masa-${p.baris}" class="gjd-masa" value="lebih" /> Sudah bekerja 1 tahun atau lebih</label>
+             <label class="kb-opsi"><input type="radio" name="gjd-masa-${p.baris}" class="gjd-masa" value="kurang" /> Belum 1 tahun</label>`}
         <div class="gjd-status-pratinjau kb-pratinjau"></div>
-        <div class="upload-row" style="margin:4px 0 0"><button type="button" class="btn-primary gjd-status-simpan" data-baris="${p.baris}">Nonaktifkan pegawai</button></div>
+        <div class="upload-row" style="margin:4px 0 0"><button type="button" class="btn-primary gjd-status-simpan" data-baris="${p.baris}">${terapkan ? "Terapkan aturan berhenti" : "Nonaktifkan pegawai"}</button></div>
       </div>`;
     }
   }
@@ -4796,7 +4813,7 @@ function gjdRender() {
   $("#gjd-catatan").innerHTML = (d.catatan || []).map((c) => `<div class="th-notice th-err">⚠️ <div>${escapeHtml(c)}</div></div>`).join("");
   const urut = d.pegawai.filter((p) => p.aktif).concat(d.pegawai.filter((p) => !p.aktif));
   $("#gjd-pegawai").innerHTML = urut
-    .map((p) => gjKartuHtml(p, { depan: true, cicilBuka: GJD_CICIL, statusBuka: GJD_STATUS, hariIni: d.hariIni, bulanBerjalan: d.bulanBerjalan, kosong: "Tidak ada gaji bulan depan." }))
+    .map((p) => gjKartuHtml(p, { depan: true, cicilBuka: GJD_CICIL, statusBuka: GJD_STATUS, hariIni: d.hariIni, bulanBerjalan: d.bulanBerjalan, akhirBulan: gjdAkhirBulan(d.bulanBerjalan), kosong: "Tidak ada gaji bulan depan." }))
     .join("");
   $("#gjd-bank").innerHTML = (d.bankPilihan || []).map((b) => `<option value="${b}">${b === "MANDIRI" ? "Mandiri" : b}</option>`).join("");
   if (GJD_STATUS != null) gjdPratinjauStatus();
@@ -4811,20 +4828,56 @@ function gjdHariKerja(iso) {
   return n;
 }
 
+function gjdAkhirBulan(kunci) {
+  const [y, m] = String(kunci || "").split("-").map(Number);
+  if (!y || !m) return "";
+  return `${kunci}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, "0")}`;
+}
+
+// Masa kerja < 1 tahun? null = tanggal mulai tidak diketahui.
+function gjdKurangSetahun(mulai, berhenti) {
+  if (!mulai || !berhenti) return null;
+  const [y, m, d] = mulai.split("-").map(Number);
+  return berhenti < new Date(Date.UTC(y + 1, m - 1, d)).toISOString().slice(0, 10);
+}
+
+// Aturan nonaktif yang akan dipakai untuk form yang sedang terbuka.
+function gjdAturanStatus(form, p) {
+  const tgl = form.querySelector(".gjd-berhenti").value;
+  const sebelum = !!tgl && tgl < GJD.bulanBerjalan + "-01";
+  const pilih = form.querySelector(".gjd-masa:checked");
+  let kurang = gjdKurangSetahun(p.status.mulai, tgl);
+  if (kurang == null && pilih) kurang = pilih.value === "kurang";
+  const mode = !tgl ? null : sebelum || kurang ? "nol" : kurang === false ? "selisih" : null;
+  return { tgl, sebelum, kurang, mode, masaKerja: pilih ? pilih.value : null };
+}
+
 function gjdPratinjauStatus() {
   const form = document.querySelector(`.gjd-status-form[data-baris="${GJD_STATUS}"]`);
   const p = GJD && GJD.pegawai.find((x) => x.baris === GJD_STATUS);
   if (!form || !p) return;
-  const tgl = form.querySelector(".gjd-berhenti").value;
-  const hari = gjdHariKerja(tgl);
-  const dibayar = hari * GJD.tarifHarianBerhenti;
-  const selisih = Math.max(0, (p.gajiPokok || 0) - dibayar);
-  const potLama = p.potKetidakhadiran || 0;
-  form.querySelector(".gjd-status-pratinjau").innerHTML =
-    `Hari kerja s/d ${escapeHtml(tgl.split("-").reverse().join("/"))} (Minggu tidak dihitung): <b>${hari} hari</b> × ${gjRp(GJD.tarifHarianBerhenti)} = <b>${gjRp(dibayar)}</b>.<br>
+  const a = gjdAturanStatus(form, p);
+  const tglTeks = escapeHtml(a.tgl.split("-").reverse().join("/"));
+  const terapkan = form.dataset.terapkan === "1";
+  const akhir = terapkan ? "" : "<br>Status di sheet PEGAWAI menjadi NONAKTIF; ";
+  let html;
+  if (!a.tgl) html = "Pilih tanggal berhenti.";
+  else if (!a.mode) html = "Pilih masa kerja pegawai dulu.";
+  else if (a.mode === "nol") {
+    const alasan = a.sebelum ? "Berhenti sebelum bulan ini" : "Masa kerja <b>belum 1 tahun</b>";
+    html = `${alasan} → aturan selisih tidak berlaku, <b>gaji pokok langsung 0</b> (${gjRp(p.gajiPokok)} → Rp0).` +
+      `${akhir || "<br>"}${terapkan ? "M" : "m"}ulai bulan depan gaji pokoknya tetap 0.`;
+  } else {
+    const hari = gjdHariKerja(a.tgl);
+    const dibayar = hari * GJD.tarifHarianBerhenti;
+    const selisih = Math.max(0, (p.gajiPokok || 0) - dibayar);
+    const potLama = p.potKetidakhadiran || 0;
+    html = `Masa kerja sudah 1 tahun atau lebih. Hari kerja s/d ${tglTeks} (Minggu tidak dihitung): <b>${hari} hari</b> × ${gjRp(GJD.tarifHarianBerhenti)} = <b>${gjRp(dibayar)}</b>.<br>
      Gaji pokok ${gjRp(p.gajiPokok)} − ${gjRp(dibayar)} = <b>${gjRp(selisih)}</b> masuk ke potongan ketidakhadiran` +
-    (potLama ? ` (${gjRp(potLama)} + ${gjRp(selisih)} = <b>${gjRp(potLama + selisih)}</b>)` : "") +
-    `.<br>Status di sheet PEGAWAI menjadi NONAKTIF; mulai bulan depan gaji pokoknya otomatis 0.`;
+      (potLama ? ` (${gjRp(potLama)} + ${gjRp(selisih)} = <b>${gjRp(potLama + selisih)}</b>)` : "") +
+      `.${akhir || "<br>"}${terapkan ? "M" : "m"}ulai bulan depan gaji pokoknya otomatis 0.`;
+  }
+  form.querySelector(".gjd-status-pratinjau").innerHTML = html;
 }
 
 async function gjdSimpanStatus(baris, aktif) {
@@ -4832,23 +4885,34 @@ async function gjdSimpanStatus(baris, aktif) {
   const p = GJD.pegawai.find((x) => x.baris === baris);
   if (!p) return;
   let tanggal = null;
+  let masaKerja = null;
+  let terapkan = false;
   if (!aktif) {
     const form = document.querySelector(`.gjd-status-form[data-baris="${baris}"]`);
-    tanggal = form.querySelector(".gjd-berhenti").value;
-    if (!window.confirm(`Nonaktifkan ${p.nama} per ${tanggal.split("-").reverse().join("/")}?`)) return;
+    const a = gjdAturanStatus(form, p);
+    terapkan = form.dataset.terapkan === "1";
+    tanggal = a.tgl;
+    masaKerja = a.masaKerja;
+    if (!tanggal) return showLog(out, "✘ Pilih tanggal berhenti.", true);
+    if (!a.mode) return showLog(out, "✘ Pilih masa kerja pegawai (sudah 1 tahun atau belum).", true);
+    const tanya = terapkan ? `Terapkan aturan berhenti untuk ${p.nama}` : `Nonaktifkan ${p.nama} per ${tanggal.split("-").reverse().join("/")}`;
+    if (!window.confirm(`${tanya}?${a.mode === "nol" ? " Gaji pokoknya menjadi 0." : ""}`)) return;
   } else if (!window.confirm(`Aktifkan kembali ${p.nama}?`)) return;
   GJD_BUSY = true;
   try {
-    const r = await gjdPost("/api/gaji-depan/status", { baris, nama: p.nama, aktif, tanggal, token: GJD.spreadsheet.id });
+    const r = await gjdPost("/api/gaji-depan/status", { baris, nama: p.nama, aktif, tanggal, masaKerja, terapkan, token: GJD.spreadsheet.id });
     GJD = r.data;
     GJD_STATUS = null;
     gjdRender();
     const h = r.hasil;
     let msg = h.aktif
       ? `✔ ${h.nama} diaktifkan kembali${h.pegawaiDiubah ? " (sheet PEGAWAI: AKTIF)" : ""}.${h.dipulihkan.length ? " " + h.dipulihkan.join("; ") + "." : ""}`
-      : `✔ ${h.nama} dinonaktifkan per ${h.tanggalTeks}: ${h.hariKerja} hari kerja × ${gjRp(GJD.tarifHarianBerhenti)} = ${gjRp(h.dibayar)}; ` +
-        `potongan ketidakhadiran ${h.potLama ? gjRp(h.potLama) + " + " : ""}${gjRp(h.selisih)} = ${gjRp(h.potBaru || 0)}.` +
-        `${h.pegawaiDiubah ? " Sheet PEGAWAI: NONAKTIF." : ""} Bulan depan gaji pokoknya otomatis 0.`;
+      : h.mode === "nol"
+        ? `✔ ${h.nama} ${h.terapkan ? "— aturan berhenti diterapkan" : "dinonaktifkan"} per ${h.tanggalTeks}: ${h.sebelumBulan ? "berhenti sebelum bulan ini" : `masa kerja belum 1 tahun${h.mulaiTeks ? ` (kontrak mulai ${h.mulaiTeks})` : ""}`}, ` +
+          `gaji pokok ${gjRp(h.gajiPokok)} → Rp0.${h.pegawaiDiubah ? " Sheet PEGAWAI: NONAKTIF." : ""} Bulan depan tetap 0.`
+        : `✔ ${h.nama} ${h.terapkan ? "— aturan berhenti diterapkan" : "dinonaktifkan"} per ${h.tanggalTeks}: ${h.hariKerja} hari kerja × ${gjRp(GJD.tarifHarianBerhenti)} = ${gjRp(h.dibayar)}; ` +
+          `potongan ketidakhadiran ${h.potLama ? gjRp(h.potLama) + " + " : ""}${gjRp(h.selisih)} = ${gjRp(h.potBaru || 0)}.` +
+          `${h.pegawaiDiubah ? " Sheet PEGAWAI: NONAKTIF." : ""} Bulan depan gaji pokoknya otomatis 0.`;
     if (r.catatan && r.catatan.length) msg += "\n⚠ " + r.catatan.join("\n⚠ ");
     showLog(out, msg);
   } catch (e) {
@@ -4861,23 +4925,31 @@ async function gjdSimpanStatus(baris, aktif) {
 async function gjdTambahPegawai() {
   const out = $("#gjd-tambah-hasil");
   const nama = $("#gjd-nama").value.trim();
+  const panggilan = $("#gjd-panggilan").value.trim();
+  const outlet = $("#gjd-outlet").value;
   const bank = $("#gjd-bank").value;
   const rekening = $("#gjd-rek").value.trim();
   const gajiPokok = $("#gjd-gaji").value.replace(/\D/g, "");
   if (!nama) return showLog(out, "✘ Isi nama pegawai.", true);
   if (bank !== "CASH" && !rekening) return showLog(out, "✘ Isi nomor akun bank.", true);
   if (!gajiPokok) return showLog(out, "✘ Isi gaji pokok.", true);
+  if (!outlet) return showLog(out, "✘ Pilih outlet pegawai.", true);
   const btn = $("#btn-gjd-tambah");
   btn.disabled = true;
   GJD_BUSY = true;
   try {
-    const r = await gjdPost("/api/gaji-depan/pegawai", { nama, bank, rekening, gajiPokok: Number(gajiPokok), token: GJD && GJD.spreadsheet.id });
+    const r = await gjdPost("/api/gaji-depan/pegawai", { nama, panggilan, outlet, bank, rekening, gajiPokok: Number(gajiPokok), token: GJD && GJD.spreadsheet.id });
     GJD = r.data;
     gjdRender();
     const t = r.ditambah;
-    showLog(out, `✔ ${t.nama} ditambahkan di baris ${t.baris} (${t.bank}${t.rekening ? " " + t.rekening : ""}, gaji pokok ${gjRp(t.gajiPokok)}). ` +
-      `${t.rumusDiperpanjang ? `${t.rumusDiperpanjang} rumus TOTAL TRANSFER diperpanjang.` : ""}\n⚠ ` + r.catatan.join("\n⚠ "));
-    ["#gjd-nama", "#gjd-rek", "#gjd-gaji"].forEach((x) => ($(x).value = ""));
+    const baris = [`✔ ${t.nama} ditambahkan di baris ${t.baris} (${t.bank}${t.rekening ? " " + t.rekening : ""}, gaji pokok ${gjRp(t.gajiPokok)}).` +
+      `${t.rumusDiperpanjang ? ` ${t.rumusDiperpanjang} rumus TOTAL TRANSFER diperpanjang.` : ""}`];
+    (r.langkah || []).forEach((l) => baris.push(`${l.ok ? "✔" : "✘"} ${l.teks}`));
+    (r.catatan || []).forEach((c) => baris.push(`⚠ ${c}`));
+    showLog(out, baris.join("\n"), (r.langkah || []).some((l) => !l.ok));
+    ["#gjd-nama", "#gjd-panggilan", "#gjd-rek", "#gjd-gaji"].forEach((x) => ($(x).value = ""));
+    $("#gjd-outlet").value = "";
+    gjdKetBiaya();
     const kartu = document.querySelector(`#gjd-pegawai .gj-kartu[data-baris="${t.baris}"]`);
     if (kartu) kartu.classList.add("gjd-baru");
   } catch (e) {
@@ -5005,6 +5077,8 @@ $("#sub-gajibulandepan").addEventListener("click", async (ev) => {
     gjdRender();
     return;
   }
+  const tb = ev.target.closest(".gjd-terapkan-btn");
+  if (tb) { const n = Number(tb.dataset.baris); GJD_STATUS = GJD_STATUS === n ? null : n; gjdRender(); return; }
   const ss = ev.target.closest(".gjd-status-simpan");
   if (ss) return gjdSimpanStatus(Number(ss.dataset.baris), false);
   if (ev.target.closest("#btn-gjd-tambah")) return gjdTambahPegawai();
@@ -5016,9 +5090,17 @@ $("#sub-gajibulandepan").addEventListener("click", async (ev) => {
   }
 });
 $("#sub-gajibulandepan").addEventListener("change", (ev) => {
-  if (ev.target.matches(".gjd-berhenti")) gjdPratinjauStatus();
+  if (ev.target.matches(".gjd-berhenti, .gjd-masa")) gjdPratinjauStatus();
 });
+// Pratinjau 5 keterangan biaya yang akan ditambahkan ke DAFTAR BIAYA.
+function gjdKetBiaya() {
+  const pg = ($("#gjd-panggilan").value.trim() || $("#gjd-nama").value.trim()).replace(/\s+/g, " ");
+  $("#gjd-ket-biaya").innerHTML = pg
+    ? "Keterangan biaya baru: " + ["Gaji", "Kasbon Gaji", "Lembur", "THR", "Bonus Kinerja"].map((x) => `<b>${escapeHtml(x + " " + pg)}</b>`).join(", ")
+    : "";
+}
 $("#sub-gajibulandepan").addEventListener("input", (ev) => {
+  if (ev.target.matches("#gjd-nama, #gjd-panggilan")) gjdKetBiaya();
   if (ev.target.matches(".gjd-berhenti")) gjdPratinjauStatus();
   if (ev.target.matches(".gjd-kb-nominal, #gjd-thr-input, #gjd-gaji")) {
     const dgt = ev.target.value.replace(/\D/g, "").replace(/^0+(?=\d)/, "");

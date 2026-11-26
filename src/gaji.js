@@ -22,6 +22,7 @@
 
 const cfg = require("./config");
 const { resolveCashflowSpreadsheetId, readRange, getSheetTitles } = require("./sheets");
+const pegawaibaru = require("./pegawaibaru");
 
 const SALDO_MINIMUM = 100000;
 const BANK = ["BCA", "BRI", "BNI", "MANDIRI"];
@@ -163,6 +164,20 @@ async function load() {
   for (const s of ["GAJI BULAN INI", "KONTROL KAS"]) {
     if (!meta.sheets.includes(s)) throw httpError(404, `Sheet "${s}" tidak ditemukan di spreadsheet ${meta.title}.`);
   }
+  // Pegawai baru di GAJI BULAN DEPAN bulan lalu → tambahkan ke GAJI BULAN INI + perpanjang rentang IMPORTRANGE.
+  const catatan = [];
+  const info = [];
+  try {
+    const s = await pegawaibaru.sinkronGajiBulanIni(id);
+    s.catatan.forEach((c) => catatan.push(c));
+    if (s.ditambah.length) {
+      info.push(`Pegawai baru dari GAJI BULAN DEPAN bulan lalu ditambahkan ke sheet GAJI BULAN INI: ${s.ditambah.join(", ")} (rumus & rentang IMPORTRANGE ikut diperpanjang).`);
+    } else if (s.rentang && !s.dariCache) {
+      info.push(`${s.rentang} rentang IMPORTRANGE/TOTAL TRANSFER di sheet GAJI BULAN INI diperpanjang agar mencakup semua pegawai bulan lalu.`);
+    }
+  } catch (e) {
+    catatan.push(`Pengecekan pegawai baru dari bulan lalu gagal: ${e.message}`);
+  }
   const adaKebutuhan = meta.sheets.includes("KEBUTUHAN AWAL BULAN");
   const [gaji, gajiTampil, kontrol, kebutuhan] = await Promise.all([
     readRange(id, "'GAJI BULAN INI'!A1:R60", "UNFORMATTED_VALUE"),
@@ -172,7 +187,6 @@ async function load() {
   ]);
 
   const pegawai = susunPegawai(gaji, gajiTampil);
-  const catatan = [];
 
   // Return investasi bulan ini (KEBUTUHAN AWAL BULAN › Return Investasi, MAUMBI + PERKAMIL).
   const ret = bacaReturnInvestasi(kebutuhan);
@@ -190,6 +204,7 @@ async function load() {
     returnInvestasi: ret.nilai,
     saldoMinimum: SALDO_MINIMUM,
     catatan: catatan.concat(st.catatan),
+    info,
     updateHarian: sync ? sync.display : null,
     dimuat: cfg.formatBusinessDateTime(new Date()),
   };

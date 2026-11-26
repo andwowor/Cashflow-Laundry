@@ -786,10 +786,24 @@
         <h3>Rincian gaji per pegawai</h3>
         <p class="hint">Angka bergaris putus-putus (<b>gaji pokok</b>, tunjangan lain, potongan ketidakhadiran, potongan lain-lain)
           bisa diklik untuk diubah. Tombol <b>Nonaktifkan</b> menghitung gaji hari kerja bulan ini (Minggu tidak dihitung) ×
-          Rp50.000; selisihnya dengan gaji pokok masuk ke potongan ketidakhadiran, dan bulan depan gaji pokoknya otomatis 0.</p>
+          Rp50.000; selisihnya dengan gaji pokok masuk ke potongan ketidakhadiran, dan bulan depan gaji pokoknya otomatis 0.
+          Pegawai yang <b>belum bekerja 1 tahun</b> (dihitung dari tanggal kontrak aktif di Dashboard Internal) atau berhenti
+          sebelum bulan ini: gaji pokoknya langsung 0.</p>
         <details id="gjd-tambah" class="gjd-tambah">
           <summary><b>➕ Tambah pegawai baru</b></summary>
           <div class="db-field"><label for="gjd-nama">Nama pegawai</label><input type="text" id="gjd-nama" maxlength="80" autocomplete="off" /></div>
+          <div class="db-field"><label for="gjd-panggilan">Nama panggilan <span class="hint" style="margin:0">(untuk keterangan biaya; kosongkan = nama lengkap)</span></label>
+            <input type="text" id="gjd-panggilan" maxlength="60" autocomplete="off" placeholder="mis. Budi" /></div>
+          <div id="gjd-ket-biaya" class="hint"></div>
+          <div class="upload-row">
+            <label class="hint" for="gjd-outlet" style="margin:0">Outlet</label>
+            <select id="gjd-outlet" style="max-width:220px">
+              <option value="">— pilih —</option>
+              <option value="MAUMBI">MAUMBI</option>
+              <option value="PERKAMIL">PERKAMIL</option>
+              <option value="LAINNYA">Lainnya (tidak masuk proyeksi outlet)</option>
+            </select>
+          </div>
           <div class="upload-row">
             <label class="hint" for="gjd-bank" style="margin:0">Gaji bank</label>
             <select id="gjd-bank" style="max-width:140px"></select>
@@ -798,6 +812,9 @@
             <label class="hint" for="gjd-gaji" style="margin:0">Gaji pokok (Rp)</label>
             <input type="text" id="gjd-gaji" inputmode="numeric" autocomplete="off" placeholder="mis. 1.500.000" style="max-width:160px" />
           </div>
+          <p class="hint">Otomatis ikut: baris baru di sheet <b>KASBON</b> (+ potongan kasbonnya), rumus gaji di <b>PROYEKSI BIAYA</b> /
+            KEBUTUHAN AWAL BULAN DEPAN sesuai outlet, 5 keterangan biaya di <b>DAFTAR BIAYA</b> (BIAYA &amp; KAS LAUNDRY), dan bulan
+            depan ditambahkan ke GAJI BULAN INI.</p>
           <button type="button" id="btn-gjd-tambah" class="btn-primary">Tambah ke GAJI BULAN DEPAN</button>
           <div id="gjd-tambah-hasil" class="result-log hidden"></div>
         </details>

@@ -350,7 +350,8 @@ app.post("/api/gaji-depan/thr", async (req, res) => {
   }
 });
 
-// THR otomatis di GAJI BULAN DEPAN: dicek 2 menit setelah server hidup lalu tiap 6 jam (hanya mengisi sel kosong).
+// THR otomatis di GAJI BULAN DEPAN: dicek 2 menit setelah server hidup lalu tiap 6 jam (hanya mengisi sel kosong);
+// sekaligus gaji pokok 0 untuk pegawai berhenti dan sinkron pegawai baru bulan lalu ke GAJI BULAN INI.
 function jalankanThrOtomatis() {
   gajidepan
     .isiThrOtomatis()
@@ -361,6 +362,12 @@ function jalankanThrOtomatis() {
       (r.dinolkan || []).forEach((t) => console.log(`[Gaji bulan depan] ${t}`));
     })
     .catch((e) => console.error("[THR otomatis] gagal:", e.message));
+  // Pegawai baru bulan lalu → GAJI BULAN INI (juga dicek saat menu Gaji Bulan Ini dibuka).
+  require("./src/sheets")
+    .resolveCashflowSpreadsheetId()
+    .then(({ id }) => require("./src/pegawaibaru").sinkronGajiBulanIni(id, { paksa: true }))
+    .then((s) => { if (s.ditambah.length) console.log(`[Gaji bulan ini] pegawai baru ditambahkan: ${s.ditambah.join(", ")}`); })
+    .catch((e) => console.error("[Gaji bulan ini] sinkron gagal:", e.message));
 }
 if (!process.env.MATIKAN_JADWAL_THR) {
   setTimeout(jalankanThrOtomatis, 2 * 60 * 1000).unref();

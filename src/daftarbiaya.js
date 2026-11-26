@@ -155,4 +155,89 @@ async function submit(payload) {
   return { ok: true, sheet, row: newRow, keterangan, posBiaya, posAplikasi, itemAplikasi, kode, kodeStatus };
 }
 
-module.exports = { options, submit };
+// ---------- Keterangan biaya untuk pegawai baru (Gaji & Kasbon › Tambah pegawai) ----------
+// Permintaan Andre 26 Nov 2026: tiap pegawai baru otomatis mendapat 5 keterangan biaya, mis. pegawai dengan nama
+// panggilan "Budi": Gaji Budi, Kasbon Gaji Budi, Lembur Budi, THR Budi, Bonus Kinerja Budi. POS BIAYA / POS BIAYA
+// APLIKASI / ITEM BIAYA mengikuti isian yang PALING BANYAK dipakai keterangan serupa di sheet (cadangan di bawah
+// bila belum ada contoh); KODE TRANSAKSI mengikuti baris contohnya (rumus disalin, angka disalin, kosong dibiarkan).
+const PREFIKS_PEGAWAI = [
+  ["Gaji", ["Gaji Karyawan", "", ""]],
+  ["Kasbon Gaji", ["Gaji Karyawan", "", ""]],
+  ["Lembur", ["Lembur Karyawan", "Biaya Gaji", "Pegawai tetap"]],
+  ["THR", ["THR", "Biaya Gaji", "Pegawai tetap"]],
+  ["Bonus Kinerja", ["Bonus", "Biaya Gaji", "Pegawai tetap"]],
+];
+const keteranganPegawai = (panggilan) => PREFIKS_PEGAWAI.map(([p]) => `${p} ${norm(panggilan).replace(/\s+/g, " ")}`);
+
+/** Contoh isian per prefiks dari baris yang sudah ada. grid = C1:G (FORMULA). */
+function contohPegawai(grid, prefiks, cadangan) {
+  const awal = `${prefiks} `.toUpperCase();
+  const hitung = new Map();
+  for (let i = 1; i < grid.length; i++) {
+    const r = grid[i] || [];
+    const ket = norm(r[0]);
+    if (!ket.toUpperCase().startsWith(awal) || ket.length <= awal.length) continue;
+    const isi = [norm(r[1]), norm(r[2]), norm(r[3])];
+    const k = isi.join("\u0001");
+    const x = hitung.get(k) || { isi, n: 0, baris: 0, g: "" };
+    x.n++;
+    x.baris = i + 1;
+    x.g = norm(r[4]);
+    hitung.set(k, x);
+  }
+  let pilih = null;
+  for (const x of hitung.values()) if (!pilih || x.n > pilih.n || (x.n === pilih.n && x.baris > pilih.baris)) pilih = x;
+  return pilih || { isi: cadangan, n: 0, baris: 0, g: "" };
+}
+
+/** Tambahkan keterangan biaya pegawai baru yang belum ada. Mengembalikan { ditambah, sudahAda, sheet }. */
+async function tambahKeteranganPegawai(panggilan) {
+  const nama = norm(panggilan).replace(/\s+/g, " ");
+  if (!nama) throw new Error("Nama panggilan kosong.");
+  const id = cfg.BIAYA_KAS_SPREADSHEET_ID;
+  const sheet = await resolveSheetTitle();
+  const grid = await readRange(id, `'${sheet}'!C1:G`, "FORMULA");
+  const ada = new Set(grid.slice(1).map((r) => norm((r || [])[0]).toUpperCase()));
+  let lastRow = 1;
+  for (let i = 1; i < grid.length; i++) if (norm((grid[i] || [])[0])) lastRow = i + 1;
+  // Baris terakhir yang KODE TRANSAKSI-nya rumus (cadangan bila contoh belum ada).
+  let barisRumusG = 0;
+  for (let i = 1; i < grid.length; i++) if (/^=/.test(norm((grid[i] || [])[4]))) barisRumusG = i + 1;
+
+  const ditambah = [];
+  const sudahAda = [];
+  const tulis = [];
+  const salinG = [];
+  const nilaiG = [];
+  let baris = lastRow;
+  for (const [prefiks, cadangan] of PREFIKS_PEGAWAI) {
+    const ket = `${prefiks} ${nama}`;
+    if (ada.has(ket.toUpperCase())) { sudahAda.push(ket); continue; }
+    const c = contohPegawai(grid, prefiks, cadangan);
+    baris++;
+    tulis.push({ range: `'${sheet}'!C${baris}:F${baris}`, values: [[ket, ...c.isi]] });
+    if (c.baris && /^=/.test(c.g)) salinG.push([c.baris, baris]);
+    else if (c.baris && c.g) nilaiG.push({ range: `'${sheet}'!G${baris}`, values: [[c.g]] });
+    else if (!c.baris && barisRumusG) salinG.push([barisRumusG, baris]);
+    ditambah.push(ket);
+  }
+  if (!tulis.length) return { ditambah, sudahAda, sheet };
+  await require("./google").sheetsClient().spreadsheets.values.batchUpdate({
+    spreadsheetId: id,
+    requestBody: { valueInputOption: "RAW", data: tulis.concat(nilaiG) },
+  });
+  if (salinG.length) {
+    const sheetId = await getSheetId(id, sheet);
+    await batchUpdateRequests(id, salinG.map(([dari, ke]) => ({
+      copyPaste: {
+        source: { sheetId, startRowIndex: dari - 1, endRowIndex: dari, startColumnIndex: KODE_COL_IDX, endColumnIndex: KODE_COL_IDX + 1 },
+        destination: { sheetId, startRowIndex: ke - 1, endRowIndex: ke, startColumnIndex: KODE_COL_IDX, endColumnIndex: KODE_COL_IDX + 1 },
+        pasteType: "PASTE_FORMULA",
+        pasteOrientation: "NORMAL",
+      },
+    })));
+  }
+  return { ditambah, sudahAda, sheet, baris: [lastRow + 1, baris] };
+}
+
+module.exports = { options, submit, tambahKeteranganPegawai, keteranganPegawai, PREFIKS_PEGAWAI };

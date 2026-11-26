@@ -28,12 +28,20 @@
 // sudah berisi potongan absensi dari Dashboard Internal); STATUS & TANGGAL BERHENTI di sheet PEGAWAI diubah; di
 // spreadsheet bulan-bulan berikutnya GAJI POKOK pegawai itu otomatis dibuat 0. Catatan per nama di
 // data/config.json › pegawaiNonaktif (berisi ID spreadsheet & bulan) supaya "Aktifkan" bisa membatalkannya.
+// Tambahan aturan Andre (26 Nov 2026): masa kerja BELUM 1 tahun (TANGGAL KONTRAK AKTIF di sheet PEGAWAI s/d tanggal
+// berhenti) → aturan selisih tidak berlaku, GAJI POKOK langsung 0. Berhenti sebelum bulan spreadsheet → juga langsung 0.
+// Pegawai yang dinonaktifkan di luar dashboard (STATUS NONAKTIF di sheet PEGAWAI): berhenti sebelum bulan spreadsheet →
+// GAJI POKOK otomatis 0 sekali per spreadsheet (config gajiNolOtomatis); berhenti di bulan ini → tombol "Terapkan
+// aturan berhenti" di kartunya. Pegawai baru: lihat juga src/pegawaibaru.js (KASBON, PROYEKSI BIAYA) dan
+// src/daftarbiaya.js (5 keterangan biaya di BIAYA & KAS LAUNDRY).
 
 const cfg = require("./config");
 const { resolveCashflowSpreadsheetId, readRange, getSheetTitles, getSheetId, batchWrite, batchUpdateRequests } = require("./sheets");
 const { sheetsClient } = require("./google");
 const gaji = require("./gaji");
 const kasbon = require("./kasbon");
+const pegawaibaru = require("./pegawaibaru");
+const daftarbiaya = require("./daftarbiaya");
 
 const SHEET = "GAJI BULAN DEPAN";
 const NOMINAL_THR_BAWAAN = 500000;
@@ -54,6 +62,7 @@ const EDITABLE = {
 };
 const LABEL = { gajiPokok: "Gaji pokok", tunjanganLain: "Tunjangan lain", potKetidakhadiran: "Potongan ketidakhadiran", potLain: "Potongan lain-lain" };
 const BANK_BOLEH = ["BCA", "BRI", "BNI", "MANDIRI", "BSI", "CASH"];
+const OUTLET_BOLEH = ["MAUMBI", "PERKAMIL", "LAINNYA"];
 const MAX_NOMINAL = 1e10;
 
 const { httpError, angka, norm } = gaji;
@@ -106,6 +115,35 @@ function isoKeTeks(iso) {
   const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
   return m ? `${+m[3]} ${BULAN[+m[2] - 1]} ${m[1]}` : "";
 }
+/** "09/11/2025", "19/09/2026 12:00:00" atau "2026-09-19" → "yyyy-mm-dd" ("" bila tidak terbaca). */
+function tglKeIso(v) {
+  const s = teks(v);
+  let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+  m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : "";
+}
+/** true bila berhenti sebelum genap 1 tahun sejak mulai kontrak; null bila tanggal mulai tidak diketahui. */
+function kurangSetahun(mulaiIso, berhentiIso) {
+  if (!mulaiIso || !berhentiIso) return null;
+  const [y, m, d] = mulaiIso.split("-").map(Number);
+  return berhentiIso < new Date(Date.UTC(y + 1, m - 1, d)).toISOString().slice(0, 10);
+}
+function akhirBulanIso(kunci) {
+  const [y, m] = kunci.split("-").map(Number);
+  return `${kunci}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, "0")}`;
+}
+function catatanNolOtomatis() {
+  const c = cfg.getStoredConfig();
+  return c.gajiNolOtomatis && typeof c.gajiNolOtomatis === "object" ? c.gajiNolOtomatis : {};
+}
+function simpanNolOtomatis(obj) {
+  const c = cfg.getStoredConfig();
+  const kunci = Object.keys(obj);
+  if (kunci.length > 6) kunci.slice(0, kunci.length - 6).forEach((k) => delete obj[k]);
+  c.gajiNolOtomatis = obj;
+  cfg.saveStoredConfig(c);
+}
 
 function nominalThr() {
   const n = Number(cfg.getStoredConfig().thrNominal);
@@ -121,24 +159,31 @@ function simpanCatatanNonaktif(obj) {
   cfg.saveStoredConfig(c);
 }
 
-// ---------- sheet PEGAWAI (Dashboard Internal) — hanya NAMA, STATUS, TANGGAL BERHENTI, AGAMA ----------
+// ---------- sheet PEGAWAI (Dashboard Internal) — hanya NAMA, OUTLET, TANGGAL KONTRAK AKTIF, STATUS,
+// TANGGAL BERHENTI, AGAMA (sheet itu juga berisi KTP & password: kolom lain TIDAK dibaca) ----------
 
 const performaId = () => require("./transaksiharian").spreadsheetId();
 
 async function bacaPegawaiInternal() {
   const id = performaId();
   const judul = ((await readRange(id, "'PEGAWAI'!A1:Z1", "FORMATTED_VALUE"))[0] || []).map(norm);
-  const ix = { nama: judul.indexOf("NAMA"), status: judul.indexOf("STATUS"), agama: judul.indexOf("AGAMA"), berhenti: judul.indexOf("TANGGAL BERHENTI") };
+  const ix = {
+    nama: judul.indexOf("NAMA"), status: judul.indexOf("STATUS"), agama: judul.indexOf("AGAMA"), berhenti: judul.indexOf("TANGGAL BERHENTI"),
+    outlet: judul.indexOf("OUTLET"), mulai: judul.indexOf("TANGGAL KONTRAK AKTIF"),
+  };
   if (ix.nama < 0 || ix.status < 0 || ix.agama < 0) throw new Error("Kolom NAMA/STATUS/AGAMA tidak ditemukan di sheet PEGAWAI.");
   const kol = async (i) => (i < 0 ? [] : (await readRange(id, `'PEGAWAI'!${colLetter(i)}2:${colLetter(i)}300`, "FORMATTED_VALUE")).map((r) => teks((r || [])[0])));
-  const [nama, status, agama, berhenti] = await Promise.all([kol(ix.nama), kol(ix.status), kol(ix.agama), kol(ix.berhenti)]);
+  const [nama, status, agama, berhenti, outlet, mulai] = await Promise.all([kol(ix.nama), kol(ix.status), kol(ix.agama), kol(ix.berhenti), kol(ix.outlet), kol(ix.mulai)]);
   const peta = new Map();
   const ganda = new Set();
   nama.forEach((n, i) => {
     if (!n) return;
     const k = norm(n);
     if (peta.has(k)) ganda.add(k);
-    peta.set(k, { nama: n, baris: i + 2, status: norm(status[i]), agama: norm(agama[i]), berhenti: berhenti[i] || "" });
+    peta.set(k, {
+      nama: n, baris: i + 2, status: norm(status[i]), agama: norm(agama[i]), berhenti: berhenti[i] || "", berhentiIso: tglKeIso(berhenti[i]),
+      outlet: norm(outlet[i]), mulai: tglKeIso(mulai[i]),
+    });
   });
   for (const k of ganda) peta.get(k).ganda = true;
   peta.kolom = { status: colLetter(ix.status), berhenti: ix.berhenti >= 0 ? colLetter(ix.berhenti) : null };
@@ -229,10 +274,18 @@ async function prosesThr(id, title, gbd, tulis, peg) {
   return hasil;
 }
 
-/** Pegawai yang dinonaktifkan di bulan sebelumnya → GAJI POKOK di spreadsheet bulan ini dibuat 0. */
-async function nolkanGajiPokok(id, title, gbd) {
+/**
+ * GAJI POKOK dibuat 0 (sekali per spreadsheet per nama) untuk pegawai yang:
+ *  - dinonaktifkan dari dashboard di bulan sebelumnya (config pegawaiNonaktif), atau
+ *  - berstatus NONAKTIF di sheet PEGAWAI dengan TANGGAL BERHENTI sebelum bulan spreadsheet ini.
+ */
+async function nolkanGajiPokok(id, title, gbd, peg) {
   const bulanIni = kunciBulan(bulanSpreadsheet(title));
+  const awal = `${bulanIni}-01`;
   const rec = catatanNonaktif();
+  const otom = catatanNolOtomatis();
+  const otomIni = otom[id] || {};
+  let otomBerubah = false;
   const judul = gbd.nilai[0] || [];
   const iNama = kolomIndex(judul, ["PEGAWAI"]);
   const iGaji = kolomIndex(judul, EDITABLE.gajiPokok);
@@ -242,18 +295,33 @@ async function nolkanGajiPokok(id, title, gbd) {
   for (let i = 1; i < gbd.nilai.length; i++) {
     const nama = teks((gbd.nilai[i] || [])[iNama]);
     if (!nama) break;
-    const r = rec[norm(nama)];
-    if (!r || !(r.bulan < bulanIni)) continue;
-    r.dinolkan = r.dinolkan || {};
-    if (r.dinolkan[id] != null) continue; // sudah pernah dinolkan di spreadsheet ini
+    const k = norm(nama);
     const gp = angka((gbd.nilai[i] || [])[iGaji]);
-    r.dinolkan[id] = gp;
+    const sel = `'${SHEET}'!${colLetter(iGaji)}${i + 1}`;
+    const r = rec[k];
+    if (r) {
+      if (!(r.bulan < bulanIni)) continue;
+      r.dinolkan = r.dinolkan || {};
+      if (r.dinolkan[id] != null) continue; // sudah pernah dinolkan di spreadsheet ini
+      r.dinolkan[id] = gp;
+      if (gp) {
+        tulisan.push({ range: sel, values: [[0]] });
+        hasil.push(`${nama}: gaji pokok ${gp.toLocaleString("id-ID")} dibuat 0 (nonaktif sejak ${isoKeTeks(r.tanggal)}).`);
+      }
+      continue;
+    }
+    const pi = peg && !(peg instanceof Error) ? peg.get(k) : null;
+    if (!pi || pi.ganda || pi.status !== "NONAKTIF" || !pi.berhentiIso || pi.berhentiIso >= awal) continue;
+    if (otomIni[k] != null) continue; // sudah diperiksa di spreadsheet ini (isian manual sesudahnya dibiarkan)
+    otomIni[k] = gp;
+    otomBerubah = true;
     if (gp) {
-      tulisan.push({ range: `'${SHEET}'!${colLetter(iGaji)}${i + 1}`, values: [[0]] });
-      hasil.push(`${nama}: gaji pokok ${gp.toLocaleString("id-ID")} dibuat 0 (nonaktif sejak ${isoKeTeks(r.tanggal)}).`);
+      tulisan.push({ range: sel, values: [[0]] });
+      hasil.push(`${nama}: gaji pokok ${gp.toLocaleString("id-ID")} dibuat 0 — di sheet PEGAWAI tercatat berhenti ${isoKeTeks(pi.berhentiIso)}.`);
     }
   }
   if (Object.values(rec).some((r) => r.dinolkan)) simpanCatatanNonaktif(rec);
+  if (otomBerubah) { otom[id] = otomIni; simpanNolOtomatis(otom); }
   if (tulisan.length) await batchWrite(id, tulisan);
   return hasil;
 }
@@ -271,10 +339,10 @@ async function sumber() {
 async function isiThrOtomatis() {
   const { id, meta } = await sumber();
   let gbd = await bacaGbd(id);
-  const dinol = await nolkanGajiPokok(id, meta.title, gbd);
-  if (dinol.length) gbd = await bacaGbd(id);
   let peg;
   try { peg = await bacaPegawaiInternal(); } catch (e) { peg = e; }
+  const dinol = await nolkanGajiPokok(id, meta.title, gbd, peg);
+  if (dinol.length) gbd = await bacaGbd(id);
   const hasil = await prosesThr(id, meta.title, gbd, true, peg);
   hasil.dinolkan = dinol;
   return hasil;
@@ -283,10 +351,10 @@ async function isiThrOtomatis() {
 async function load() {
   const { id, meta } = await sumber();
   let gbd = await bacaGbd(id);
-  const dinol = await nolkanGajiPokok(id, meta.title, gbd);
-  if (dinol.length) gbd = await bacaGbd(id);
   let peg;
   try { peg = await bacaPegawaiInternal(); } catch (e) { peg = e; }
+  const dinol = await nolkanGajiPokok(id, meta.title, gbd, peg);
+  if (dinol.length) gbd = await bacaGbd(id);
   const thr = await prosesThr(id, meta.title, gbd, true, peg);
   if (thr.diisi.length || thr.diperbarui.length) gbd = await bacaGbd(id);
 
@@ -312,6 +380,9 @@ async function load() {
   if (kb) for (const b of kb.baris) if (b.gbd) kasbonPer[b.gbd.barisGbd] = b;
   const rec = catatanNonaktif();
   const bulanIni = kunciBulan(bulanSpreadsheet(meta.title));
+  const awalBulan = `${bulanIni}-01`;
+  const akhirBulan = akhirBulanIso(bulanIni);
+  const nolOtom = catatanNolOtomatis()[id] || {};
 
   for (const p of pegawai) {
     const i = p.baris - 1;
@@ -336,12 +407,21 @@ async function load() {
     // Status pegawai: sheet PEGAWAI (Dashboard Internal) bila terdaftar, selain itu catatan dashboard ini.
     const pi = peg instanceof Error ? null : peg.get(norm(p.nama));
     const r = rec[norm(p.nama)];
+    const nonaktifLuar = !!(pi && !pi.ganda && pi.status === "NONAKTIF" && !r);
     p.status = {
       terdaftar: !!pi,
       aktif: pi ? pi.status === "AKTIF" : !r,
       teks: pi ? pi.status || "?" : r ? "NONAKTIF" : "belum terdaftar",
-      berhenti: pi ? pi.berhenti : r ? isoKeTeks(r.tanggal) : "",
-      olehDashboard: r ? { tanggal: r.tanggal, hariKerja: r.hariKerja, selisih: r.selisih, bulanIni: r.bulan === bulanIni } : null,
+      berhenti: pi ? (pi.berhentiIso ? isoKeTeks(pi.berhentiIso) : pi.berhenti) : r ? isoKeTeks(r.tanggal) : "",
+      berhentiIso: pi ? pi.berhentiIso : r ? r.tanggal : "",
+      mulai: pi ? pi.mulai || null : null,
+      outlet: pi ? pi.outlet : "",
+      olehDashboard: r ? { tanggal: r.tanggal, mode: r.mode || "selisih", hariKerja: r.hariKerja, selisih: r.selisih, gajiLama: r.gajiLama || null, bulanIni: r.bulan === bulanIni } : null,
+      nolOtomatis: nolOtom[norm(p.nama)] || null,
+      // Dinonaktifkan di luar dashboard (sheet PEGAWAI) pada bulan ini tetapi gaji pokoknya masih ada.
+      terapkan: nonaktifLuar && p.gajiPokok > 0 && (!pi.berhentiIso || (pi.berhentiIso >= awalBulan && pi.berhentiIso <= akhirBulan))
+        ? { tanggal: pi.berhentiIso || null }
+        : null,
     };
   }
   for (const k of Object.keys(EDITABLE)) if (ixEdit[k] < 0) catatan.push(`Kolom ${EDITABLE[k][0]} tidak ditemukan di sheet GAJI BULAN DEPAN — tidak bisa diedit.`);
@@ -360,6 +440,7 @@ async function load() {
     hariIni: hariIniIso(),
     tarifHarianBerhenti: TARIF_HARIAN_BERHENTI,
     bankPilihan: BANK_BOLEH,
+    outletPilihan: OUTLET_BOLEH,
     pegawai,
     ringkas,
     status: st.status,
@@ -449,16 +530,22 @@ function aturNominalThr(body) {
 }
 
 /**
- * Tambah pegawai baru: sisipkan baris setelah pegawai terakhir. body: { nama, bank, rekening, gajiPokok, token }.
+ * Tambah pegawai baru: sisipkan baris setelah pegawai terakhir, lalu tindak lanjutnya (baris KASBON + POTONGAN
+ * KASBON, rumus PROYEKSI BIAYA outletnya, 5 keterangan biaya di DAFTAR BIAYA BIAYA & KAS LAUNDRY).
+ * body: { nama, panggilan, outlet, bank, rekening, gajiPokok, token }.
  */
 function tambahPegawai(body) {
   return eksklusif(async () => {
     const b = body || {};
     const nama = teks(b.nama).replace(/\s+/g, " ");
+    const panggilan = teks(b.panggilan).replace(/\s+/g, " ") || nama;
+    const outlet = norm(b.outlet);
     const bank = norm(b.bank);
     const rekening = teks(b.rekening).replace(/[\s.-]/g, "");
     const gp = parseNominal(b.gajiPokok);
     if (!nama || nama.length > 80) throw httpError(400, "Nama pegawai wajib diisi (maks. 80 huruf).");
+    if (panggilan.length > 60) throw httpError(400, "Nama panggilan maks. 60 huruf.");
+    if (!OUTLET_BOLEH.includes(outlet)) throw httpError(400, "Pilih outlet pegawai: MAUMBI, PERKAMIL, atau Lainnya.");
     if (!BANK_BOLEH.includes(bank)) throw httpError(400, `Pilih gaji bank: ${BANK_BOLEH.join(", ")}.`);
     if (bank !== "CASH" && !/^\d{5,20}$/.test(rekening)) throw httpError(400, "Nomor akun bank harus angka (5–20 digit).");
     if (gp == null || Number.isNaN(gp) || gp < 0) throw httpError(400, "Gaji pokok harus angka 0 atau lebih, mis. 1.500.000");
@@ -511,22 +598,55 @@ function tambahPegawai(body) {
     }));
     if (ubahRumus.length) await batchWrite(id, ubahRumus);
 
+    // Tindak lanjut — masing-masing berdiri sendiri: kegagalan satu langkah tidak membatalkan yang lain.
+    const langkah = [];
+    const catatan = [];
+    const coba = async (judulLangkah, fn) => {
+      try { langkah.push({ ok: true, teks: await fn() }); } catch (e) { langkah.push({ ok: false, teks: `${judulLangkah}: gagal — ${e.message}` }); }
+    };
+    const subjekKasbon = `Kasbon Gaji ${panggilan}`;
+    await coba("Sheet KASBON", async () => {
+      const k = await pegawaibaru.tambahBarisKasbon(id, subjekKasbon, baru);
+      return `Sheet KASBON: ${k.baru ? `baris ${k.baris} "${subjekKasbon}" ditambahkan` : `baris ${k.baris} "${subjekKasbon}" sudah ada, dipakai`}` +
+        (k.rentang.length ? `; rentang IMPORTRANGE ${k.rentang.join(" & ")} diperpanjang` : "") +
+        (k.potongan ? `; POTONGAN KASBON (${k.potongan}) = KASBON!C${k.baris}.` : ".");
+    });
+    if (outlet === "LAINNYA") {
+      catatan.push("Outlet \"Lainnya\": gaji pegawai ini tidak dimasukkan ke rumus PROYEKSI BIAYA / KEBUTUHAN AWAL BULAN DEPAN.");
+    } else {
+      await coba("PROYEKSI BIAYA", async () => {
+        const p = await pegawaibaru.tambahKeProyeksi(id, outlet, baru, akhir);
+        p.catatan.forEach((c) => catatan.push(c));
+        if (!p.sel.length) throw new Error(`tidak ada rumus per pegawai di kolom ${outlet} yang bisa ditambah.`);
+        return `PROYEKSI BIAYA ${outlet}: ${p.subjek.join(", ")} (${p.sel.join(", ")}) kini ikut menghitung pegawai ini — KEBUTUHAN AWAL BULAN DEPAN ikut terbarui.`;
+      });
+    }
+    await coba("DAFTAR BIAYA", async () => {
+      const d = await daftarbiaya.tambahKeteranganPegawai(panggilan);
+      if (d.sudahAda.length) catatan.push(`Keterangan biaya ${d.sudahAda.join(", ")} sudah ada di DAFTAR BIAYA — tidak ditambah lagi. Bila itu milik orang lain, ganti nama panggilannya.`);
+      return d.ditambah.length ? `DAFTAR BIAYA (BIAYA & KAS LAUNDRY): ${d.ditambah.join(", ")} ditambahkan.` : "DAFTAR BIAYA: semua keterangan biaya pegawai ini sudah ada.";
+    });
+    catatan.push("Daftarkan juga pegawai ini di Dashboard Internal (sheet PEGAWAI) — status, agama (THR otomatis), dan masa kerja diambil dari sana.");
+
     const data = await load();
     return {
       ok: true,
-      ditambah: { nama, bank, rekening, gajiPokok: gp, baris: baru, rumusDiperpanjang: ubahRumus.length },
-      catatan: [
-        "Pegawai baru belum terdaftar di Dashboard Internal (sheet PEGAWAI) — status & THR otomatis mengikuti data di sana.",
-        "Sheet KEBUTUHAN AWAL BULAN DEPAN menjumlah gaji per sel pegawai, jadi gaji pegawai baru belum ikut di sana.",
-        "Bila pegawai ini kasbon, tambahkan barisnya di sheet KASBON dan rumus POTONGAN KASBON-nya.",
-      ],
+      ditambah: { nama, panggilan, outlet, bank, rekening, gajiPokok: gp, baris: baru, rumusDiperpanjang: ubahRumus.length },
+      langkah,
+      catatan,
       data,
     };
   });
 }
 
 /**
- * Aktif / nonaktifkan pegawai. body: { baris, nama, aktif (bool), tanggal "yyyy-mm-dd" (nonaktif), token }.
+ * Aktif / nonaktifkan pegawai. body: { baris, nama, aktif (bool), tanggal "yyyy-mm-dd" (nonaktif),
+ *   masaKerja "kurang"|"lebih" (hanya bila TANGGAL KONTRAK AKTIF di sheet PEGAWAI kosong),
+ *   terapkan (bool: pegawai sudah NONAKTIF di sheet PEGAWAI, tinggal terapkan aturan gajinya), token }.
+ * Aturan nonaktif:
+ *   - berhenti sebelum bulan spreadsheet, atau masa kerja belum 1 tahun → GAJI POKOK langsung 0 ("nol");
+ *   - selain itu hari kerja s/d tanggal berhenti × Rp50.000 dibayar; selisihnya DITAMBAHKAN ke POTONGAN
+ *     KETIDAKHADIRAN ("selisih").
  */
 function ubahStatus(body) {
   return eksklusif(async () => {
@@ -534,6 +654,7 @@ function ubahStatus(body) {
     const baris = Number(b.baris);
     if (!Number.isInteger(baris) || baris < 2) throw httpError(400, "Baris tidak valid.");
     const aktif = b.aktif === true || b.aktif === "true";
+    const terapkan = !aktif && (b.terapkan === true || b.terapkan === "true");
     const { id, meta } = await sumber();
     if (b.token && b.token !== id) throw httpError(409, "Spreadsheet CASHFLOW bulan ini sudah berganti. Data dimuat ulang — silakan ulangi.");
     const gbd = await bacaGbd(id);
@@ -549,14 +670,17 @@ function ubahStatus(body) {
     }
     let peg = null;
     let pegCatatan = null;
-    try { peg = await bacaPegawaiInternal(); } catch (e) { pegCatatan = `Sheet PEGAWAI (Dashboard Internal) tidak bisa diubah: ${e.message}`; }
+    try { peg = await bacaPegawaiInternal(); } catch (e) { pegCatatan = `Sheet PEGAWAI (Dashboard Internal) tidak bisa dibaca/diubah: ${e.message}`; }
     const pi = peg ? peg.get(norm(nama)) : null;
     if (pi && pi.ganda) throw httpError(409, `Nama "${nama}" ada lebih dari sekali di sheet PEGAWAI — ubah statusnya di Dashboard Internal.`);
     const rec = catatanNonaktif();
     const k = norm(nama);
     const bulanIni = kunciBulan(bulanSpreadsheet(meta.title));
+    const awalBulan = `${bulanIni}-01`;
     const potSekarang = teks(row[iPot]) === "" ? null : angka(row[iPot]);
     const gajiSekarang = angka(row[iGaji]);
+    const selGaji = `'${SHEET}'!${colLetter(iGaji)}${baris}`;
+    const selPot = `'${SHEET}'!${colLetter(iPot)}${baris}`;
     const tulisPegawai = async (status, tanggalIso) => {
       if (!pi) return false;
       const data = [{ range: `'PEGAWAI'!${peg.kolom.status}${pi.baris}`, values: [[status]] }];
@@ -571,43 +695,77 @@ function ubahStatus(body) {
     let hasil;
     if (!aktif) {
       if (rec[k] && rec[k].spreadsheetId === id) throw httpError(409, `${nama} sudah dinonaktifkan dari dashboard pada ${isoKeTeks(rec[k].tanggal)}.`);
-      if (pi && pi.status !== "AKTIF") throw httpError(409, `${nama} sudah berstatus ${pi.status} di sheet PEGAWAI.`);
-      const tanggal = teks(b.tanggal) || hariIniIso();
-      const m = tanggal.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-      if (!m || `${m[1]}-${m[2]}` !== bulanIni) throw httpError(400, `Tanggal berhenti harus di bulan ${BULAN[+bulanIni.slice(5) - 1]} ${bulanIni.slice(0, 4)}.`);
+      if (terapkan) {
+        if (!pi || pi.status !== "NONAKTIF") throw httpError(409, `${nama} tidak berstatus NONAKTIF di sheet PEGAWAI.`);
+        if (rec[k]) throw httpError(409, `${nama} sudah dinonaktifkan dari dashboard pada ${isoKeTeks(rec[k].tanggal)}.`);
+      } else if (pi && pi.status !== "AKTIF") {
+        throw httpError(409, `${nama} sudah berstatus ${pi.status} di sheet PEGAWAI.`);
+      }
+      const tanggalPegawai = terapkan ? pi.berhentiIso : "";
+      const tanggal = tanggalPegawai || teks(b.tanggal) || hariIniIso();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(tanggal)) throw httpError(400, "Tanggal berhenti tidak valid.");
       if (tanggal > hariIniIso()) throw httpError(400, "Tanggal berhenti tidak boleh setelah hari ini.");
-      const hariKerja = hariKerjaSampai(tanggal);
-      const dibayar = hariKerja * TARIF_HARIAN_BERHENTI;
-      const selisih = Math.max(0, gajiSekarang - dibayar);
-      const potBaru = (potSekarang || 0) + selisih;
-      if (selisih) await batchWrite(id, [{ range: `'${SHEET}'!${colLetter(iPot)}${baris}`, values: [[potBaru]] }]);
-      const diubahPegawai = await tulisPegawai("NONAKTIF", tanggal);
+      if (tanggal > akhirBulanIso(bulanIni)) throw httpError(400, `Tanggal berhenti paling lambat akhir ${BULAN[+bulanIni.slice(5) - 1]} ${bulanIni.slice(0, 4)}.`);
+      const sebelumBulan = tanggal < awalBulan;
+      const mulai = pi ? pi.mulai : "";
+      let kurang = kurangSetahun(mulai, tanggal);
+      if (kurang == null && b.masaKerja === "kurang") kurang = true;
+      if (kurang == null && b.masaKerja === "lebih") kurang = false;
+      if (!sebelumBulan && kurang == null) {
+        throw httpError(400, `Masa kerja ${nama} belum diketahui (TANGGAL KONTRAK AKTIF di sheet PEGAWAI kosong) — pilih apakah sudah bekerja 1 tahun atau belum.`);
+      }
+      const mode = sebelumBulan || kurang ? "nol" : "selisih";
+      const hariKerja = sebelumBulan ? 0 : hariKerjaSampai(tanggal);
+      let dibayar = 0;
+      let selisih = 0;
+      let potBaru = potSekarang;
+      if (mode === "selisih") {
+        dibayar = hariKerja * TARIF_HARIAN_BERHENTI;
+        selisih = Math.max(0, gajiSekarang - dibayar);
+        potBaru = (potSekarang || 0) + selisih;
+        if (selisih) await batchWrite(id, [{ range: selPot, values: [[potBaru]] }]);
+      } else if (gajiSekarang) {
+        await batchWrite(id, [{ range: selGaji, values: [[0]] }]);
+      }
+      // Sheet PEGAWAI: NONAKTIF + tanggal berhenti (pada "terapkan" hanya bila tanggalnya masih kosong).
+      const diubahPegawai = terapkan && tanggalPegawai ? false : await tulisPegawai("NONAKTIF", tanggal);
       rec[k] = {
-        nama, tanggal, bulan: bulanIni, spreadsheetId: id, baris, hariKerja, tarif: TARIF_HARIAN_BERHENTI, gajiPokok: gajiSekarang,
-        potLama: potSekarang, potBaru: selisih ? potBaru : potSekarang, selisih, pegawaiDiubah: diubahPegawai,
+        nama, tanggal, bulan: bulanIni, spreadsheetId: id, baris, mode, hariKerja, tarif: TARIF_HARIAN_BERHENTI, gajiPokok: gajiSekarang,
+        gajiLama: mode === "nol" ? gajiSekarang : null, potLama: potSekarang, potBaru: selisih ? potBaru : potSekarang, selisih,
+        kurangSetahun: kurang, sebelumBulan, mulai: mulai || null, pegawaiDiubah: diubahPegawai, dariPegawai: terapkan,
       };
       simpanCatatanNonaktif(rec);
-      hasil = { nama, aktif: false, tanggal, tanggalTeks: isoKeTeks(tanggal), hariKerja, dibayar, gajiPokok: gajiSekarang, selisih, potLama: potSekarang, potBaru: rec[k].potBaru, pegawaiDiubah: diubahPegawai };
+      hasil = {
+        nama, aktif: false, tanggal, tanggalTeks: isoKeTeks(tanggal), mode, hariKerja, dibayar, gajiPokok: gajiSekarang, selisih,
+        potLama: potSekarang, potBaru: rec[k].potBaru, kurangSetahun: kurang, sebelumBulan, mulai: mulai || null, mulaiTeks: mulai ? isoKeTeks(mulai) : "",
+        pegawaiDiubah: diubahPegawai, terapkan,
+      };
     } else {
       const r = rec[k];
-      const dipulihkan = [];
-      const tulis = [];
-      if (r && r.spreadsheetId === id && r.selisih && potSekarang === r.potBaru) {
-        tulis.push({ range: `'${SHEET}'!${colLetter(iPot)}${baris}`, values: [[r.potLama == null ? "" : r.potLama]] });
-        dipulihkan.push(`potongan ketidakhadiran kembali ${r.potLama == null ? "kosong" : r.potLama.toLocaleString("id-ID")}`);
-      } else if (r && r.spreadsheetId === id && r.selisih) {
-        dipulihkan.push(`potongan ketidakhadiran TIDAK dikembalikan (sudah diubah menjadi ${potSekarang == null ? "kosong" : potSekarang.toLocaleString("id-ID")})`);
-      }
-      if (r && r.dinolkan && r.dinolkan[id] && gajiSekarang === 0) {
-        tulis.push({ range: `'${SHEET}'!${colLetter(iGaji)}${baris}`, values: [[r.dinolkan[id]]] });
-        dipulihkan.push(`gaji pokok kembali ${r.dinolkan[id].toLocaleString("id-ID")}`);
-      }
-      if (tulis.length) await batchWrite(id, tulis);
+      const otom = catatanNolOtomatis();
+      const nolOtom = otom[id] && otom[id][k] != null ? otom[id][k] : null;
       if (!pi && !r) throw httpError(409, `${nama} belum terdaftar di sheet PEGAWAI dan tidak pernah dinonaktifkan dari dashboard.`);
       if (pi && pi.status === "AKTIF" && !r) throw httpError(409, `${nama} sudah AKTIF.`);
+      const dipulihkan = [];
+      const tulis = [];
+      const sama = r && r.spreadsheetId === id;
+      if (sama && r.selisih && potSekarang === r.potBaru) {
+        tulis.push({ range: selPot, values: [[r.potLama == null ? "" : r.potLama]] });
+        dipulihkan.push(`potongan ketidakhadiran kembali ${r.potLama == null ? "kosong" : r.potLama.toLocaleString("id-ID")}`);
+      } else if (sama && r.selisih) {
+        dipulihkan.push(`potongan ketidakhadiran TIDAK dikembalikan (sudah diubah menjadi ${potSekarang == null ? "kosong" : potSekarang.toLocaleString("id-ID")})`);
+      }
+      const gajiKembali = (sama && r.mode === "nol" && r.gajiLama) || (r && r.dinolkan && r.dinolkan[id]) || nolOtom || 0;
+      if (gajiKembali && gajiSekarang === 0) {
+        tulis.push({ range: selGaji, values: [[gajiKembali]] });
+        dipulihkan.push(`gaji pokok kembali ${gajiKembali.toLocaleString("id-ID")}`);
+      } else if (gajiKembali) {
+        dipulihkan.push(`gaji pokok TIDAK dikembalikan (sudah diubah menjadi ${gajiSekarang.toLocaleString("id-ID")})`);
+      }
+      if (tulis.length) await batchWrite(id, tulis);
       const diubahPegawai = await tulisPegawai("AKTIF", "");
-      delete rec[k];
-      simpanCatatanNonaktif(rec);
+      if (r) { delete rec[k]; simpanCatatanNonaktif(rec); }
+      if (nolOtom != null) { delete otom[id][k]; simpanNolOtomatis(otom); }
       hasil = { nama, aktif: true, dipulihkan, pegawaiDiubah: diubahPegawai };
     }
     const data = await load();
@@ -616,6 +774,6 @@ function ubahStatus(body) {
 }
 
 module.exports = {
-  load, ubah, aturNominalThr, tambahPegawai, ubahStatus, isiThrOtomatis, infoGajian, prosesThr, hariKerjaSampai,
+  load, ubah, aturNominalThr, tambahPegawai, ubahStatus, isiThrOtomatis, infoGajian, prosesThr, hariKerjaSampai, kurangSetahun, tglKeIso,
   BULAN_IDUL_FITRI, NOMINAL_THR_BAWAAN, TARIF_HARIAN_BERHENTI,
 };

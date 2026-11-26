@@ -790,7 +790,7 @@ a.btn-ghost { text-decoration: none; display: inline-flex; align-items: center; 
 .gj-chip.kurang { background: var(--err-soft); color: #8e2a20; }
 .gj-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }
 .gj-kartu { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 14px; background: #fffdf8; min-width: 0; }
-.gj-kartu.nonaktif { opacity: .6; }
+.gj-kartu.nonaktif > :not(.gjd-status-form):not(.gjd-terapkan) { opacity: .6; }
 .gj-kepala { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
 .gj-id { min-width: 0; }
 .gj-nama { font-weight: 800; font-size: 15.5px; color: var(--ink); }
@@ -888,3 +888,6 @@ a.btn-ghost { text-decoration: none; display: inline-flex; align-items: center; 
 .gjd-tambah summary { cursor: pointer; }
 .gjd-tambah[open] summary { margin-bottom: 8px; }
 .gj-kartu.gjd-baru { box-shadow: 0 0 0 3px var(--gold); }
+.gjd-terapkan { margin-top: 10px; padding: 6px 10px; border-radius: 8px; background: var(--err-soft); color: #8e2a20; font-size: 13px; line-height: 1.5; }
+.gjd-terapkan .gj-salin { margin-left: 4px; }
+#gjd-ket-biaya { margin: 0 0 8px; }
