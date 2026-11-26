@@ -131,6 +131,21 @@ yang meniru kondisi Mac (logo lokal + lock berubah), pakai `APP_REPO_DIR`.
   POTONGAN KASBON `=MIN(KASBON!C{n};cicilan)` (penuh = `=KASBON!C{n}`; cek nilai, bila galat coba pemisah "," lalu kembalikan
   rumus lama). Rumus manual owner `=KASBON!C3-1000000` dikenali sebagai "ditunda". Dashboard memperingatkan SUBJEK yang
   tidak ada di DAFTAR BIAYA (mis. salah ketik "Kasbin") dan rentang IMPORTRANGE D/E yang lebih pendek dari jumlah pegawai.
+- **Gaji & Kasbon › Gaji Bulan Depan** (`src/gajidepan.js`, `/api/gaji-depan{,/ubah,/thr,/pegawai,/status}`): sheet GAJI
+  BULAN DEPAN (= gaji dibayar tgl 2 bulan berikutnya). Tabel status kas sama dengan Gaji Bulan Ini, return investasi dari
+  KEBUTUHAN AWAL BULAN DEPAN. Edit manual: GAJI POKOK, TUNJANGAN LAIN, POTONGAN KETIDAKHADIRAN, POTONGAN LAIN-LAIN (cek nilai
+  lama → 409). POTONGAN KASBON terhubung ke cicilan (`/api/kasbon/cicilan`). Dashboard Internal ikut menulis LEMBUR,
+  POTONGAN LEMBUR, POTONGAN KETIDAKHADIRAN (absensi bulan lalu) & POTONGAN KERUGIAN ke sheet ini.
+  **THR otomatis** (keputusan Andre 26 Nov 2026): Rp500.000/pegawai (bisa diubah di menu → config `thrNominal`), hanya
+  STATUS AKTIF di sheet PEGAWAI (PERFORMA; dibaca HANYA kolom NAMA/STATUS/TANGGAL BERHENTI/AGAMA — sheet itu berisi KTP &
+  password); gajian 2 Des → Kristen Protestan/Katolik, gajian tgl 2 bulan Idul Fitri (tabel `BULAN_IDUL_FITRI` s/d 2035,
+  perbarui bila perlu) → Islam. Hanya sel kosong/0 yang diisi; dijalankan saat menu dibuka + tiap 6 jam (server.js;
+  `MATIKAN_JADWAL_THR=1` untuk uji). **Tambah pegawai**: sisip baris setelah pegawai terakhir, salin rumus THP/JAM LEMBUR,
+  perpanjang rentang `x2:x<akhir>` di tabel TOTAL TRANSFER. KEBUTUHAN AWAL BULAN DEPAN (menjumlah sel per pegawai) dan
+  IMPORTRANGE `GAJI BULAN DEPAN!E2:G10` dkk. di GAJI BULAN INI bulan berikutnya TIDAK ikut diperbarui. **Nonaktif**: hari kerja
+  1..tanggal berhenti tanpa Minggu × Rp50.000; selisih dengan gaji pokok DITAMBAHKAN ke POTONGAN KETIDAKHADIRAN; PEGAWAI
+  STATUS=NONAKTIF + TANGGAL BERHENTI; catatan per nama di config `pegawaiNonaktif` (bulan + ID spreadsheet) → di spreadsheet
+  bulan berikutnya GAJI POKOK otomatis 0. "Aktifkan" membatalkan perubahan dashboard bila angkanya belum diubah orang lain.
 - Repo ini **publik**. Jangan menambah ID file/folder Drive baru, data pribadi, atau rahasia ke repo.
 - **Proyeksi Biaya** (`src/proyeksi.js`, `/api/proyeksi`, `/api/proyeksi/simpan`): menampilkan seluruh sheet
   PROYEKSI BIAYA (CASHFLOW bulan berjalan) lengkap dengan sel gabungan, KECUALI kolom berjudul LOKASI & KET

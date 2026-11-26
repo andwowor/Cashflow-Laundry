@@ -395,4 +395,4 @@ function hapusAturan(baris) {
   });
 }
 
-module.exports = { info, upload, klarifikasi, perluDicek, kamus, hapusAturan, spreadsheetUrl, _colLetter: colLetter };
+module.exports = { info, upload, klarifikasi, perluDicek, kamus, hapusAturan, spreadsheetUrl, spreadsheetId, _colLetter: colLetter };

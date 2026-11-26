@@ -21,6 +21,7 @@ const proyeksi = require("./src/proyeksi");
 const kassewa = require("./src/kassewa");
 const gaji = require("./src/gaji");
 const kasbon = require("./src/kasbon");
+const gajidepan = require("./src/gajidepan");
 const proyeksiupload = require("./src/proyeksiupload");
 const moninput = require("./src/moninput");
 const riwayat = require("./src/riwayat");
@@ -310,6 +311,61 @@ app.post("/api/kasbon/cicilan", async (req, res) => {
     res.status(err.status || 500).json({ ok: false, error: err.message || String(err), data: err.data || null });
   }
 });
+
+app.get("/api/gaji-depan", async (req, res) => {
+  try {
+    res.json(await gajidepan.load());
+  } catch (err) {
+    if (!err.status) console.error(err);
+    res.status(err.status || 500).json({ ok: false, error: err.message || String(err) });
+  }
+});
+
+app.post("/api/gaji-depan/ubah", async (req, res) => {
+  try {
+    res.json(await gajidepan.ubah(req.body || {}));
+  } catch (err) {
+    if (!err.status) console.error(err);
+    res.status(err.status || 500).json({ ok: false, error: err.message || String(err) });
+  }
+});
+
+for (const [rute, fn] of [["/api/gaji-depan/pegawai", "tambahPegawai"], ["/api/gaji-depan/status", "ubahStatus"]]) {
+  app.post(rute, async (req, res) => {
+    try {
+      res.json(await gajidepan[fn](req.body || {}));
+    } catch (err) {
+      if (!err.status) console.error(err);
+      res.status(err.status || 500).json({ ok: false, error: err.message || String(err) });
+    }
+  });
+}
+
+app.post("/api/gaji-depan/thr", async (req, res) => {
+  try {
+    res.json(await gajidepan.aturNominalThr(req.body || {}));
+  } catch (err) {
+    if (!err.status) console.error(err);
+    res.status(err.status || 500).json({ ok: false, error: err.message || String(err) });
+  }
+});
+
+// THR otomatis di GAJI BULAN DEPAN: dicek 2 menit setelah server hidup lalu tiap 6 jam (hanya mengisi sel kosong).
+function jalankanThrOtomatis() {
+  gajidepan
+    .isiThrOtomatis()
+    .then((r) => {
+      if (r.diisi.length || r.diperbarui.length) {
+        console.log(`[THR otomatis] gajian ${r.gajian}: diisi ${r.diisi.join(", ") || "-"}; diperbarui ${r.diperbarui.join(", ") || "-"}`);
+      }
+      (r.dinolkan || []).forEach((t) => console.log(`[Gaji bulan depan] ${t}`));
+    })
+    .catch((e) => console.error("[THR otomatis] gagal:", e.message));
+}
+if (!process.env.MATIKAN_JADWAL_THR) {
+  setTimeout(jalankanThrOtomatis, 2 * 60 * 1000).unref();
+  setInterval(jalankanThrOtomatis, 6 * 60 * 60 * 1000).unref();
+}
 
 app.get("/api/gaji", async (req, res) => {
   try {

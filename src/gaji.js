@@ -91,36 +91,23 @@ function nilaiKontrol(rows, label, barisCadangan) {
   return { label: teks(r[0]) || label, nilai: angka(r[1]), baris: i + 1, ada: i >= 0 && r.length > 1 && teks(r[1]) !== "" };
 }
 
-async function load() {
-  const { id } = await resolveCashflowSpreadsheetId();
-  const meta = await getSheetTitles(id);
-  for (const s of ["GAJI BULAN INI", "KONTROL KAS"]) {
-    if (!meta.sheets.includes(s)) throw httpError(404, `Sheet "${s}" tidak ditemukan di spreadsheet ${meta.title}.`);
-  }
-  const adaKebutuhan = meta.sheets.includes("KEBUTUHAN AWAL BULAN");
-  const [gaji, gajiTampil, kontrol, kebutuhan] = await Promise.all([
-    readRange(id, "'GAJI BULAN INI'!A1:R60", "UNFORMATTED_VALUE"),
-    readRange(id, "'GAJI BULAN INI'!A1:R60", "FORMATTED_VALUE"),
-    readRange(id, "'KONTROL KAS'!A1:B30", "UNFORMATTED_VALUE"),
-    adaKebutuhan ? readRange(id, "'KEBUTUHAN AWAL BULAN'!A1:C60", "UNFORMATTED_VALUE") : Promise.resolve([]),
-  ]);
+/** Return investasi dari sheet kebutuhan (baris "Return Investasi", kolom MAUMBI + PERKAMIL). */
+function bacaReturnInvestasi(rows) {
+  const r = (rows || []).find((x) => norm((x || [])[0]) === "RETURN INVESTASI");
+  return r ? { nilai: angka(r[1]) + angka(r[2]), ada: true } : { nilai: 0, ada: false };
+}
 
-  const pegawai = susunPegawai(gaji, gajiTampil);
+/**
+ * Tabel status kas untuk gaji: per bank sisa = saldo − 100.000 − return investasi (BCA) − THP lewat bank itu;
+ * kas tunai: (Maumbi + Perkamil) − THP tunai. kontrol = baris sheet KONTROL KAS (A:B).
+ */
+function hitungStatusKas(pegawai, kontrol, returnInvestasi) {
   const catatan = [];
-
-  // Return investasi bulan ini (KEBUTUHAN AWAL BULAN › Return Investasi, MAUMBI + PERKAMIL).
-  let returnInvestasi = 0;
-  const rRet = (kebutuhan || []).find((r) => norm((r || [])[0]) === "RETURN INVESTASI");
-  if (rRet) returnInvestasi = angka(rRet[1]) + angka(rRet[2]);
-  else catatan.push('Baris "Return Investasi" di sheet KEBUTUHAN AWAL BULAN tidak ditemukan — return investasi dianggap 0.');
-
-  // Saldo terkini (KONTROL KAS baris 2–5 & 10–11).
   const bankBaris = { BCA: 2, BRI: 3, BNI: 4, MANDIRI: 5 };
   const saldoBank = BANK.map((b) => ({ kode: b, ...nilaiKontrol(kontrol, b, bankBaris[b]) }));
   const tunaiM = nilaiKontrol(kontrol, "KAS TUNAI MAUMBI", 10);
   const tunaiP = nilaiKontrol(kontrol, "KAS TUNAI PERKAMIL", 11);
 
-  // Kebutuhan gaji per sumber rekening.
   const kebutuhanPer = { BCA: 0, BRI: 0, BNI: 0, MANDIRI: 0, TUNAI: 0 };
   const pegawaiPer = { BCA: [], BRI: [], BNI: [], MANDIRI: [], TUNAI: [] };
   const tanpaSumber = [];
@@ -151,33 +138,61 @@ async function load() {
     kebutuhan: kebutuhanPer.TUNAI, sisa: saldoTunai - kebutuhanPer.TUNAI, cukup: saldoTunai - kebutuhanPer.TUNAI >= 0,
     pegawai: pegawaiPer.TUNAI, rincian: [{ nama: "Kas tunai Maumbi", saldo: tunaiM.nilai }, { nama: "Kas tunai Perkamil", saldo: tunaiP.nilai }],
   });
-  const jumlah = (k) => status.reduce((a, s) => a + s[k], 0);
+  const jumlah = (k) => status.reduce((a, x) => a + x[k], 0);
   const total = {
     saldo: jumlah("saldo"), saldoMinimum: jumlah("saldoMinimum"), returnInvestasi: jumlah("returnInvestasi"),
     kebutuhan: jumlah("kebutuhan"), sisa: jumlah("sisa"),
   };
+  return { status, total, catatan };
+}
+
+function ringkasPegawai(pegawai) {
+  return {
+    jumlahPegawai: pegawai.length,
+    dibayar: pegawai.filter((p) => p.thp > 0).length,
+    totalThp: pegawai.reduce((a, p) => a + p.thp, 0),
+    totalPendapatan: pegawai.reduce((a, p) => a + p.totalPendapatan, 0),
+    totalPotongan: pegawai.reduce((a, p) => a + p.totalPotongan, 0),
+    totalSisaKasbon: pegawai.reduce((a, p) => a + (p.sisaKasbon || 0), 0),
+  };
+}
+
+async function load() {
+  const { id } = await resolveCashflowSpreadsheetId();
+  const meta = await getSheetTitles(id);
+  for (const s of ["GAJI BULAN INI", "KONTROL KAS"]) {
+    if (!meta.sheets.includes(s)) throw httpError(404, `Sheet "${s}" tidak ditemukan di spreadsheet ${meta.title}.`);
+  }
+  const adaKebutuhan = meta.sheets.includes("KEBUTUHAN AWAL BULAN");
+  const [gaji, gajiTampil, kontrol, kebutuhan] = await Promise.all([
+    readRange(id, "'GAJI BULAN INI'!A1:R60", "UNFORMATTED_VALUE"),
+    readRange(id, "'GAJI BULAN INI'!A1:R60", "FORMATTED_VALUE"),
+    readRange(id, "'KONTROL KAS'!A1:B30", "UNFORMATTED_VALUE"),
+    adaKebutuhan ? readRange(id, "'KEBUTUHAN AWAL BULAN'!A1:C60", "UNFORMATTED_VALUE") : Promise.resolve([]),
+  ]);
+
+  const pegawai = susunPegawai(gaji, gajiTampil);
+  const catatan = [];
+
+  // Return investasi bulan ini (KEBUTUHAN AWAL BULAN › Return Investasi, MAUMBI + PERKAMIL).
+  const ret = bacaReturnInvestasi(kebutuhan);
+  if (!ret.ada) catatan.push('Baris "Return Investasi" di sheet KEBUTUHAN AWAL BULAN tidak ditemukan — return investasi dianggap 0.');
+  const st = hitungStatusKas(pegawai, kontrol, ret.nilai);
 
   const sync = cfg.getLastSync ? cfg.getLastSync() : null;
   return {
     ok: true,
     spreadsheet: { id, title: meta.title, url: `https://docs.google.com/spreadsheets/d/${id}/edit` },
     pegawai,
-    ringkas: {
-      jumlahPegawai: pegawai.length,
-      dibayar: pegawai.filter((p) => p.thp > 0).length,
-      totalThp: pegawai.reduce((a, p) => a + p.thp, 0),
-      totalPendapatan: pegawai.reduce((a, p) => a + p.totalPendapatan, 0),
-      totalPotongan: pegawai.reduce((a, p) => a + p.totalPotongan, 0),
-      totalSisaKasbon: pegawai.reduce((a, p) => a + (p.sisaKasbon || 0), 0),
-    },
-    status,
-    total,
-    returnInvestasi,
+    ringkas: ringkasPegawai(pegawai),
+    status: st.status,
+    total: st.total,
+    returnInvestasi: ret.nilai,
     saldoMinimum: SALDO_MINIMUM,
-    catatan,
+    catatan: catatan.concat(st.catatan),
     updateHarian: sync ? sync.display : null,
     dimuat: cfg.formatBusinessDateTime(new Date()),
   };
 }
 
-module.exports = { load, susunPegawai, SALDO_MINIMUM };
+module.exports = { load, susunPegawai, bacaReturnInvestasi, hitungStatusKas, ringkasPegawai, httpError, angka, norm, SALDO_MINIMUM };

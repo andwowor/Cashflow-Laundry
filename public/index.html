@@ -723,6 +723,7 @@
     <section id="tab-gajikasbon" class="panel">
       <nav class="subtabs" aria-label="Sub menu Gaji &amp; Kasbon">
         <button class="subtab active" data-sub="gajibulanini">💰 Gaji Bulan Ini</button>
+        <button class="subtab" data-sub="gajibulandepan">📅 Gaji Bulan Depan</button>
         <button class="subtab" data-sub="kasbon">🧾 Kasbon</button>
       </nav>
 
@@ -752,6 +753,56 @@
       <div class="card">
         <h3>Rincian gaji per pegawai</h3>
         <div id="gj-pegawai" class="gj-grid"></div>
+      </div>
+      </div>
+
+      <!-- Sub menu: Gaji Bulan Depan -->
+      <div id="sub-gajibulandepan" class="subpanel">
+      <div class="card">
+        <h2>Gaji Bulan Depan <small class="hint">dibayar <span id="gjd-gajian">tanggal 2 bulan depan</span></small></h2>
+        <p class="hint">Data dari sheet <b>GAJI BULAN DEPAN</b> pada spreadsheet CASHFLOW bulan ini. Angka bergaris putus-putus
+          (<b>Gaji pokok</b>, <b>Tunjangan lain</b>, <b>Potongan ketidakhadiran</b>, <b>Potongan lain-lain</b>) bisa diklik untuk diubah — langsung
+          tersimpan di spreadsheet. Lembur, potongan lembur, potongan ketidakhadiran, dan potongan kerugian juga ditulis oleh
+          Dashboard Internal; isian manual bisa tertimpa bila Dashboard Internal menulis ulang bulan itu.</p>
+        <div class="upload-row">
+          <button id="btn-gjd-load" class="btn-ghost">↻ Muat ulang</button>
+          <a id="gjd-open" class="btn-ghost hidden" target="_blank" rel="noopener">Buka di Google Sheets ↗</a>
+          <span id="gjd-meta" class="hint" style="margin:0"></span>
+        </div>
+        <div id="gjd-ringkas" class="ks-saldo"><p class="hint">Memuat…</p></div>
+        <div id="gjd-thr" class="gjd-thr"></div>
+      </div>
+
+      <div class="card">
+        <h3>Status saldo kas untuk pembayaran gaji</h3>
+        <p class="hint">Saldo terkini dari sheet <b>KONTROL KAS</b> (bank: baris 2–5, kas tunai: baris 10–11).
+          <b>Sisa</b> = saldo terkini − saldo minimum Rp100.000 (bank) − return investasi bulan depan (khusus BCA, dari
+          KEBUTUHAN AWAL BULAN DEPAN) − kebutuhan gaji lewat rekening itu. Gaji BSI dibayar dari MANDIRI.</p>
+        <div id="gjd-status" class="table-wrap"></div>
+        <div id="gjd-catatan"></div>
+      </div>
+
+      <div class="card">
+        <h3>Rincian gaji per pegawai</h3>
+        <p class="hint">Angka bergaris putus-putus (<b>gaji pokok</b>, tunjangan lain, potongan ketidakhadiran, potongan lain-lain)
+          bisa diklik untuk diubah. Tombol <b>Nonaktifkan</b> menghitung gaji hari kerja bulan ini (Minggu tidak dihitung) ×
+          Rp50.000; selisihnya dengan gaji pokok masuk ke potongan ketidakhadiran, dan bulan depan gaji pokoknya otomatis 0.</p>
+        <details id="gjd-tambah" class="gjd-tambah">
+          <summary><b>➕ Tambah pegawai baru</b></summary>
+          <div class="db-field"><label for="gjd-nama">Nama pegawai</label><input type="text" id="gjd-nama" maxlength="80" autocomplete="off" /></div>
+          <div class="upload-row">
+            <label class="hint" for="gjd-bank" style="margin:0">Gaji bank</label>
+            <select id="gjd-bank" style="max-width:140px"></select>
+            <label class="hint" for="gjd-rek" style="margin:0">Nomor akun bank</label>
+            <input type="text" id="gjd-rek" inputmode="numeric" autocomplete="off" style="max-width:200px" />
+            <label class="hint" for="gjd-gaji" style="margin:0">Gaji pokok (Rp)</label>
+            <input type="text" id="gjd-gaji" inputmode="numeric" autocomplete="off" placeholder="mis. 1.500.000" style="max-width:160px" />
+          </div>
+          <button type="button" id="btn-gjd-tambah" class="btn-primary">Tambah ke GAJI BULAN DEPAN</button>
+          <div id="gjd-tambah-hasil" class="result-log hidden"></div>
+        </details>
+        <div id="gjd-result" class="result-log hidden"></div>
+        <div id="gjd-pegawai" class="gj-grid"></div>
       </div>
       </div>
 

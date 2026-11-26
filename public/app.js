@@ -4364,7 +4364,16 @@ function gjRender() {
         : '<div class="ks-angka pos kecil">Semua cukup ✓</div><div class="ks-sub">saldo cukup untuk semua gaji</div>'
     }</div>`;
 
-  // Tabel status saldo kas
+  $("#gj-status").innerHTML = gjTabelStatusHtml(d, "gj-grid-status");
+  $("#gj-catatan").innerHTML = (d.catatan || []).map((c) => `<div class="th-notice th-err">⚠️ <div>${escapeHtml(c)}</div></div>`).join("");
+
+  // Kartu per pegawai: yang dibayar dulu, lalu yang tidak ada gaji bulan ini.
+  const urut = d.pegawai.filter((p) => p.aktif).concat(d.pegawai.filter((p) => !p.aktif));
+  $("#gj-pegawai").innerHTML = urut.map((p) => gjKartuHtml(p, { kosong: "Tidak ada gaji bulan ini." })).join("");
+}
+
+/** Tabel status saldo kas untuk gaji (dipakai Gaji Bulan Ini & Gaji Bulan Depan). */
+function gjTabelStatusHtml(d, idTabel) {
   const baris = d.status
     .map((s) => {
       const sub = s.rincian
@@ -4384,7 +4393,7 @@ function gjRender() {
     })
     .join("");
   const t = d.total;
-  $("#gj-status").innerHTML = `<table id="gj-grid-status"><thead><tr>
+  return `<table id="${idTabel}" class="gj-status-tabel"><thead><tr>
       <th>Rekening / kas</th><th class="num">Saldo terkini</th><th class="num">Saldo minimum</th><th class="num">Return investasi</th>
       <th class="num">Kebutuhan gaji</th><th class="num">Sisa setelah gaji</th><th>Status</th></tr></thead>
     <tbody>${baris}</tbody>
@@ -4393,41 +4402,95 @@ function gjRender() {
       <td class="num" data-label="Return investasi">${t.returnInvestasi ? gjRp(-t.returnInvestasi) : "–"}</td>
       <td class="num" data-label="Kebutuhan gaji">${gjRp(-t.kebutuhan)}</td>
       <td class="num gj-sisa ${t.sisa < 0 ? "neg" : "pos"}" data-label="Sisa setelah gaji">${gjRp(t.sisa)}</td><td class="gj-kosong"></td></tr></tfoot></table>`;
-  $("#gj-catatan").innerHTML = (d.catatan || []).map((c) => `<div class="th-notice th-err">⚠️ <div>${escapeHtml(c)}</div></div>`).join("");
+}
 
-  // Kartu per pegawai: yang dibayar dulu, lalu yang tidak ada gaji bulan ini.
-  const urut = d.pegawai.filter((p) => p.aktif).concat(d.pegawai.filter((p) => !p.aktif));
-  const daftar = (list, p) =>
+/**
+ * Kartu rincian gaji satu pegawai. opsi.kosong = teks bila tidak ada gaji; opsi.depan = mode Gaji Bulan Depan
+ * (THR berlabel otomatis/manual, kolom yang bisa diedit, dan pengaturan cicilan kasbon).
+ */
+function gjKartuHtml(p, opsi) {
+  const o = opsi || {};
+  const nilaiHtml = (k, v) => {
+    const teksV = v ? gjRp(v) : "–";
+    if (o.depan && p.edit && p.edit[k]) {
+      const f = p.edit[k].rumus;
+      return `<button type="button" class="gjd-edit" data-baris="${p.baris}" data-kolom="${k}" data-nilai="${v || ""}"
+        title="${f ? "Rumus sekarang: " + escapeHtml(f) + " — klik untuk mengganti dengan angka" : "Klik untuk mengubah"}">${teksV}${f ? " <span class=\"gj-kecil\">ƒ</span>" : ""}</button>`;
+    }
+    return teksV;
+  };
+  const daftar = (list) =>
     list
       .map(([k, label]) => {
         const v = p[k] || 0;
-        const extra = k === "lembur" && p.jamLembur ? ` <span class="gj-kecil">(${Number(p.jamLembur).toLocaleString("id-ID", { maximumFractionDigits: 1 })} jam)</span>` : "";
-        return `<div class="gj-baris${v ? "" : " nol"}"><span>${label}${extra}</span><span>${v ? gjRp(v) : "–"}</span></div>`;
+        let extra = k === "lembur" && p.jamLembur ? ` <span class="gj-kecil">(${Number(p.jamLembur).toLocaleString("id-ID", { maximumFractionDigits: 1 })} jam)</span>` : "";
+        if (o.depan && k === "thr" && v) extra += p.thrOtomatis ? ' <span class="kb-tag hijau">otomatis</span>' : ' <span class="kb-tag abu">manual</span>';
+        if (o.depan && k === "potKasbon" && p.kasbon) {
+          const kb = p.kasbon;
+          const tag = kb.mode === "cicil" ? `<span class="kb-tag emas">cicil maks. ${gjRp(kb.cicilan)}</span>`
+            : kb.mode === "manual" ? `<span class="kb-tag emas" title="${escapeHtml(kb.rumus)}">ditunda ${gjRp(kb.ditunda)}</span>`
+            : kb.mode === "khusus" ? `<span class="kb-tag emas" title="${escapeHtml(kb.rumus)}">rumus khusus</span>`
+            : kb.rencanaDepan ? '<span class="kb-tag hijau">penuh</span>' : "";
+          extra += ` ${tag}`;
+        }
+        const editable = o.depan && p.edit && p.edit[k];
+        return `<div class="gj-baris${v || editable ? "" : " nol"}"><span>${label}${extra}</span><span>${nilaiHtml(k, v)}</span></div>`;
       })
       .join("");
-  $("#gj-pegawai").innerHTML = urut
-    .map(
-      (p) => `<div class="gj-kartu${p.aktif ? "" : " nonaktif"}">
+  let kasbonHtml = "";
+  if (o.depan && p.kasbon && (p.kasbon.rencanaDepan || p.kasbon.mode !== "penuh")) {
+    const kb = p.kasbon;
+    const buka = o.cicilBuka === p.baris;
+    kasbonHtml = `<div class="gjd-kasbon">
+      <div class="gj-kecil">Kasbon belum lunas ${gjRp(kb.rencanaDepan)} — dipotong ${gjRp(p.potKasbon)}, sisa ${gjRp(kb.sisaSetelahDepan || 0)} dibawa ke bulan berikutnya.
+        <button type="button" class="gj-salin gjd-cicil" data-baris="${p.baris}">${buka ? "Tutup" : "Atur cicilan"}</button></div>
+      ${buka ? `<div class="gjd-cicil-form" data-baris="${p.baris}">
+        <label class="kb-opsi"><input type="radio" name="gjd-kb-mode" value="penuh"${kb.mode === "cicil" ? "" : " checked"} /> Potong penuh (${gjRp(kb.rencanaDepan)})</label>
+        <label class="kb-opsi"><input type="radio" name="gjd-kb-mode" value="cicil"${kb.mode === "cicil" ? " checked" : ""} /> Dicicil, maks.
+          <input type="text" class="gjd-kb-nominal" inputmode="numeric" placeholder="mis. 500.000" value="${kb.mode === "cicil" ? Number(kb.cicilan).toLocaleString("id-ID") : ""}" /> per bulan</label>
+        <div class="upload-row" style="margin:4px 0 0"><button type="button" class="btn-primary gjd-cicil-simpan" data-baris="${p.baris}">Simpan cicilan</button></div>
+        <div class="gj-kecil">Sheet KASBON tidak diubah — sisa kasbon tetap tercatat di kolom SISA bulan berikutnya.</div>
+      </div>` : ""}
+    </div>`;
+  }
+  let statusHtml = "";
+  let statusForm = "";
+  if (o.depan && p.status) {
+    const st = p.status;
+    const badge = st.aktif
+      ? `<span class="kb-tag hijau">${st.terdaftar ? "AKTIF" : "belum terdaftar di Dashboard Internal"}</span>`
+      : `<span class="kb-tag merah">NONAKTIF${st.berhenti ? " sejak " + escapeHtml(st.berhenti) : ""}</span>`;
+    statusHtml = `<div class="gjd-status">${badge}
+      <button type="button" class="gj-salin gjd-status-btn" data-baris="${p.baris}" data-aktif="${st.aktif ? "0" : "1"}">${st.aktif ? (o.statusBuka === p.baris ? "Tutup" : "Nonaktifkan") : "Aktifkan"}</button></div>`;
+    if (st.aktif && o.statusBuka === p.baris) {
+      statusForm = `<div class="gjd-status-form" data-baris="${p.baris}">
+        <label class="kb-opsi">Tanggal berhenti
+          <input type="date" class="gjd-berhenti" value="${o.hariIni}" min="${o.bulanBerjalan}-01" max="${o.hariIni}" /></label>
+        <div class="gjd-status-pratinjau kb-pratinjau"></div>
+        <div class="upload-row" style="margin:4px 0 0"><button type="button" class="btn-primary gjd-status-simpan" data-baris="${p.baris}">Nonaktifkan pegawai</button></div>
+      </div>`;
+    }
+  }
+  const nonaktif = !p.aktif || (o.depan && p.status && !p.status.aktif);
+  return `<div class="gj-kartu${nonaktif ? " nonaktif" : ""}" data-baris="${p.baris}">
         <div class="gj-kepala">
           <div class="gj-id"><div class="gj-nama">${escapeHtml(p.nama)}</div>
             <div class="gj-bank">${escapeHtml(p.bank || "-")}${p.rekening ? ` · <span class="gj-norek">${escapeHtml(p.rekening)}</span>
-              <button type="button" class="gj-salin" data-salin="${escapeHtml(p.rekening)}" title="Salin nomor rekening">Salin</button>` : ""}</div></div>
+              <button type="button" class="gj-salin" data-salin="${escapeHtml(p.rekening)}" title="Salin nomor rekening">Salin</button>` : ""}</div>${statusHtml}</div>
           <div class="gj-thp"><div class="ks-label">THP</div><div class="gj-thp-angka">${gjRp(p.thp)}</div></div>
-        </div>
+        </div>${statusForm}
         ${
-          p.aktif
+          p.aktif || o.depan
             ? `<div class="gj-rinci">
-                <div><div class="gj-sub">Pendapatan</div>${daftar(GJ_PENDAPATAN, p)}
+                <div><div class="gj-sub">Pendapatan</div>${daftar(GJ_PENDAPATAN)}
                   <div class="gj-baris tot"><span>Total</span><span>${gjRp(p.totalPendapatan)}</span></div></div>
-                <div><div class="gj-sub">Potongan</div>${daftar(GJ_POTONGAN, p)}
+                <div><div class="gj-sub">Potongan</div>${daftar(GJ_POTONGAN)}
                   <div class="gj-baris tot"><span>Total</span><span>${p.totalPotongan ? gjRp(-p.totalPotongan) : "–"}</span></div></div>
-              </div>`
-            : '<div class="gj-kecil" style="margin-top:8px">Tidak ada gaji bulan ini.</div>'
+              </div>${kasbonHtml}`
+            : `<div class="gj-kecil" style="margin-top:8px">${escapeHtml(o.kosong || "Tidak ada gaji.")}</div>`
         }
-        <div class="gj-kaki">Sisa kasbon: <b>${gjRp(p.sisaKasbon || 0)}</b></div>
-      </div>`
-    )
-    .join("");
+        ${p.sisaKasbon != null ? `<div class="gj-kaki">Sisa kasbon: <b>${gjRp(p.sisaKasbon || 0)}</b></div>` : ""}
+      </div>`;
 }
 
 $("#btn-gj-load").addEventListener("click", loadGaji);
@@ -4437,6 +4500,7 @@ function gkBukaSub() {
   const aktif = $("#tab-gajikasbon .subtab.active");
   if (aktif && aktif.dataset.sub === "gajibulanini") loadGaji();
   if (aktif && aktif.dataset.sub === "kasbon") loadKasbon();
+  if (aktif && aktif.dataset.sub === "gajibulandepan") loadGajiDepan();
 }
 $$("#tab-gajikasbon .subtab").forEach((b) =>
   b.addEventListener("click", () => {
@@ -4665,6 +4729,306 @@ $("#kb-table").addEventListener("input", (ev) => {
   kbPratinjau();
 });
 $("#kb-table").addEventListener("change", kbPratinjau);
+
+// ================= Gaji & Kasbon › Gaji Bulan Depan =================
+// Sheet GAJI BULAN DEPAN (gaji yang dibayar tanggal 2 bulan berikutnya): status kas, THR otomatis,
+// edit Tunjangan lain / Potongan ketidakhadiran / Potongan lain-lain, dan cicilan kasbon.
+let GJD = null;
+let GJD_BUSY = false;
+let GJD_CICIL = null; // baris GAJI BULAN DEPAN yang form cicilannya terbuka
+let GJD_STATUS = null; // baris yang panel nonaktifnya terbuka
+
+async function loadGajiDepan() {
+  if (GJD_BUSY) return;
+  $("#btn-gjd-load").disabled = true;
+  if (!GJD) $("#gjd-ringkas").innerHTML = '<p class="hint">Memuat sheet GAJI BULAN DEPAN…</p>';
+  try {
+    GJD = await api("/api/gaji-depan");
+    gjdRender();
+  } catch (e) {
+    $("#gjd-ringkas").innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
+  } finally {
+    $("#btn-gjd-load").disabled = false;
+  }
+}
+
+function gjdRender() {
+  const d = GJD;
+  if (!d) return;
+  $("#gjd-open").href = d.spreadsheet.url;
+  $("#gjd-open").classList.remove("hidden");
+  $("#gjd-gajian").textContent = d.gajian;
+  $("#gjd-meta").textContent = `${d.spreadsheet.title} · dimuat ${d.dimuat}` + (d.updateHarian ? ` · saldo kas dari update harian ${d.updateHarian}` : "");
+  const r = d.ringkas;
+  const kurang = d.status.filter((s) => !s.cukup);
+  $("#gjd-ringkas").innerHTML = `
+    <div class="ks-kartu ks-utama"><div class="ks-label">Total gaji dibayar ${escapeHtml(d.gajian)}</div>
+      <div class="ks-angka">${gjRp(r.totalThp)}</div><div class="ks-sub">${r.dibayar} dari ${r.jumlahPegawai} pegawai</div></div>
+    <div class="ks-kartu"><div class="ks-label">Total THR</div><div class="ks-angka">${gjRp(r.totalThr)}</div></div>
+    <div class="ks-kartu"><div class="ks-label">Total potongan</div><div class="ks-angka neg">${gjRp(-r.totalPotongan)}</div></div>
+    <div class="ks-kartu"><div class="ks-label">Status saldo kas</div>${
+      kurang.length
+        ? `<div class="ks-angka neg kecil">Kurang di ${kurang.length} rekening</div><div class="ks-sub">${escapeHtml(kurang.map((s) => s.nama).join(", "))}</div>`
+        : '<div class="ks-angka pos kecil">Semua cukup ✓</div><div class="ks-sub">saldo cukup untuk semua gaji</div>'
+    }</div>`;
+
+  // THR otomatis
+  const t = d.thr;
+  const jenis = t.natal && t.idulFitri ? "THR Natal (Kristen/Katolik) & THR Idul Fitri (Islam)" : t.natal ? "THR Natal untuk pegawai Kristen/Katolik" : t.idulFitri ? "THR Idul Fitri untuk pegawai Islam" : "";
+  $("#gjd-thr").innerHTML = `
+    <div class="gjd-thr-isi">
+      <div>${
+        jenis
+          ? `🎁 Gajian <b>${escapeHtml(t.gajian)}</b> = <b>${jenis}</b> yang berstatus AKTIF.
+             Penerima: <b>${escapeHtml(t.penerima.join(", ") || "tidak ada")}</b>.${t.diisi.length ? ` <span class="pos">Baru saja diisi otomatis: ${escapeHtml(t.diisi.join(", "))}.</span>` : ""}${
+               t.diperbarui.length ? ` <span class="pos">Diperbarui ke nominal baru: ${escapeHtml(t.diperbarui.join(", "))}.</span>` : ""
+             }`
+          : `Gajian <b>${escapeHtml(t.gajian)}</b> bukan bulan THR. THR Natal diisi otomatis untuk gajian 2 Desember, THR Idul Fitri untuk gajian tanggal 2 bulan Idul Fitri.`
+      }</div>
+      <div class="gjd-thr-nominal">Nominal THR per pegawai: <b id="gjd-thr-nilai">${gjRp(t.nominal)}</b>
+        <button type="button" class="gj-salin" id="btn-gjd-thr-ubah">Ubah</button>
+        <span id="gjd-thr-form" class="hidden"><input type="text" id="gjd-thr-input" inputmode="numeric" value="${Number(t.nominal).toLocaleString("id-ID")}" />
+          <button type="button" class="btn-primary" id="btn-gjd-thr-simpan">Simpan</button></span></div>
+    </div>
+    ${(t.catatan || []).map((c) => `<div class="th-notice th-err">⚠️ <div>${escapeHtml(c)}</div></div>`).join("")}`;
+
+  $("#gjd-status").innerHTML = gjTabelStatusHtml(d, "gjd-grid-status");
+  $("#gjd-catatan").innerHTML = (d.catatan || []).map((c) => `<div class="th-notice th-err">⚠️ <div>${escapeHtml(c)}</div></div>`).join("");
+  const urut = d.pegawai.filter((p) => p.aktif).concat(d.pegawai.filter((p) => !p.aktif));
+  $("#gjd-pegawai").innerHTML = urut
+    .map((p) => gjKartuHtml(p, { depan: true, cicilBuka: GJD_CICIL, statusBuka: GJD_STATUS, hariIni: d.hariIni, bulanBerjalan: d.bulanBerjalan, kosong: "Tidak ada gaji bulan depan." }))
+    .join("");
+  $("#gjd-bank").innerHTML = (d.bankPilihan || []).map((b) => `<option value="${b}">${b === "MANDIRI" ? "Mandiri" : b}</option>`).join("");
+  if (GJD_STATUS != null) gjdPratinjauStatus();
+}
+
+// Hari kerja (Senin–Sabtu) tanggal 1 s/d tanggal iso.
+function gjdHariKerja(iso) {
+  const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return 0;
+  let n = 0;
+  for (let d = 1; d <= +m[3]; d++) if (new Date(Date.UTC(+m[1], +m[2] - 1, d)).getUTCDay() !== 0) n++;
+  return n;
+}
+
+function gjdPratinjauStatus() {
+  const form = document.querySelector(`.gjd-status-form[data-baris="${GJD_STATUS}"]`);
+  const p = GJD && GJD.pegawai.find((x) => x.baris === GJD_STATUS);
+  if (!form || !p) return;
+  const tgl = form.querySelector(".gjd-berhenti").value;
+  const hari = gjdHariKerja(tgl);
+  const dibayar = hari * GJD.tarifHarianBerhenti;
+  const selisih = Math.max(0, (p.gajiPokok || 0) - dibayar);
+  const potLama = p.potKetidakhadiran || 0;
+  form.querySelector(".gjd-status-pratinjau").innerHTML =
+    `Hari kerja s/d ${escapeHtml(tgl.split("-").reverse().join("/"))} (Minggu tidak dihitung): <b>${hari} hari</b> × ${gjRp(GJD.tarifHarianBerhenti)} = <b>${gjRp(dibayar)}</b>.<br>
+     Gaji pokok ${gjRp(p.gajiPokok)} − ${gjRp(dibayar)} = <b>${gjRp(selisih)}</b> masuk ke potongan ketidakhadiran` +
+    (potLama ? ` (${gjRp(potLama)} + ${gjRp(selisih)} = <b>${gjRp(potLama + selisih)}</b>)` : "") +
+    `.<br>Status di sheet PEGAWAI menjadi NONAKTIF; mulai bulan depan gaji pokoknya otomatis 0.`;
+}
+
+async function gjdSimpanStatus(baris, aktif) {
+  const out = $("#gjd-result");
+  const p = GJD.pegawai.find((x) => x.baris === baris);
+  if (!p) return;
+  let tanggal = null;
+  if (!aktif) {
+    const form = document.querySelector(`.gjd-status-form[data-baris="${baris}"]`);
+    tanggal = form.querySelector(".gjd-berhenti").value;
+    if (!window.confirm(`Nonaktifkan ${p.nama} per ${tanggal.split("-").reverse().join("/")}?`)) return;
+  } else if (!window.confirm(`Aktifkan kembali ${p.nama}?`)) return;
+  GJD_BUSY = true;
+  try {
+    const r = await gjdPost("/api/gaji-depan/status", { baris, nama: p.nama, aktif, tanggal, token: GJD.spreadsheet.id });
+    GJD = r.data;
+    GJD_STATUS = null;
+    gjdRender();
+    const h = r.hasil;
+    let msg = h.aktif
+      ? `✔ ${h.nama} diaktifkan kembali${h.pegawaiDiubah ? " (sheet PEGAWAI: AKTIF)" : ""}.${h.dipulihkan.length ? " " + h.dipulihkan.join("; ") + "." : ""}`
+      : `✔ ${h.nama} dinonaktifkan per ${h.tanggalTeks}: ${h.hariKerja} hari kerja × ${gjRp(GJD.tarifHarianBerhenti)} = ${gjRp(h.dibayar)}; ` +
+        `potongan ketidakhadiran ${h.potLama ? gjRp(h.potLama) + " + " : ""}${gjRp(h.selisih)} = ${gjRp(h.potBaru || 0)}.` +
+        `${h.pegawaiDiubah ? " Sheet PEGAWAI: NONAKTIF." : ""} Bulan depan gaji pokoknya otomatis 0.`;
+    if (r.catatan && r.catatan.length) msg += "\n⚠ " + r.catatan.join("\n⚠ ");
+    showLog(out, msg);
+  } catch (e) {
+    showLog(out, "✘ " + e.message, true);
+  } finally {
+    GJD_BUSY = false;
+  }
+}
+
+async function gjdTambahPegawai() {
+  const out = $("#gjd-tambah-hasil");
+  const nama = $("#gjd-nama").value.trim();
+  const bank = $("#gjd-bank").value;
+  const rekening = $("#gjd-rek").value.trim();
+  const gajiPokok = $("#gjd-gaji").value.replace(/\D/g, "");
+  if (!nama) return showLog(out, "✘ Isi nama pegawai.", true);
+  if (bank !== "CASH" && !rekening) return showLog(out, "✘ Isi nomor akun bank.", true);
+  if (!gajiPokok) return showLog(out, "✘ Isi gaji pokok.", true);
+  const btn = $("#btn-gjd-tambah");
+  btn.disabled = true;
+  GJD_BUSY = true;
+  try {
+    const r = await gjdPost("/api/gaji-depan/pegawai", { nama, bank, rekening, gajiPokok: Number(gajiPokok), token: GJD && GJD.spreadsheet.id });
+    GJD = r.data;
+    gjdRender();
+    const t = r.ditambah;
+    showLog(out, `✔ ${t.nama} ditambahkan di baris ${t.baris} (${t.bank}${t.rekening ? " " + t.rekening : ""}, gaji pokok ${gjRp(t.gajiPokok)}). ` +
+      `${t.rumusDiperpanjang ? `${t.rumusDiperpanjang} rumus TOTAL TRANSFER diperpanjang.` : ""}\n⚠ ` + r.catatan.join("\n⚠ "));
+    ["#gjd-nama", "#gjd-rek", "#gjd-gaji"].forEach((x) => ($(x).value = ""));
+    const kartu = document.querySelector(`#gjd-pegawai .gj-kartu[data-baris="${t.baris}"]`);
+    if (kartu) kartu.classList.add("gjd-baru");
+  } catch (e) {
+    showLog(out, "✘ " + e.message, true);
+  } finally {
+    btn.disabled = false;
+    GJD_BUSY = false;
+  }
+}
+
+async function gjdPost(path, body) {
+  const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (res.status === 401) { window.location = "/login"; throw new Error("Sesi berakhir, silakan login ulang."); }
+  const data = await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }));
+  if (!res.ok || data.ok === false) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+}
+
+const GJD_LABEL = { gajiPokok: "Gaji pokok", tunjanganLain: "Tunjangan lain", potKetidakhadiran: "Potongan ketidakhadiran", potLain: "Potongan lain-lain" };
+
+function gjdMulaiEdit(btn) {
+  if (GJD_BUSY || btn.dataset.sedang) return;
+  btn.dataset.sedang = "1";
+  const awal = btn.dataset.nilai ? Number(btn.dataset.nilai) : null;
+  const span = document.createElement("span");
+  span.className = "gjd-input-wrap";
+  span.innerHTML = `<input type="text" class="gjd-input" inputmode="numeric" value="${awal ? awal.toLocaleString("id-ID") : ""}" aria-label="Nominal baru" />`;
+  btn.replaceWith(span);
+  const inp = span.querySelector("input");
+  inp.focus();
+  inp.select();
+  let selesai = false;
+  const akhiri = async (simpan) => {
+    if (selesai) return;
+    selesai = true;
+    const dgt = inp.value.replace(/\D/g, "");
+    const baru = dgt ? Number(dgt) : null;
+    if (!simpan || baru === awal || (baru == null && !awal)) { gjdRender(); return; }
+    await gjdSimpanEdit(Number(btn.dataset.baris), btn.dataset.kolom, baru, awal);
+  };
+  inp.addEventListener("input", () => {
+    const dgt = inp.value.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+    inp.value = dgt ? Number(dgt).toLocaleString("id-ID") : "";
+  });
+  inp.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); akhiri(true); }
+    else if (e.key === "Escape") { e.preventDefault(); akhiri(false); }
+  });
+  inp.addEventListener("blur", () => akhiri(true));
+}
+
+async function gjdSimpanEdit(baris, kolom, nilai, lama) {
+  const out = $("#gjd-result");
+  const p = GJD.pegawai.find((x) => x.baris === baris);
+  GJD_BUSY = true;
+  try {
+    const r = await gjdPost("/api/gaji-depan/ubah", { baris, kolom, nilai, lama, nama: p ? p.nama : undefined, token: GJD.spreadsheet.id });
+    GJD = r.data;
+    gjdRender();
+    const s = r.disimpan;
+    showLog(out, `✔ ${s.label} ${s.nama}: ${s.lama == null ? "kosong" : gjRp(s.lama)} → ${s.baru == null ? "kosong" : gjRp(s.baru)} (${s.sel}${s.rumusLama ? `, rumus lama ${s.rumusLama} diganti angka` : ""}). THP sekarang ${gjRp(s.thp)}.`);
+  } catch (e) {
+    showLog(out, "✘ " + e.message, true);
+    GJD_BUSY = false;
+    loadGajiDepan();
+    return;
+  } finally {
+    GJD_BUSY = false;
+  }
+}
+
+async function gjdSimpanCicilan(barisGbd) {
+  const out = $("#gjd-result");
+  const p = GJD.pegawai.find((x) => x.baris === barisGbd);
+  if (!p || !p.kasbon) return;
+  const form = document.querySelector(`.gjd-cicil-form[data-baris="${barisGbd}"]`);
+  const mode = (form.querySelector('input[name="gjd-kb-mode"]:checked') || {}).value;
+  const dgt = form.querySelector(".gjd-kb-nominal").value.replace(/\D/g, "");
+  if (mode === "cicil" && !dgt) return showLog(out, "✘ Isi nominal cicilan per bulan, mis. 500.000", true);
+  GJD_BUSY = true;
+  try {
+    const r = await gjdPost("/api/kasbon/cicilan", { baris: p.kasbon.baris, subjek: p.kasbon.subjek, mode, cicilan: dgt ? Number(dgt) : null, token: GJD.spreadsheet.id });
+    const s = r.disimpan;
+    GJD_CICIL = null;
+    KB = r.data; // data sub menu Kasbon ikut segar
+    showLog(out, `✔ Kasbon ${s.nama}: ${s.mode === "cicil" ? `dicicil maks. ${gjRp(s.cicilan)} per bulan` : "potong penuh"} — dipotong ${gjRp(s.dipotongDepan)}, sisa ${gjRp(s.sisaSetelahDepan)} dibawa ke bulan berikutnya. Sheet KASBON tidak diubah.`);
+  } catch (e) {
+    showLog(out, "✘ " + e.message, true);
+  } finally {
+    GJD_BUSY = false;
+  }
+  loadGajiDepan();
+}
+
+async function gjdSimpanThr() {
+  const out = $("#gjd-result");
+  const dgt = ($("#gjd-thr-input").value || "").replace(/\D/g, "");
+  if (!dgt) return showLog(out, "✘ Isi nominal THR, mis. 500.000", true);
+  GJD_BUSY = true;
+  try {
+    const r = await gjdPost("/api/gaji-depan/thr", { nominal: Number(dgt) });
+    GJD = r.data;
+    gjdRender();
+    showLog(out, `✔ Nominal THR per pegawai sekarang ${gjRp(r.nominal)}. THR otomatis yang belum diubah manual ikut diperbarui.`);
+  } catch (e) {
+    showLog(out, "✘ " + e.message, true);
+  } finally {
+    GJD_BUSY = false;
+  }
+}
+
+$("#btn-gjd-load").addEventListener("click", () => { GJD_CICIL = null; loadGajiDepan(); });
+$("#sub-gajibulandepan").addEventListener("click", async (ev) => {
+  const ed = ev.target.closest(".gjd-edit");
+  if (ed) return gjdMulaiEdit(ed);
+  const ci = ev.target.closest(".gjd-cicil");
+  if (ci) { const n = Number(ci.dataset.baris); GJD_CICIL = GJD_CICIL === n ? null : n; gjdRender(); return; }
+  const cs = ev.target.closest(".gjd-cicil-simpan");
+  if (cs) return gjdSimpanCicilan(Number(cs.dataset.baris));
+  const sb = ev.target.closest(".gjd-status-btn");
+  if (sb) {
+    const n = Number(sb.dataset.baris);
+    if (sb.dataset.aktif === "1") return gjdSimpanStatus(n, true);
+    GJD_STATUS = GJD_STATUS === n ? null : n;
+    gjdRender();
+    return;
+  }
+  const ss = ev.target.closest(".gjd-status-simpan");
+  if (ss) return gjdSimpanStatus(Number(ss.dataset.baris), false);
+  if (ev.target.closest("#btn-gjd-tambah")) return gjdTambahPegawai();
+  if (ev.target.closest("#btn-gjd-thr-ubah")) { $("#gjd-thr-form").classList.toggle("hidden"); $("#gjd-thr-input").focus(); return; }
+  if (ev.target.closest("#btn-gjd-thr-simpan")) return gjdSimpanThr();
+  const sl = ev.target.closest(".gj-salin[data-salin]");
+  if (sl) {
+    try { await copyTextToClipboard(sl.dataset.salin); sl.textContent = "Tersalin ✓"; setTimeout(() => (sl.textContent = "Salin"), 1500); } catch { sl.textContent = "Gagal"; }
+  }
+});
+$("#sub-gajibulandepan").addEventListener("change", (ev) => {
+  if (ev.target.matches(".gjd-berhenti")) gjdPratinjauStatus();
+});
+$("#sub-gajibulandepan").addEventListener("input", (ev) => {
+  if (ev.target.matches(".gjd-berhenti")) gjdPratinjauStatus();
+  if (ev.target.matches(".gjd-kb-nominal, #gjd-thr-input, #gjd-gaji")) {
+    const dgt = ev.target.value.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+    ev.target.value = dgt ? Number(dgt).toLocaleString("id-ID") : "";
+    if (ev.target.matches(".gjd-kb-nominal") && dgt) {
+      const r = ev.target.closest(".gjd-cicil-form").querySelector('input[value="cicil"]');
+      if (r) r.checked = true;
+    }
+  }
+});
 
 // ================= Init =================
 {

@@ -778,12 +778,12 @@ a.btn-ghost { text-decoration: none; display: inline-flex; align-items: center; 
 /* ===================== Gaji Bulan Ini ===================== */
 #tab-gajikasbon .pos { color: #146c4a; }
 #tab-gajikasbon .neg { color: var(--err); }
-#gj-grid-status { font-size: 13.5px; }
-#gj-grid-status th, #gj-grid-status td { white-space: nowrap; padding: 9px 12px; }
-#gj-grid-status td.gj-rek { white-space: normal; min-width: 170px; max-width: 280px; }
-#gj-grid-status tfoot td { font-weight: 800; border-top: 2px solid var(--teal); background: var(--teal-soft); }
-#gj-grid-status td.gj-sisa { font-weight: 800; }
-#gj-grid-status tr.gj-kurang td { background: var(--err-soft); }
+.gj-status-tabel { font-size: 13.5px; }
+.gj-status-tabel th, .gj-status-tabel td { white-space: nowrap; padding: 9px 12px; }
+.gj-status-tabel td.gj-rek { white-space: normal; min-width: 170px; max-width: 280px; }
+.gj-status-tabel tfoot td { font-weight: 800; border-top: 2px solid var(--teal); background: var(--teal-soft); }
+.gj-status-tabel td.gj-sisa { font-weight: 800; }
+.gj-status-tabel tr.gj-kurang td { background: var(--err-soft); }
 .gj-kecil { font-size: 12px; color: var(--ink-soft); font-weight: 400; }
 .gj-chip { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
 .gj-chip.ok { background: #dff1e8; color: #146c4a; }
@@ -812,19 +812,19 @@ a.btn-ghost { text-decoration: none; display: inline-flex; align-items: center; 
 }
 /* HP: tabel status saldo jadi kartu per rekening (kolom Sisa & Status langsung terlihat). */
 @media (max-width: 640px) {
-  #gj-status.table-wrap { border: none; overflow: visible; }
-  #gj-grid-status thead { display: none; }
-  #gj-grid-status, #gj-grid-status tbody, #gj-grid-status tfoot, #gj-grid-status tr, #gj-grid-status td { display: block; width: 100%; }
-  #gj-grid-status tr { border: 1px solid var(--line); border-radius: var(--radius-sm); margin-bottom: 10px; overflow: hidden; background: #fff; }
-  #gj-grid-status td { white-space: normal; border-bottom: none; padding: 5px 12px; }
-  #gj-grid-status td.gj-rek { max-width: none; padding-top: 10px; border-bottom: 1px solid var(--line); }
-  #gj-grid-status td[data-label] { display: flex; justify-content: space-between; gap: 10px; text-align: right; }
-  #gj-grid-status td[data-label]::before { content: attr(data-label); color: var(--ink-soft); font-weight: 600; text-align: left; }
-  #gj-grid-status td.gj-kosong { display: none; }
-  #gj-grid-status tbody tr:nth-child(even) td { background: transparent; }
-  #gj-grid-status tbody tr.gj-kurang td { background: var(--err-soft); }
-  #gj-grid-status tfoot tr { border: 2px solid var(--teal); }
-  #gj-grid-status tfoot td { border-top: none; }
+  #gj-status.table-wrap, #gjd-status.table-wrap { border: none; overflow: visible; }
+  .gj-status-tabel thead { display: none; }
+  .gj-status-tabel, .gj-status-tabel tbody, .gj-status-tabel tfoot, .gj-status-tabel tr, .gj-status-tabel td { display: block; width: 100%; }
+  .gj-status-tabel tr { border: 1px solid var(--line); border-radius: var(--radius-sm); margin-bottom: 10px; overflow: hidden; background: #fff; }
+  .gj-status-tabel td { white-space: normal; border-bottom: none; padding: 5px 12px; }
+  .gj-status-tabel td.gj-rek { max-width: none; padding-top: 10px; border-bottom: 1px solid var(--line); }
+  .gj-status-tabel td[data-label] { display: flex; justify-content: space-between; gap: 10px; text-align: right; }
+  .gj-status-tabel td[data-label]::before { content: attr(data-label); color: var(--ink-soft); font-weight: 600; text-align: left; }
+  .gj-status-tabel td.gj-kosong { display: none; }
+  .gj-status-tabel tbody tr:nth-child(even) td { background: transparent; }
+  .gj-status-tabel tbody tr.gj-kurang td { background: var(--err-soft); }
+  .gj-status-tabel tfoot tr { border: 2px solid var(--teal); }
+  .gj-status-tabel tfoot td { border-top: none; }
 }
 
 /* ===================== Gaji & Kasbon › Kasbon ===================== */
@@ -866,3 +866,25 @@ a.btn-ghost { text-decoration: none; display: inline-flex; align-items: center; 
   #kb-grid tfoot tr { border: 2px solid var(--teal); }
   #kb-grid tfoot td { border-top: none; }
 }
+
+/* ===================== Gaji & Kasbon › Gaji Bulan Depan ===================== */
+.gjd-thr { margin-top: 12px; }
+.gjd-thr-isi { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; background: var(--gold-soft); border-radius: 12px; padding: 10px 14px; font-size: 13.5px; }
+.gjd-thr-isi > div:first-child { flex: 1 1 380px; }
+.gjd-thr-nominal { white-space: nowrap; }
+#gjd-thr-input { width: 120px; padding: 5px 8px; }
+#gjd-thr-form .btn-primary { padding: 5px 12px; }
+.gjd-edit { font: inherit; font-variant-numeric: tabular-nums; background: #fff; border: 1.5px dashed var(--gold); border-radius: 7px; padding: 0 6px; cursor: pointer; color: var(--ink); min-width: 64px; text-align: right; }
+.gjd-edit:hover, .gjd-edit:focus { border-style: solid; border-color: var(--teal); outline: none; }
+.gjd-input { width: 110px; padding: 2px 6px; font-size: 13px; text-align: right; border: 1.5px solid var(--teal); border-radius: 7px; }
+.gjd-kasbon { margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: #fffaf0; border: 1px solid var(--line); }
+.gjd-cicil-form { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.gjd-kb-nominal { width: 120px; padding: 5px 8px; }
+.gjd-status { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 5px; }
+.gjd-status-form { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: var(--err-soft); }
+.gjd-status-form .kb-pratinjau { line-height: 1.5; }
+.gjd-status-form input[type="date"] { max-width: 170px; }
+.gjd-tambah { margin: 6px 0 14px; padding: 10px 12px; border: 1.5px dashed var(--line); border-radius: var(--radius-sm); background: #fffdf8; }
+.gjd-tambah summary { cursor: pointer; }
+.gjd-tambah[open] summary { margin-bottom: 8px; }
+.gj-kartu.gjd-baru { box-shadow: 0 0 0 3px var(--gold); }
