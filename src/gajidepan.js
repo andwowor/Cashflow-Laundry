@@ -531,7 +531,7 @@ function aturNominalThr(body) {
 
 /**
  * Tambah pegawai baru: sisipkan baris setelah pegawai terakhir, lalu tindak lanjutnya (baris KASBON + POTONGAN
- * KASBON, rumus PROYEKSI BIAYA outletnya, 5 keterangan biaya di DAFTAR BIAYA BIAYA & KAS LAUNDRY).
+ * KASBON, baris GAJI BULAN INI bergaji 0, rumus PROYEKSI BIAYA outletnya, 5 keterangan biaya di DAFTAR BIAYA).
  * body: { nama, panggilan, outlet, bank, rekening, gajiPokok, token }.
  */
 function tambahPegawai(body) {
@@ -610,6 +610,15 @@ function tambahPegawai(body) {
       return `Sheet KASBON: ${k.baru ? `baris ${k.baris} "${subjekKasbon}" ditambahkan` : `baris ${k.baris} "${subjekKasbon}" sudah ada, dipakai`}` +
         (k.rentang.length ? `; rentang IMPORTRANGE ${k.rentang.join(" & ")} diperpanjang` : "") +
         (k.potongan ? `; POTONGAN KASBON (${k.potongan}) = KASBON!C${k.baris}.` : ".");
+    });
+    await coba("GAJI BULAN INI", async () => {
+      const g = await pegawaibaru.tambahKeGajiBulanIni(id, nama);
+      pegawaibaru.lupakanCache(id);
+      g.catatan.forEach((c) => catatan.push(c));
+      if (g.sudahAda) return `GAJI BULAN INI: ${nama} sudah ada — tidak ditambah lagi.`;
+      const tetap = Math.abs(g.totalSesudah - g.totalSebelum) < 0.5;
+      return `GAJI BULAN INI: ${g.ditambah.join(", ")} dicantumkan di baris ${g.baris.join(", ")} dengan gaji pokok 0 (gajinya mulai dibayar bulan depan)` +
+        (tetap ? ` — total gaji bulan ini tetap ${g.totalSebelum.toLocaleString("id-ID")}.` : ".");
     });
     if (outlet === "LAINNYA") {
       catatan.push("Outlet \"Lainnya\": gaji pegawai ini tidak dimasukkan ke rumus PROYEKSI BIAYA / KEBUTUHAN AWAL BULAN DEPAN.");

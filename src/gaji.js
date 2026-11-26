@@ -172,7 +172,11 @@ async function load() {
     s.catatan.forEach((c) => catatan.push(c));
     if (s.ditambah.length) {
       info.push(`Pegawai baru dari GAJI BULAN DEPAN bulan lalu ditambahkan ke sheet GAJI BULAN INI: ${s.ditambah.join(", ")} (rumus & rentang IMPORTRANGE ikut diperpanjang).`);
-    } else if (s.rentang && !s.dariCache) {
+    }
+    if (s.gajiPokok && s.gajiPokok.length) {
+      info.push(`Gaji pokok disamakan dengan GAJI BULAN DEPAN bulan lalu (yang dibayar bulan ini): ${s.gajiPokok.map((g) => `${g.nama} ${g.dari.toLocaleString("id-ID")} → ${g.ke.toLocaleString("id-ID")}`).join("; ")}.`);
+    }
+    if (!s.ditambah.length && s.rentang && !s.dariCache) {
       info.push(`${s.rentang} rentang IMPORTRANGE/TOTAL TRANSFER di sheet GAJI BULAN INI diperpanjang agar mencakup semua pegawai bulan lalu.`);
     }
   } catch (e) {

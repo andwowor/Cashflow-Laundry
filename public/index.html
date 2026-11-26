@@ -812,9 +812,10 @@
             <label class="hint" for="gjd-gaji" style="margin:0">Gaji pokok (Rp)</label>
             <input type="text" id="gjd-gaji" inputmode="numeric" autocomplete="off" placeholder="mis. 1.500.000" style="max-width:160px" />
           </div>
-          <p class="hint">Otomatis ikut: baris baru di sheet <b>KASBON</b> (+ potongan kasbonnya), rumus gaji di <b>PROYEKSI BIAYA</b> /
-            KEBUTUHAN AWAL BULAN DEPAN sesuai outlet, 5 keterangan biaya di <b>DAFTAR BIAYA</b> (BIAYA &amp; KAS LAUNDRY), dan bulan
-            depan ditambahkan ke GAJI BULAN INI.</p>
+          <p class="hint">Otomatis ikut: baris baru di sheet <b>KASBON</b> (+ potongan kasbonnya) dan <b>GAJI BULAN INI</b> (gaji pokok 0 —
+            gajinya baru dibayar bulan depan, total gaji bulan ini tidak berubah), rumus gaji di <b>PROYEKSI BIAYA</b> / KEBUTUHAN AWAL
+            BULAN DEPAN sesuai outlet, dan 5 keterangan biaya di <b>DAFTAR BIAYA</b> (BIAYA &amp; KAS LAUNDRY). Bulan depan gaji pokoknya
+            otomatis terisi di GAJI BULAN INI.</p>
           <button type="button" id="btn-gjd-tambah" class="btn-primary">Tambah ke GAJI BULAN DEPAN</button>
           <div id="gjd-tambah-hasil" class="result-log hidden"></div>
         </details>

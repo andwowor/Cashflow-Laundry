@@ -150,11 +150,17 @@ yang meniru kondisi Mac (logo lokal + lock berubah), pakai `APP_REPO_DIR`.
   disentuh; hasil galat dikembalikan; (3) DAFTAR BIAYA di BIAYA & KAS LAUNDRY (`daftarbiaya.tambahKeteranganPegawai`): Gaji /
   Kasbon Gaji / Lembur / THR / Bonus Kinerja + panggilan (mis. panggilan "Budi" → "Gaji Budi"…); POS/POS APLIKASI/ITEM
   = isian terbanyak keterangan serupa, KODE TRANSAKSI ikut baris contohnya (THR/Bonus kosong). CASHFLOW DAFTAR BIAYA =
-  IMPORTRANGE dari sana. **Sinkron GAJI BULAN INI** (`pegawaibaru.sinkronGajiBulanIni`, saat menu Gaji Bulan Ini dibuka + tiap
-  6 jam): spreadsheet bulan baru = salinan bulan lalu, tetapi GAJI BULAN INI mengambil E..O dengan IMPORTRANGE(LINK!A2;
-  "GAJI BULAN DEPAN!E2:G10") per POSISI baris → pegawai yang ada di GBD bulan lalu tapi belum di GAJI BULAN INI ditambahkan di
-  akhir (nama/bank/rekening/gaji pokok; THP & JAM LEMBUR disalin; SISA KASBON = KASBON!H{k} dari rumus POTONGAN KASBON bulan
-  lalu), rentang IMPORTRANGE & SUMIF diperpanjang, nama beda di baris sama diperingatkan.
+  IMPORTRANGE dari sana. (4) GAJI BULAN INI bulan ini (`pegawaibaru.tambahKeGajiBulanIni`, permintaan Andre 26 Nov 2026):
+  pegawai baru dicantumkan sejajar posisinya dengan GBD dengan GAJI POKOK 0 — gajinya baru dibayar bulan depan, total THP
+  bulan ini tidak boleh berubah (dicek sebelum/sesudah); E..O dibiarkan kosong, rentang IMPORTRANGE TIDAK diperpanjang.
+  **Sinkron GAJI BULAN INI** (`pegawaibaru.sinkronGajiBulanIni`, saat menu Gaji Bulan Ini dibuka + tiap 6 jam): spreadsheet
+  bulan baru = salinan bulan lalu, tetapi GAJI BULAN INI mengambil E..O dengan IMPORTRANGE(LINK!A2; "GAJI BULAN DEPAN!E2:G10")
+  per POSISI baris → pegawai yang ada di GBD bulan lalu tapi belum di GAJI BULAN INI ditambahkan di akhir (nama/bank/
+  rekening/gaji pokok; THP & JAM LEMBUR disalin; SISA KASBON = KASBON!H{k} dari rumus POTONGAN KASBON bulan lalu), rentang
+  IMPORTRANGE & SUMIF diperpanjang, nama beda di baris sama diperingatkan. GAJI POKOK GAJI BULAN INI = GAJI POKOK GBD bulan
+  lalu (owner menyamakannya manual tiap bulan, mis. Nov 2026): sel yang masih SALINAN APA ADANYA (= GAJI BULAN INI bulan lalu)
+  tetapi beda dengan GBD bulan lalu (pegawai baru bergaji 0, pegawai berhenti) disamakan sekali per spreadsheet per nama
+  (config `gajiPokokSinkron`); isian yang sudah diubah owner tidak disentuh.
   **Nonaktif**: hari kerja 1..tanggal berhenti tanpa Minggu × Rp50.000; selisih dengan gaji pokok DITAMBAHKAN ke POTONGAN
   KETIDAKHADIRAN. Aturan Andre 26 Nov 2026: masa kerja BELUM 1 tahun (TANGGAL KONTRAK AKTIF s/d tanggal berhenti; bila kosong
   user memilih di form) atau berhenti sebelum bulan spreadsheet → GAJI POKOK langsung 0, tanpa selisih. PEGAWAI
