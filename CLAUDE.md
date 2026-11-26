@@ -108,11 +108,20 @@ yang meniru kondisi Mac (logo lokal + lock berubah), pakai `APP_REPO_DIR`.
   CASHFLOW bulan berjalan (tiap bulan membawa seluruh riwayat sejak Okt 2025). Kolom: A MAUMBI / B PERKAMIL = nominal
   bertanda (+ masuk: tabungan/pengembalian, − keluar), C PERIODE (serial tanggal, validasi tanggal), D TOTAL
   `=IFERROR(A+B;"")` sudah terpasang s/d baris 1002, E KETERANGAN, F status bebas ("Sudah dikembalikan"), G `=D` di
-  sebagian baris berstatus. Baris 2: D2 `=SUM(D3:D100)` = saldo; A2/B2/G2 rentangnya tidak lengkap. Dashboard menghitung
-  saldo dari SEMUA baris dan memperingatkan bila transaksi melewati rentang D2. Kolom A/B tidak konsisten per outlet
+  sebagian baris berstatus. Baris 2: A2/B2/D2 `=SUM(x3:x1002)` (diperbaiki 26 Nov 2026 atas permintaan Andre; D2 = saldo;
+  G2 masih `=SUM(G3:G100)`). Dashboard menghitung saldo dari SEMUA baris dan memperingatkan bila transaksi melewati
+  rentang D2. Input memberi format Rupiah ke A:B baris baru (sel kosong di bawah belum berformat). Kolom A/B tidak konsisten per outlet
   (tabungan PERKAMIL sering dicatat di A) — jangan tampilkan saldo per outlet. Input menulis RAW (nominal bertanda,
   serial tanggal, keterangan) di baris setelah transaksi terakhir (dicari ulang tiap simpan; rumus D disalin bila
   kosong). "Batalkan" hanya mengosongkan A/B/C/E baris yang isinya masih persis sama (kunci hash).
+- **Gaji & Kasbon › Gaji Bulan Ini** (`src/gaji.js`, `/api/gaji`, hanya baca; tab `gajikasbon` bersub menu seperti
+  Upload File): sheet GAJI BULAN INI (baris 2.. sampai baris kosong pertama; kolom dicari dari judul; GAJI POKOK diketik,
+  komponen lain IMPORTRANGE dari GAJI BULAN DEPAN bulan lalu; THP = pendapatan − potongan; JAM LEMBUR = LEMBUR/6250) +
+  KONTROL KAS (B2 BCA, B3 BRI, B4 BNI, B5 MANDIRI, B10/B11 kas tunai Maumbi/Perkamil) + KEBUTUHAN AWAL BULAN baris
+  "Return Investasi". Tabel status kas: sisa = saldo − 100.000 (bank) − return investasi (khusus BCA) − THP pegawai
+  lewat rekening itu (BSI dibayar dari MANDIRI; CASH/TUNAI dari kas tunai). Di sheet, return investasi BCA masih angka
+  tetap 1.350.000 di rumus — dashboard mengambilnya dari KEBUTUHAN AWAL BULAN. Nama & nomor rekening pegawai adalah
+  data pribadi: hanya ditampilkan di dashboard, JANGAN masuk repo/tes yang di-commit (pakai nama palsu di tiruan).
 - Repo ini **publik**. Jangan menambah ID file/folder Drive baru, data pribadi, atau rahasia ke repo.
 - **Proyeksi Biaya** (`src/proyeksi.js`, `/api/proyeksi`, `/api/proyeksi/simpan`): menampilkan seluruh sheet
   PROYEKSI BIAYA (CASHFLOW bulan berjalan) lengkap dengan sel gabungan, KECUALI kolom berjudul LOKASI & KET

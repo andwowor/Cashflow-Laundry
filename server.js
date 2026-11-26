@@ -19,6 +19,7 @@ const qrisbank = require("./src/qrisbank");
 const monbiaya = require("./src/monbiaya");
 const proyeksi = require("./src/proyeksi");
 const kassewa = require("./src/kassewa");
+const gaji = require("./src/gaji");
 const proyeksiupload = require("./src/proyeksiupload");
 const moninput = require("./src/moninput");
 const riwayat = require("./src/riwayat");
@@ -288,6 +289,17 @@ app.post("/api/qrisbank/analyze", upload.array("files", 10), wrap(async (req, re
 app.post("/api/qrisbank/submit", wrap(async (req, res) => {
   res.json(await qrisbank.submit((req.body || {}).entries));
 }));
+
+// ---------- Gaji Bulan Ini (sheet GAJI BULAN INI + KONTROL KAS, CASHFLOW bulan berjalan) ----------
+
+app.get("/api/gaji", async (req, res) => {
+  try {
+    res.json(await gaji.load());
+  } catch (err) {
+    if (!err.status) console.error(err);
+    res.status(err.status || 500).json({ ok: false, error: err.message || String(err) });
+  }
+});
 
 // ---------- Kas Sewa Gedung (sheet KAS SEWA GEDUNG, CASHFLOW bulan berjalan) ----------
 

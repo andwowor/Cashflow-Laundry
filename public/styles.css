@@ -774,3 +774,55 @@ a.btn-ghost { text-decoration: none; display: inline-flex; align-items: center; 
   .ks-utama .ks-angka { font-size: 26px; }
   .ks-angka { font-size: 19px; }
 }
+
+/* ===================== Gaji Bulan Ini ===================== */
+#tab-gajikasbon .pos { color: #146c4a; }
+#tab-gajikasbon .neg { color: var(--err); }
+#gj-grid-status { font-size: 13.5px; }
+#gj-grid-status th, #gj-grid-status td { white-space: nowrap; padding: 9px 12px; }
+#gj-grid-status td.gj-rek { white-space: normal; min-width: 170px; max-width: 280px; }
+#gj-grid-status tfoot td { font-weight: 800; border-top: 2px solid var(--teal); background: var(--teal-soft); }
+#gj-grid-status td.gj-sisa { font-weight: 800; }
+#gj-grid-status tr.gj-kurang td { background: var(--err-soft); }
+.gj-kecil { font-size: 12px; color: var(--ink-soft); font-weight: 400; }
+.gj-chip { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
+.gj-chip.ok { background: #dff1e8; color: #146c4a; }
+.gj-chip.kurang { background: var(--err-soft); color: #8e2a20; }
+.gj-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }
+.gj-kartu { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 14px; background: #fffdf8; min-width: 0; }
+.gj-kartu.nonaktif { opacity: .6; }
+.gj-kepala { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+.gj-id { min-width: 0; }
+.gj-nama { font-weight: 800; font-size: 15.5px; color: var(--ink); }
+.gj-bank { font-size: 12.5px; color: var(--ink-soft); margin-top: 3px; overflow-wrap: anywhere; }
+.gj-norek { font-variant-numeric: tabular-nums; }
+.gj-salin { margin-left: 4px; border: 1px solid var(--line); background: #fff; border-radius: 8px; font-size: 11px; padding: 1px 7px; cursor: pointer; font-family: var(--font); }
+.gj-thp { text-align: right; flex: 0 0 auto; }
+.gj-thp-angka { font-size: 19px; font-weight: 800; color: var(--teal-dark); white-space: nowrap; }
+.gj-rinci { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 10px; }
+.gj-sub { font-size: 11.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--teal-dark); margin-bottom: 4px; }
+.gj-baris { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; padding: 2px 0; }
+.gj-baris span:last-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.gj-baris.nol { color: #a9a39a; }
+.gj-baris.tot { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 4px; font-weight: 800; }
+.gj-kaki { margin-top: 10px; font-size: 13px; color: var(--ink-soft); }
+@media (max-width: 480px) {
+  .gj-grid { grid-template-columns: 1fr; }
+  .gj-rinci { grid-template-columns: 1fr; gap: 8px; }
+}
+/* HP: tabel status saldo jadi kartu per rekening (kolom Sisa & Status langsung terlihat). */
+@media (max-width: 640px) {
+  #gj-status.table-wrap { border: none; overflow: visible; }
+  #gj-grid-status thead { display: none; }
+  #gj-grid-status, #gj-grid-status tbody, #gj-grid-status tfoot, #gj-grid-status tr, #gj-grid-status td { display: block; width: 100%; }
+  #gj-grid-status tr { border: 1px solid var(--line); border-radius: var(--radius-sm); margin-bottom: 10px; overflow: hidden; background: #fff; }
+  #gj-grid-status td { white-space: normal; border-bottom: none; padding: 5px 12px; }
+  #gj-grid-status td.gj-rek { max-width: none; padding-top: 10px; border-bottom: 1px solid var(--line); }
+  #gj-grid-status td[data-label] { display: flex; justify-content: space-between; gap: 10px; text-align: right; }
+  #gj-grid-status td[data-label]::before { content: attr(data-label); color: var(--ink-soft); font-weight: 600; text-align: left; }
+  #gj-grid-status td.gj-kosong { display: none; }
+  #gj-grid-status tbody tr:nth-child(even) td { background: transparent; }
+  #gj-grid-status tbody tr.gj-kurang td { background: var(--err-soft); }
+  #gj-grid-status tfoot tr { border: 2px solid var(--teal); }
+  #gj-grid-status tfoot td { border-top: none; }
+}

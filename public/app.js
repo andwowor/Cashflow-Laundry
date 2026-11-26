@@ -148,6 +148,7 @@ $$(".tab").forEach((btn) => {
     if (btn.dataset.tab === "riwayat" && !RB_LOADED) rbOpen();
     if (btn.dataset.tab === "proyeksi") loadProyeksi(); // selalu segarkan saat dibuka
     if (btn.dataset.tab === "kassewa") loadKasSewa(); // selalu segarkan saat dibuka
+    if (btn.dataset.tab === "gajikasbon") gkBukaSub(); // muat sub menu yang sedang aktif
     if (btn.dataset.tab === "daftarbiaya" && !DB_LOADED) loadDaftarBiaya();
     if (btn.dataset.tab === "deposit" && !DEP_LOADED) loadDeposit();
     if (btn.dataset.tab === "aliran" && !AL_LOADED) alOpen();
@@ -4313,6 +4314,147 @@ $("#ks-cepat").addEventListener("click", (ev) => {
 });
 ["#ks-bulan", "#ks-fjenis"].forEach((s) => $(s).addEventListener("change", ksRenderRiwayat));
 $("#ks-cari").addEventListener("input", ksRenderRiwayat);
+
+// ================= Gaji & Kasbon › Gaji Bulan Ini =================
+// Sheet GAJI BULAN INI + KONTROL KAS (CASHFLOW bulan berjalan), hanya baca.
+let GJ = null;
+const GJ_PENDAPATAN = [
+  ["gajiPokok", "Gaji pokok"], ["lembur", "Lembur"], ["uangMakan", "Uang makan"], ["thr", "THR"], ["bonus", "Bonus"],
+  ["bonusReferal", "Bonus referal"], ["tunjanganLain", "Tunjangan lain"],
+];
+const GJ_POTONGAN = [
+  ["potLembur", "Potongan lembur"], ["potKetidakhadiran", "Potongan ketidakhadiran"], ["potKasbon", "Potongan kasbon"],
+  ["potKerugian", "Potongan kerugian"], ["potLain", "Potongan lain-lain"],
+];
+
+function gjRp(n) {
+  const v = Math.round(Number(n) || 0);
+  return (v < 0 ? "−" : "") + "Rp" + Math.abs(v).toLocaleString("id-ID");
+}
+
+async function loadGaji() {
+  $("#btn-gj-load").disabled = true;
+  if (!GJ) $("#gj-ringkas").innerHTML = '<p class="hint">Memuat sheet GAJI BULAN INI…</p>';
+  try {
+    GJ = await api("/api/gaji");
+    gjRender();
+  } catch (e) {
+    $("#gj-ringkas").innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
+  } finally {
+    $("#btn-gj-load").disabled = false;
+  }
+}
+
+function gjRender() {
+  const d = GJ;
+  if (!d) return;
+  $("#gj-open").href = d.spreadsheet.url;
+  $("#gj-open").classList.remove("hidden");
+  $("#gj-meta").textContent = `${d.spreadsheet.title} · dimuat ${d.dimuat}` + (d.updateHarian ? ` · saldo kas dari update harian ${d.updateHarian}` : "");
+  const r = d.ringkas;
+  const kurang = d.status.filter((s) => !s.cukup);
+  $("#gj-ringkas").innerHTML = `
+    <div class="ks-kartu ks-utama"><div class="ks-label">Total gaji dibayar (THP)</div>
+      <div class="ks-angka">${gjRp(r.totalThp)}</div><div class="ks-sub">${r.dibayar} dari ${r.jumlahPegawai} pegawai</div></div>
+    <div class="ks-kartu"><div class="ks-label">Total pendapatan</div><div class="ks-angka">${gjRp(r.totalPendapatan)}</div></div>
+    <div class="ks-kartu"><div class="ks-label">Total potongan</div><div class="ks-angka neg">${gjRp(-r.totalPotongan)}</div></div>
+    <div class="ks-kartu"><div class="ks-label">Status saldo kas</div>${
+      kurang.length
+        ? `<div class="ks-angka neg kecil">Kurang di ${kurang.length} rekening</div><div class="ks-sub">${escapeHtml(kurang.map((s) => s.nama).join(", "))}</div>`
+        : '<div class="ks-angka pos kecil">Semua cukup ✓</div><div class="ks-sub">saldo cukup untuk semua gaji</div>'
+    }</div>`;
+
+  // Tabel status saldo kas
+  const baris = d.status
+    .map((s) => {
+      const sub = s.rincian
+        ? s.rincian.map((x) => `${escapeHtml(x.nama)}: ${gjRp(x.saldo)}`).join(" · ")
+        : s.pegawai.length
+          ? "Gaji: " + escapeHtml(s.pegawai.join(", "))
+          : "tidak ada gaji lewat rekening ini";
+      return `<tr class="${s.cukup ? "" : "gj-kurang"}">
+        <td class="gj-rek"><b>${escapeHtml(s.nama)}</b><div class="gj-kecil">${sub}${s.rincian && s.pegawai.length ? "<br>Gaji tunai: " + escapeHtml(s.pegawai.join(", ")) : ""}</div></td>
+        <td class="num" data-label="Saldo terkini">${gjRp(s.saldo)}</td>
+        <td class="num" data-label="Saldo minimum">${s.saldoMinimum ? gjRp(-s.saldoMinimum) : "–"}</td>
+        <td class="num" data-label="Return investasi">${s.returnInvestasi ? gjRp(-s.returnInvestasi) : "–"}</td>
+        <td class="num" data-label="Kebutuhan gaji">${s.kebutuhan ? gjRp(-s.kebutuhan) : "–"}</td>
+        <td class="num gj-sisa ${s.sisa < 0 ? "neg" : "pos"}" data-label="Sisa setelah gaji">${gjRp(s.sisa)}</td>
+        <td data-label="Status">${s.cukup ? '<span class="gj-chip ok">Cukup</span>' : `<span class="gj-chip kurang">Kurang ${gjRp(-s.sisa)}</span>`}</td>
+      </tr>`;
+    })
+    .join("");
+  const t = d.total;
+  $("#gj-status").innerHTML = `<table id="gj-grid-status"><thead><tr>
+      <th>Rekening / kas</th><th class="num">Saldo terkini</th><th class="num">Saldo minimum</th><th class="num">Return investasi</th>
+      <th class="num">Kebutuhan gaji</th><th class="num">Sisa setelah gaji</th><th>Status</th></tr></thead>
+    <tbody>${baris}</tbody>
+    <tfoot><tr><td class="gj-rek"><b>TOTAL</b></td><td class="num" data-label="Saldo terkini">${gjRp(t.saldo)}</td>
+      <td class="num" data-label="Saldo minimum">${gjRp(-t.saldoMinimum)}</td>
+      <td class="num" data-label="Return investasi">${t.returnInvestasi ? gjRp(-t.returnInvestasi) : "–"}</td>
+      <td class="num" data-label="Kebutuhan gaji">${gjRp(-t.kebutuhan)}</td>
+      <td class="num gj-sisa ${t.sisa < 0 ? "neg" : "pos"}" data-label="Sisa setelah gaji">${gjRp(t.sisa)}</td><td class="gj-kosong"></td></tr></tfoot></table>`;
+  $("#gj-catatan").innerHTML = (d.catatan || []).map((c) => `<div class="th-notice th-err">⚠️ <div>${escapeHtml(c)}</div></div>`).join("");
+
+  // Kartu per pegawai: yang dibayar dulu, lalu yang tidak ada gaji bulan ini.
+  const urut = d.pegawai.filter((p) => p.aktif).concat(d.pegawai.filter((p) => !p.aktif));
+  const daftar = (list, p) =>
+    list
+      .map(([k, label]) => {
+        const v = p[k] || 0;
+        const extra = k === "lembur" && p.jamLembur ? ` <span class="gj-kecil">(${Number(p.jamLembur).toLocaleString("id-ID", { maximumFractionDigits: 1 })} jam)</span>` : "";
+        return `<div class="gj-baris${v ? "" : " nol"}"><span>${label}${extra}</span><span>${v ? gjRp(v) : "–"}</span></div>`;
+      })
+      .join("");
+  $("#gj-pegawai").innerHTML = urut
+    .map(
+      (p) => `<div class="gj-kartu${p.aktif ? "" : " nonaktif"}">
+        <div class="gj-kepala">
+          <div class="gj-id"><div class="gj-nama">${escapeHtml(p.nama)}</div>
+            <div class="gj-bank">${escapeHtml(p.bank || "-")}${p.rekening ? ` · <span class="gj-norek">${escapeHtml(p.rekening)}</span>
+              <button type="button" class="gj-salin" data-salin="${escapeHtml(p.rekening)}" title="Salin nomor rekening">Salin</button>` : ""}</div></div>
+          <div class="gj-thp"><div class="ks-label">THP</div><div class="gj-thp-angka">${gjRp(p.thp)}</div></div>
+        </div>
+        ${
+          p.aktif
+            ? `<div class="gj-rinci">
+                <div><div class="gj-sub">Pendapatan</div>${daftar(GJ_PENDAPATAN, p)}
+                  <div class="gj-baris tot"><span>Total</span><span>${gjRp(p.totalPendapatan)}</span></div></div>
+                <div><div class="gj-sub">Potongan</div>${daftar(GJ_POTONGAN, p)}
+                  <div class="gj-baris tot"><span>Total</span><span>${p.totalPotongan ? gjRp(-p.totalPotongan) : "–"}</span></div></div>
+              </div>`
+            : '<div class="gj-kecil" style="margin-top:8px">Tidak ada gaji bulan ini.</div>'
+        }
+        <div class="gj-kaki">Sisa kasbon: <b>${gjRp(p.sisaKasbon || 0)}</b></div>
+      </div>`
+    )
+    .join("");
+}
+
+$("#btn-gj-load").addEventListener("click", loadGaji);
+
+// Sub menu Gaji & Kasbon
+function gkBukaSub() {
+  const aktif = $("#tab-gajikasbon .subtab.active");
+  if (aktif && aktif.dataset.sub === "gajibulanini") loadGaji();
+}
+$$("#tab-gajikasbon .subtab").forEach((b) =>
+  b.addEventListener("click", () => {
+    $$("#tab-gajikasbon .subtab").forEach((x) => x.classList.toggle("active", x === b));
+    $$("#tab-gajikasbon .subpanel").forEach((p) => p.classList.toggle("active", p.id === "sub-" + b.dataset.sub));
+    gkBukaSub();
+  })
+);
+$("#gj-pegawai").addEventListener("click", async (ev) => {
+  const b = ev.target.closest(".gj-salin");
+  if (!b) return;
+  try {
+    await copyTextToClipboard(b.dataset.salin);
+    b.textContent = "Tersalin ✓";
+    setTimeout(() => (b.textContent = "Salin"), 1500);
+  } catch {
+    b.textContent = "Gagal";
+  }
+});
 
 // ================= Init =================
 {

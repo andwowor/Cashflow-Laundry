@@ -35,6 +35,7 @@
       <button class="tab" data-tab="kas">Input Kas</button>
       <button class="tab" data-tab="setoran">Setoran Kas</button>
       <button class="tab" data-tab="kassewa">Kas Sewa Gedung</button>
+      <button class="tab" data-tab="gajikasbon">Gaji &amp; Kasbon</button>
       <button class="tab" data-tab="deposit">Deposit Pelanggan</button>
       <button class="tab" data-tab="transaksi">Upload File</button>
       <button class="tab" data-tab="pengaturan">Pengaturan</button>
@@ -715,6 +716,42 @@
         </div>
         <div id="ks-ringkas" class="last-sync hidden"></div>
         <div id="ks-table" class="table-wrap"></div>
+      </div>
+    </section>
+
+    <!-- ============ TAB GAJI & KASBON ============ -->
+    <section id="tab-gajikasbon" class="panel">
+      <nav class="subtabs" aria-label="Sub menu Gaji &amp; Kasbon">
+        <button class="subtab active" data-sub="gajibulanini">💰 Gaji Bulan Ini</button>
+      </nav>
+
+      <!-- Sub menu: Gaji Bulan Ini -->
+      <div id="sub-gajibulanini" class="subpanel active">
+      <div class="card">
+        <h2>Gaji Bulan Ini</h2>
+        <p class="hint">Data dari sheet <b>GAJI BULAN INI</b> pada spreadsheet CASHFLOW bulan ini (hanya ditampilkan —
+          angka gaji diubah langsung di spreadsheet).</p>
+        <div class="upload-row">
+          <button id="btn-gj-load" class="btn-ghost">↻ Muat ulang</button>
+          <a id="gj-open" class="btn-ghost hidden" target="_blank" rel="noopener">Buka di Google Sheets ↗</a>
+          <span id="gj-meta" class="hint" style="margin:0"></span>
+        </div>
+        <div id="gj-ringkas" class="ks-saldo"><p class="hint">Memuat…</p></div>
+      </div>
+
+      <div class="card">
+        <h3>Status saldo kas untuk pembayaran gaji</h3>
+        <p class="hint">Saldo terkini dari sheet <b>KONTROL KAS</b> (bank: baris 2–5, kas tunai: baris 10–11).
+          <b>Sisa</b> = saldo terkini − saldo minimum Rp100.000 (bank) − return investasi bulan ini (khusus BCA) −
+          kebutuhan gaji yang ditransfer lewat rekening itu. Gaji pegawai ber-rekening BSI dibayar dari MANDIRI.</p>
+        <div id="gj-status" class="table-wrap"></div>
+        <div id="gj-catatan"></div>
+      </div>
+
+      <div class="card">
+        <h3>Rincian gaji per pegawai</h3>
+        <div id="gj-pegawai" class="gj-grid"></div>
+      </div>
       </div>
     </section>
 

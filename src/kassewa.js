@@ -5,8 +5,8 @@
 //
 // Struktur sheet (CASHFLOW NOVEMBER 2026):
 //   baris 1 = judul: A MAUMBI | B PERKAMIL | C PERIODE | D TOTAL | E KETERANGAN | (F status) | (G)
-//   baris 2 = ringkasan: A2 =SUM(A3:A26), B2 =SUM(B3:B7) (rentang lama, tidak lengkap),
-//             D2 =SUM(D3:D100) = SALDO kas, G2 =SUM(G3:G100) = total pemakaian berstatus "Sudah dikembalikan".
+//   baris 2 = ringkasan: A2 =SUM(A3:A1002), B2 =SUM(B3:B1002), D2 =SUM(D3:D1002) = SALDO kas
+//             (diperbaiki 26 Nov 2026; sebelumnya A3:A26, B3:B7, D3:D100), G2 =SUM(G3:G100).
 //   baris 3.. = transaksi: nominal bertanda di A (MAUMBI) atau B (PERKAMIL) — positif = masuk
 //             (tabungan sewa gedung / pengembalian), negatif = keluar (pemakaian); C tanggal (serial,
 //             validasi tanggal); D =IFERROR(A+B;"") sudah terpasang s/d baris 1002; E keterangan;
@@ -27,6 +27,8 @@ const BARIS_AWAL = 3;
 const OUTLET = ["MAUMBI", "PERKAMIL"];
 const MAX_NOMINAL = 1e11;
 const qs = `'${SHEET}'`;
+// Format angka kolom A/B di baris lama (akuntansi Rupiah).
+const FORMAT_RUPIAH = '_-[$Rp-421]* #,##0_-;_-[$Rp-421]* \\-#,##0_-;_-[$Rp-421]* "-"??_-;_-@';
 
 function httpError(status, message, extra) {
   const e = new Error(message);
@@ -225,20 +227,29 @@ function simpan(body) {
     if ([0, 1, 2, 4, 5].some((c) => teks(isi[c]) !== "")) {
       throw httpError(409, "Baris tujuan di sheet ternyata sudah terisi. Data dimuat ulang — silakan ulangi.", { data });
     }
-    if (!/^=/.test(teks(isi[3]))) {
-      const sheetId = await getSheetId(id, SHEET);
-      if (sheetId == null) throw httpError(404, `Sheet "${SHEET}" tidak ditemukan.`);
-      // Salin rumus D dari baris atasnya (mengikuti locale spreadsheet).
-      await batchUpdateRequests(id, [
-        {
-          copyPaste: {
-            source: { sheetId, startRowIndex: baris - 2, endRowIndex: baris - 1, startColumnIndex: 3, endColumnIndex: 4 },
-            destination: { sheetId, startRowIndex: baris - 1, endRowIndex: baris, startColumnIndex: 3, endColumnIndex: 4 },
-            pasteType: "PASTE_FORMULA",
-          },
+    const sheetId = await getSheetId(id, SHEET);
+    if (sheetId == null) throw httpError(404, `Sheet "${SHEET}" tidak ditemukan.`);
+    // Nominal A:B berformat Rupiah seperti baris lama (sel kosong di bawah belum berformat).
+    const permintaan = [
+      {
+        repeatCell: {
+          range: { sheetId, startRowIndex: baris - 1, endRowIndex: baris, startColumnIndex: 0, endColumnIndex: 2 },
+          cell: { userEnteredFormat: { numberFormat: { type: "NUMBER", pattern: FORMAT_RUPIAH } } },
+          fields: "userEnteredFormat.numberFormat",
         },
-      ]);
+      },
+    ];
+    if (!/^=/.test(teks(isi[3]))) {
+      // Salin rumus D dari baris atasnya (mengikuti locale spreadsheet).
+      permintaan.push({
+        copyPaste: {
+          source: { sheetId, startRowIndex: baris - 2, endRowIndex: baris - 1, startColumnIndex: 3, endColumnIndex: 4 },
+          destination: { sheetId, startRowIndex: baris - 1, endRowIndex: baris, startColumnIndex: 3, endColumnIndex: 4 },
+          pasteType: "PASTE_FORMULA",
+        },
+      });
     }
+    await batchUpdateRequests(id, permintaan);
 
     const nilai = jenis === "masuk" ? nominal : -nominal;
     const kolom = outlet === "MAUMBI" ? "A" : "B";
