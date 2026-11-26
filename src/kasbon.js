@@ -7,7 +7,8 @@
 //   B NOMINAL KASBON BULAN INI = SUMIF('INPUT PENGGUNAAN BIAYA'!B; A; C)  (kasbon baru bulan ini)
 //   C RENCANA POTONG BULAN DEPAN = B + H                                   (seluruh kasbon yang belum lunas)
 //   D SISA KASBON BULAN SEBELUMNYA = IMPORTRANGE(LINK!A2; "KASBON!H2:H11")
-//   E RENCANA POTONG BULAN INI = IMPORTRANGE(LINK!A2; "KASBON!C2:C9")     (= C bulan lalu; judul lama "RENCANA POTONG")
+//   E RENCANA POTONG BULAN INI = IMPORTRANGE(LINK!A2; "KASBON!C2:C11")    (= C bulan lalu; judul lama "RENCANA POTONG";
+//     rentang diperluas dari C2:C9 dan A11 "Kasbin…" diperbaiki jadi "Kasbon…" pada 26 Nov 2026)
 //   F DIBAYAR (diketik), G TANGGAL BAYAR (diketik), H SISA = E − F, I TOTAL KASBON = B + H
 // Potongan gaji bulan depan: sheet GAJI BULAN DEPAN kolom POTONGAN KASBON (M) = KASBON!C{baris pegawai itu}
 // (urutan baris kedua sheet tidak sama; pemetaannya dibaca dari rumus kolom M).
