@@ -20,6 +20,7 @@ const monbiaya = require("./src/monbiaya");
 const proyeksi = require("./src/proyeksi");
 const kassewa = require("./src/kassewa");
 const gaji = require("./src/gaji");
+const kasbon = require("./src/kasbon");
 const proyeksiupload = require("./src/proyeksiupload");
 const moninput = require("./src/moninput");
 const riwayat = require("./src/riwayat");
@@ -291,6 +292,24 @@ app.post("/api/qrisbank/submit", wrap(async (req, res) => {
 }));
 
 // ---------- Gaji Bulan Ini (sheet GAJI BULAN INI + KONTROL KAS, CASHFLOW bulan berjalan) ----------
+
+app.get("/api/kasbon", async (req, res) => {
+  try {
+    res.json(await kasbon.load());
+  } catch (err) {
+    if (!err.status) console.error(err);
+    res.status(err.status || 500).json({ ok: false, error: err.message || String(err) });
+  }
+});
+
+app.post("/api/kasbon/cicilan", async (req, res) => {
+  try {
+    res.json(await kasbon.aturCicilan(req.body || {}));
+  } catch (err) {
+    if (!err.status) console.error(err);
+    res.status(err.status || 500).json({ ok: false, error: err.message || String(err), data: err.data || null });
+  }
+});
 
 app.get("/api/gaji", async (req, res) => {
   try {

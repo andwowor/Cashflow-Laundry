@@ -723,6 +723,7 @@
     <section id="tab-gajikasbon" class="panel">
       <nav class="subtabs" aria-label="Sub menu Gaji &amp; Kasbon">
         <button class="subtab active" data-sub="gajibulanini">💰 Gaji Bulan Ini</button>
+        <button class="subtab" data-sub="kasbon">🧾 Kasbon</button>
       </nav>
 
       <!-- Sub menu: Gaji Bulan Ini -->
@@ -751,6 +752,33 @@
       <div class="card">
         <h3>Rincian gaji per pegawai</h3>
         <div id="gj-pegawai" class="gj-grid"></div>
+      </div>
+      </div>
+
+      <!-- Sub menu: Kasbon -->
+      <div id="sub-kasbon" class="subpanel">
+      <div class="card">
+        <h2>Kasbon Pegawai</h2>
+        <p class="hint">Data dari sheet <b>KASBON</b> pada spreadsheet CASHFLOW bulan ini. Alurnya:
+          <b>rencana potong bulan ini</b> (E) − <b>dibayar</b> (F) = <b>sisa</b> (H);
+          <b>rencana potong bulan depan</b> (C) = kasbon baru bulan ini (B) + sisa (H).</p>
+        <div class="upload-row">
+          <button id="btn-kb-load" class="btn-ghost">↻ Muat ulang</button>
+          <a id="kb-open" class="btn-ghost hidden" target="_blank" rel="noopener">Buka di Google Sheets ↗</a>
+          <span id="kb-meta" class="hint" style="margin:0"></span>
+        </div>
+        <div id="kb-ringkas" class="ks-saldo"><p class="hint">Memuat…</p></div>
+        <div id="kb-catatan"></div>
+      </div>
+
+      <div class="card">
+        <h3>Kasbon per pegawai</h3>
+        <p class="hint">Bila pegawai minta potongan bulan depan <b>dicicil</b>, klik <b>Atur cicilan</b>. Yang diubah hanya
+          <b>POTONGAN KASBON</b> di sheet GAJI BULAN DEPAN (dipotong paling banyak sebesar cicilan). Kolom C dan
+          <b>SISA (H)</b> di sheet KASBON tidak disentuh, jadi sisa kasbon tetap tercatat dan terbawa ke bulan berikutnya.</p>
+        <div id="kb-result" class="result-log hidden"></div>
+        <div id="kb-table" class="table-wrap"></div>
+        <div id="kb-tanpa" class="hint"></div>
       </div>
       </div>
     </section>

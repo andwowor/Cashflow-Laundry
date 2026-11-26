@@ -122,6 +122,15 @@ yang meniru kondisi Mac (logo lokal + lock berubah), pakai `APP_REPO_DIR`.
   lewat rekening itu (BSI dibayar dari MANDIRI; CASH/TUNAI dari kas tunai). Di sheet, return investasi BCA masih angka
   tetap 1.350.000 di rumus — dashboard mengambilnya dari KEBUTUHAN AWAL BULAN. Nama & nomor rekening pegawai adalah
   data pribadi: hanya ditampilkan di dashboard, JANGAN masuk repo/tes yang di-commit (pakai nama palsu di tiruan).
+- **Gaji & Kasbon › Kasbon** (`src/kasbon.js`, `/api/kasbon`, `/api/kasbon/cicilan`): sheet KASBON — A SUBJEK ("Kasbon
+  Gaji <nama>" = keterangan DAFTAR BIAYA), B kasbon baru (SUMIF INPUT PENGGUNAAN BIAYA), C RENCANA POTONG BULAN DEPAN = B+H,
+  D sisa bulan lalu & E RENCANA POTONG BULAN INI (judul diganti 26 Nov 2026; dulu "RENCANA POTONG") = IMPORTRANGE KASBON
+  H/C bulan lalu, F DIBAYAR & G TANGGAL BAYAR diketik, H SISA = E−F, I TOTAL = B+H. Potongan gaji = GAJI BULAN DEPAN kolom
+  POTONGAN KASBON `=KASBON!C{n}` (urutan baris berbeda; pemetaan dibaca dari rumus itu). **Cicilan** tidak pernah mengubah
+  KASBON (C harus tetap penuh agar E bulan depan penuh dan H = E−F menyimpan sisa): dashboard hanya menulis rumus
+  POTONGAN KASBON `=MIN(KASBON!C{n};cicilan)` (penuh = `=KASBON!C{n}`; cek nilai, bila galat coba pemisah "," lalu kembalikan
+  rumus lama). Rumus manual owner `=KASBON!C3-1000000` dikenali sebagai "ditunda". Dashboard memperingatkan SUBJEK yang
+  tidak ada di DAFTAR BIAYA (mis. salah ketik "Kasbin") dan rentang IMPORTRANGE D/E yang lebih pendek dari jumlah pegawai.
 - Repo ini **publik**. Jangan menambah ID file/folder Drive baru, data pribadi, atau rahasia ke repo.
 - **Proyeksi Biaya** (`src/proyeksi.js`, `/api/proyeksi`, `/api/proyeksi/simpan`): menampilkan seluruh sheet
   PROYEKSI BIAYA (CASHFLOW bulan berjalan) lengkap dengan sel gabungan, KECUALI kolom berjudul LOKASI & KET

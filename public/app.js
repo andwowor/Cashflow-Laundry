@@ -4436,6 +4436,7 @@ $("#btn-gj-load").addEventListener("click", loadGaji);
 function gkBukaSub() {
   const aktif = $("#tab-gajikasbon .subtab.active");
   if (aktif && aktif.dataset.sub === "gajibulanini") loadGaji();
+  if (aktif && aktif.dataset.sub === "kasbon") loadKasbon();
 }
 $$("#tab-gajikasbon .subtab").forEach((b) =>
   b.addEventListener("click", () => {
@@ -4455,6 +4456,215 @@ $("#gj-pegawai").addEventListener("click", async (ev) => {
     b.textContent = "Gagal";
   }
 });
+
+// ================= Gaji & Kasbon › Kasbon =================
+// Sheet KASBON (CASHFLOW bulan berjalan). Cicilan = rumus POTONGAN KASBON di GAJI BULAN DEPAN;
+// sheet KASBON tidak diubah sehingga kolom SISA (H) tetap benar.
+let KB = null;
+let KB_BUKA = null; // baris KASBON yang form cicilannya terbuka
+let KB_BUSY = false;
+
+function kbRp(n) {
+  const v = Math.round(Number(n) || 0);
+  return (v < 0 ? "−" : "") + "Rp" + Math.abs(v).toLocaleString("id-ID");
+}
+const kbNol = (n) => (Number(n) ? kbRp(n) : "–");
+
+async function loadKasbon() {
+  if (KB_BUSY) return;
+  $("#btn-kb-load").disabled = true;
+  if (!KB) $("#kb-ringkas").innerHTML = '<p class="hint">Memuat sheet KASBON…</p>';
+  try {
+    KB = await api("/api/kasbon");
+    kbRender();
+  } catch (e) {
+    $("#kb-ringkas").innerHTML = `<p class="error">${escapeHtml(e.message)}</p>`;
+  } finally {
+    $("#btn-kb-load").disabled = false;
+  }
+}
+
+function kbPotongInfo(b) {
+  const g = b.gbd;
+  if (!g) return '<span class="kb-tag abu">tidak terhubung ke GAJI BULAN DEPAN</span>';
+  if (g.galat) return `<span class="kb-tag merah">galat ${escapeHtml(g.galat)}</span>`;
+  if (g.mode === "cicil") return `<span class="kb-tag emas">dicicil maks. ${kbRp(g.cicilan)}/bln</span>`;
+  if (g.mode === "manual") return `<span class="kb-tag emas" title="${escapeHtml(g.rumus)}">manual: ditunda ${kbRp(g.ditunda)}</span>`;
+  if (g.mode === "khusus") return `<span class="kb-tag emas" title="${escapeHtml(g.rumus)}">rumus khusus</span>`;
+  return b.rencanaDepan ? '<span class="kb-tag hijau">potong penuh</span>' : "";
+}
+
+function kbRender() {
+  const d = KB;
+  if (!d) return;
+  $("#kb-open").href = d.spreadsheet.url;
+  $("#kb-open").classList.remove("hidden");
+  $("#kb-meta").textContent = `${d.spreadsheet.title} · dimuat ${d.dimuat}`;
+  const r = d.ringkas;
+  $("#kb-ringkas").innerHTML = `
+    <div class="ks-kartu ks-utama"><div class="ks-label">Total kasbon belum lunas</div>
+      <div class="ks-angka">${kbRp(r.totalKasbon)}</div><div class="ks-sub">${r.jumlahBerkasbon} pegawai</div></div>
+    <div class="ks-kartu"><div class="ks-label">Kasbon baru bulan ini</div><div class="ks-angka">${kbRp(r.baru)}</div></div>
+    <div class="ks-kartu"><div class="ks-label">Dibayar bulan ini</div><div class="ks-angka pos">${kbRp(r.dibayar)}</div></div>
+    <div class="ks-kartu"><div class="ks-label">Dipotong dari gaji bulan depan</div><div class="ks-angka">${kbRp(r.dipotongDepan)}</div>
+      <div class="ks-sub">${r.cicilan ? `${r.cicilan} pegawai dicicil` : "semua potong penuh"}</div></div>`;
+  $("#kb-catatan").innerHTML = (d.catatan || []).map((c) => `<div class="th-notice th-err">⚠️ <div>${escapeHtml(c)}</div></div>`).join("");
+
+  const tampil = d.baris.filter((b) => b.adaKasbon || b.peringatan || (b.gbd && b.gbd.mode !== "penuh"));
+  const tanpa = d.baris.filter((b) => !tampil.includes(b));
+  $("#kb-tanpa").textContent = tanpa.length ? `Tanpa kasbon: ${tanpa.map((b) => b.nama).join(", ")}.` : "";
+  if (!tampil.length) {
+    $("#kb-table").innerHTML = '<p class="hint" style="padding:12px;margin:0">Tidak ada kasbon bulan ini.</p>';
+    return;
+  }
+  const rows = tampil
+    .map((b) => {
+      const g = b.gbd;
+      const form =
+        KB_BUKA === b.baris && g
+          ? `<tr class="kb-form-row" data-baris="${b.baris}"><td colspan="9">${kbFormHtml(b)}</td></tr>`
+          : "";
+      const v = (x) => `<span class="kb-v">${x}</span>`;
+      const tombol = g && !g.galat && (b.rencanaDepan || g.mode !== "penuh")
+        ? `<div><button type="button" class="btn-ghost kb-atur" data-baris="${b.baris}">${KB_BUKA === b.baris ? "Tutup" : "Atur cicilan"}</button></div>`
+        : "";
+      return `<tr data-baris="${b.baris}" class="${b.peringatan ? "kb-cek" : ""}">
+        <td class="kb-nama"><b>${escapeHtml(b.nama)}</b>${g && g.pegawai ? `<div class="gj-kecil">${escapeHtml(g.pegawai)}</div>` : ""}${
+          b.peringatan ? `<div class="kb-warn">⚠️ ${escapeHtml(b.peringatan)}</div>` : ""
+        }</td>
+        <td class="num" data-label="Sisa bulan lalu (D)">${v(kbNol(b.sisaLalu))}</td>
+        <td class="num" data-label="Rencana potong bulan ini (E)">${v(b.rencanaKosong ? '<span class="gj-kecil">kosong</span>' : kbNol(b.rencana))}</td>
+        <td class="num" data-label="Dibayar (F)">${v(kbNol(b.dibayar) + (b.dibayar && b.tanggalBayar ? `<div class="gj-kecil">${escapeHtml(b.tanggalBayar)}</div>` : ""))}</td>
+        <td class="num" data-label="Sisa (H)">${v(`<b>${kbNol(b.sisa)}</b>`)}</td>
+        <td class="num" data-label="Kasbon baru bulan ini (B)">${v(kbNol(b.baru))}</td>
+        <td class="num" data-label="Rencana potong bulan depan (C)">${v(`<b>${kbNol(b.rencanaDepan)}</b>`)}</td>
+        <td class="num" data-label="Dipotong dari gaji bulan depan">${v((b.dipotongDepan != null ? kbNol(b.dipotongDepan) : "–") + `<div>${kbPotongInfo(b)}</div>` + tombol)}</td>
+        <td class="num" data-label="Sisa dibawa ke bulan berikutnya">${v(b.sisaSetelahDepan != null ? kbNol(b.sisaSetelahDepan) : "–")}</td>
+      </tr>${form}`;
+    })
+    .join("");
+  const t = (k) => tampil.reduce((a, b) => a + (Number(b[k]) || 0), 0);
+  $("#kb-table").innerHTML = `<table id="kb-grid"><thead><tr>
+      <th>Pegawai</th><th class="num">Sisa bulan lalu<br><small>D</small></th><th class="num">Rencana potong bulan ini<br><small>E</small></th>
+      <th class="num">Dibayar<br><small>F</small></th><th class="num">Sisa<br><small>H = E − F</small></th>
+      <th class="num">Kasbon baru<br><small>B</small></th><th class="num">Rencana potong bulan depan<br><small>C = B + H</small></th>
+      <th class="num">Dipotong dari gaji bulan depan<br><small>GAJI BULAN DEPAN</small></th><th class="num">Sisa dibawa<br><small>C − potongan</small></th>
+    </tr></thead><tbody>${rows}</tbody>
+    <tfoot><tr><td class="kb-nama"><b>TOTAL</b></td><td class="num" data-label="Sisa bulan lalu (D)">${kbNol(t("sisaLalu"))}</td>
+      <td class="num" data-label="Rencana potong bulan ini (E)">${kbNol(t("rencana"))}</td><td class="num" data-label="Dibayar (F)">${kbNol(t("dibayar"))}</td>
+      <td class="num" data-label="Sisa (H)">${kbNol(t("sisa"))}</td><td class="num" data-label="Kasbon baru bulan ini (B)">${kbNol(t("baru"))}</td>
+      <td class="num" data-label="Rencana potong bulan depan (C)">${kbNol(t("rencanaDepan"))}</td>
+      <td class="num" data-label="Dipotong dari gaji bulan depan">${kbNol(t("dipotongDepan"))}</td>
+      <td class="num" data-label="Sisa dibawa ke bulan berikutnya">${kbNol(t("sisaSetelahDepan"))}</td></tr></tfoot></table>`;
+  if (KB_BUKA != null) kbPratinjau();
+}
+
+function kbFormHtml(b) {
+  const g = b.gbd;
+  const cicil = g.mode === "cicil";
+  return `<div class="kb-form">
+    <div class="kb-form-judul">Potongan kasbon <b>${escapeHtml(b.nama)}</b> dari gaji bulan depan (${escapeHtml(g.pegawai)})</div>
+    <label class="kb-opsi"><input type="radio" name="kb-mode" value="penuh"${cicil ? "" : " checked"} />
+      Potong penuh <span class="gj-kecil">(${kbRp(b.rencanaDepan)} — seluruh rencana potong bulan depan)</span></label>
+    <label class="kb-opsi"><input type="radio" name="kb-mode" value="cicil"${cicil ? " checked" : ""} /> Dicicil, maks.
+      <input type="text" id="kb-cicilan" inputmode="numeric" autocomplete="off" placeholder="mis. 500.000" value="${cicil ? Number(g.cicilan).toLocaleString("id-ID") : ""}" /> per bulan</label>
+    ${g.mode === "manual" || g.mode === "khusus" ? `<div class="gj-kecil">Rumus sekarang: <code>${escapeHtml(g.rumus)}</code> — akan diganti.</div>` : ""}
+    <div id="kb-pratinjau" class="kb-pratinjau"></div>
+    <div class="upload-row" style="margin:6px 0 0">
+      <button type="button" class="btn-primary" id="btn-kb-simpan" data-baris="${b.baris}">Simpan</button>
+      <button type="button" class="btn-ghost" id="btn-kb-batal">Batal</button>
+    </div>
+  </div>`;
+}
+
+function kbCicilanInput() {
+  const el = $("#kb-cicilan");
+  const dgt = el ? String(el.value || "").replace(/\D/g, "") : "";
+  return dgt ? Number(dgt) : 0;
+}
+
+function kbPratinjau() {
+  const b = KB && KB.baris.find((x) => x.baris === KB_BUKA);
+  const el = $("#kb-pratinjau");
+  if (!b || !el) return;
+  const mode = (document.querySelector('input[name="kb-mode"]:checked') || {}).value;
+  const c = b.rencanaDepan;
+  let potong = c;
+  if (mode === "cicil") {
+    const x = kbCicilanInput();
+    if (!x) { el.innerHTML = "Isi nominal cicilan per bulan."; return; }
+    potong = Math.min(c, x);
+  }
+  el.innerHTML = `Bulan depan dipotong <b>${kbRp(potong)}</b> dari gaji; sisa <b>${kbRp(c - potong)}</b> tetap tercatat di KASBON dan dibawa ke bulan berikutnya.` +
+    (mode === "cicil" ? ` <span class="gj-kecil">Cicilan berlaku terus setiap bulan sampai diubah kembali ke potong penuh.</span>` : "");
+}
+
+async function kbSimpan(baris) {
+  const b = KB && KB.baris.find((x) => x.baris === baris);
+  if (!b || KB_BUSY) return;
+  const out = $("#kb-result");
+  const mode = (document.querySelector('input[name="kb-mode"]:checked') || {}).value;
+  const cicilan = kbCicilanInput();
+  if (mode === "cicil" && !cicilan) return showLog(out, "✘ Isi nominal cicilan per bulan, mis. 500.000", true);
+  const btn = $("#btn-kb-simpan");
+  btn.disabled = true;
+  btn.textContent = "Menyimpan…";
+  KB_BUSY = true;
+  try {
+    const res = await fetch("/api/kasbon/cicilan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ baris, subjek: b.subjek, mode, cicilan, token: KB.spreadsheet.id }),
+    });
+    if (res.status === 401) { window.location = "/login"; return; }
+    const data = await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }));
+    if (!res.ok || !data.ok) {
+      if (data.data) { KB = Object.assign({}, KB, data.data); kbRender(); }
+      throw new Error(data.error || `HTTP ${res.status}`);
+    }
+    KB = data.data;
+    KB_BUKA = null;
+    kbRender();
+    const s = data.disimpan;
+    showLog(
+      out,
+      `✔ ${s.nama}: ${s.mode === "cicil" ? `dicicil maks. ${kbRp(s.cicilan)} per bulan` : "potong penuh"}. ` +
+        `Bulan depan dipotong ${kbRp(s.dipotongDepan)}, sisa ${kbRp(s.sisaSetelahDepan)} dibawa ke bulan berikutnya.\n` +
+        `Diubah: ${s.sel} ${s.rumusLama} → ${s.rumusBaru}. Sheet KASBON tidak diubah.`
+    );
+  } catch (e) {
+    showLog(out, "✘ " + e.message, true);
+    if (document.body.contains(btn)) { btn.disabled = false; btn.textContent = "Simpan"; }
+  } finally {
+    KB_BUSY = false;
+  }
+}
+
+$("#btn-kb-load").addEventListener("click", () => { KB_BUKA = null; loadKasbon(); });
+$("#kb-table").addEventListener("click", (ev) => {
+  const atur = ev.target.closest(".kb-atur");
+  if (atur) {
+    const n = Number(atur.dataset.baris);
+    KB_BUKA = KB_BUKA === n ? null : n;
+    kbRender();
+    const inp = $("#kb-cicilan");
+    if (inp && KB_BUKA != null) inp.closest(".kb-form").scrollIntoView({ block: "nearest" });
+    return;
+  }
+  if (ev.target.closest("#btn-kb-batal")) { KB_BUKA = null; kbRender(); return; }
+  const simpan = ev.target.closest("#btn-kb-simpan");
+  if (simpan) kbSimpan(Number(simpan.dataset.baris));
+});
+$("#kb-table").addEventListener("input", (ev) => {
+  if (ev.target.id === "kb-cicilan") {
+    const dgt = ev.target.value.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+    ev.target.value = dgt ? Number(dgt).toLocaleString("id-ID") : "";
+    const r = document.querySelector('input[name="kb-mode"][value="cicil"]');
+    if (r && dgt) r.checked = true;
+  }
+  kbPratinjau();
+});
+$("#kb-table").addEventListener("change", kbPratinjau);
 
 // ================= Init =================
 {
